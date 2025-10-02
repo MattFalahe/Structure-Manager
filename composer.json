@@ -1,0 +1,31 @@
+{
+    "name": "mattfalahe/structure-manager",
+    "description": "Structure fuel management plugin for SeAT",
+    "type": "seat-plugin",
+    "keywords": ["seat", "eve", "eveonline", "structure", "management", "plugin"],
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Matt Falahe",
+            "email": "mattfalahe@gmail.com"
+        }
+    ],
+    "homepage": "https://github.com/MattFalahe/Structure-Manager",
+    "require": {
+        "php": "^7.4|^8.0",
+        "eveseat/seat": "^5.0",
+        "laravel/framework": "^8.0|^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "StructureManager\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "StructureManager\\StructureManagerServiceProvider"
+            ]
+        }
+    }
+}
