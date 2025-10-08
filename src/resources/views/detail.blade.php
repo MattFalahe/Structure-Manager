@@ -38,8 +38,16 @@
                         @if($structure->fuel_expires)
                             {{ \Carbon\Carbon::parse($structure->fuel_expires)->format('Y-m-d H:i:s') }}
                             <br>
-                            <strong class="{{ $days = \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now()) < 7 ? 'text-danger' : ($days < 14 ? 'text-warning' : 'text-success') }}">
-                                {{ $days }} days remaining
+                            @php
+                                $fuelExpires = \Carbon\Carbon::parse($structure->fuel_expires);
+                                $now = now();
+                                $totalHours = $fuelExpires->diffInHours($now);
+                                $days = floor($totalHours / 24);
+                                $hours = $totalHours % 24;
+                                $colorClass = $totalHours < 168 ? 'text-danger' : ($totalHours < 336 ? 'text-warning' : 'text-success');
+                            @endphp
+                            <strong class="{{ $colorClass }}">
+                                {{ $days }}d {{ $hours }}h remaining
                             </strong>
                         @else
                             <span class="text-muted">Unknown</span>

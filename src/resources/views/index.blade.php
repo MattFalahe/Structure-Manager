@@ -4,7 +4,7 @@
 @section('page_header', trans('structure-manager::common.structure_manager'))
 
 @push('head')
-<link rel="stylesheet" href="https://cdn.datatables.net/1.10.25/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="{{ asset('vendor/structure-manager/css/dataTables.bootstrap4.min.css') }}">
 <style>
     .fuel-critical { color: #dc3545; font-weight: bold; }
     .fuel-warning { color: #ffc107; font-weight: bold; }
@@ -125,34 +125,105 @@
 @endsection
 
 @push('javascript')
-<script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap4.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+{{-- Fix SeAT's mixed content issue first --}}
 <script>
+(function() {
+    // Wait for jQuery to be available
+    if (typeof $ !== 'undefined' && $.ajax) {
+        var originalAjax = $.ajax;
+        $.ajax = function(settings) {
+            if (settings && settings.url && typeof settings.url === 'string' && settings.url.startsWith('http://')) {
+                settings.url = settings.url.replace('http://', 'https://');
+            }
+            return originalAjax.call(this, settings);
+        };
+    }
+})();
+</script>
+
+{{-- Load assets from plugin --}}
+<script src="{{ asset('vendor/structure-manager/js/jquery.dataTables.min.js') }}"></script>
+<script src="{{ asset('vendor/structure-manager/js/dataTables.bootstrap4.min.js') }}"></script>
+<script src="{{ asset('vendor/structure-manager/js/chart.min.js') }}"></script>
+<script src="{{ asset('vendor/structure-manager/js/moment.min.js') }}"></script>
+
+<script>
+// Verify libraries loaded
+if (typeof moment === 'undefined') {
+    console.error('Moment.js failed to load');
+}
+if (typeof Chart === 'undefined') {
+    console.error('Chart.js failed to load');
+}
+if (typeof $.fn.DataTable === 'undefined') {
+    console.error('DataTables failed to load');
+}
+
 $(document).ready(function() {
-    let table = $('#structures-table').DataTable({
+    console.log('Document ready');
+    
+    // Declare table variable in broader scope
+    var table;
+    
+    // Define updateFuelSummary function
+    function updateFuelSummary() {
+        if (typeof table === 'undefined' || !table) {
+            console.log('Table not yet initialized');
+            return;
+        }
+        
+        var critical = 0, warning = 0, normal = 0;
+        table.rows().data().each(function(row) {
+            if (row.fuel_status === 'critical') critical++;
+            else if (row.fuel_status === 'warning') warning++;
+            else if (row.fuel_status === 'normal') normal++;
+        });
+        
+        $('#critical-count').text(critical);
+        $('#warning-count').text(warning);
+        $('#normal-count').text(normal);
+    }
+    
+    console.log('Initializing DataTable...');
+    
+    // Initialize the table
+    table = $('#structures-table').DataTable({
+        processing: true,
+        serverSide: false,
         ajax: {
             url: '{{ route("structure-manager.data") }}',
             data: function(d) {
                 d.corporation_id = $('#corporation-filter').val();
                 d.fuel_status = $('#fuel-filter').val();
+            },
+            dataSrc: function(json) {
+                console.log('Received data:', json);
+                if (json.error) {
+                    alert('Error: ' + json.message);
+                    return [];
+                }
+                return json.data || [];
+            },
+            error: function(xhr, error, thrown) {
+                console.error('AJAX Error:', {xhr: xhr, error: error, thrown: thrown});
+                console.error('Response:', xhr.responseText);
+                alert('Error loading data: ' + (thrown || error));
             }
         },
         columns: [
             { 
                 data: 'structure_name',
                 render: function(data, type, row) {
-                    return `<a href="{{ url('structure-manager/structure') }}/${row.structure_id}">${data}</a>`;
+                    return '<a href="{{ url('structure-manager/structure') }}/' + row.structure_id + '">' + data + '</a>';
                 }
             },
             { data: 'structure_type' },
             { 
                 data: 'system_name',
                 render: function(data, type, row) {
-                    let secClass = row.security >= 0.5 ? 'text-success' : 
+                    var secClass = row.security >= 0.5 ? 'text-success' : 
                                   row.security > 0 ? 'text-warning' : 'text-danger';
-                    return `${data} <span class="${secClass}">(${row.security.toFixed(1)})</span>`;
+                    return data + ' <span class="' + secClass + '">(' + parseFloat(row.security).toFixed(1) + ')</span>';
                 }
             },
             { data: 'corporation_name' },
@@ -166,48 +237,67 @@ $(document).ready(function() {
             { 
                 data: 'days_remaining',
                 render: function(data, type, row) {
-                    if (data === null) return '<span class="fuel-unknown">N/A</span>';
-                    let className = `fuel-${row.fuel_status}`;
-                    return `<span class="${className}">${data} days</span>`;
+                    if (data === null || typeof row.hours_remaining === 'undefined') {
+                        return '<span class="fuel-unknown">N/A</span>';
+                    }
+                    
+                    var className = 'fuel-' + row.fuel_status;
+                    var days = row.days_remaining;
+                    var hours = row.remaining_hours;
+                    
+                    // For sorting, return just the hours
+                    if (type === 'sort' || type === 'type') {
+                        return row.hours_remaining;
+                    }
+                    
+                    // Format display text
+                    var displayText = '';
+                    if (days > 0) {
+                        displayText = days + 'd ' + hours + 'h';
+                    } else {
+                        displayText = hours + ' hours';
+                    }
+                    
+                    return '<span class="' + className + '" title="' + row.hours_remaining + ' total hours">' + displayText + '</span>';
                 }
             },
             { 
                 data: 'services',
                 render: function(data) {
                     if (!data) return '<span class="text-muted">None</span>';
-                    let services = data.split(', ');
-                    return services.map(s => `<span class="badge badge-info">${s}</span>`).join(' ');
+                    var services = data.split(', ');
+                    return services.map(function(s) { 
+                        return '<span class="badge badge-info">' + s + '</span>';
+                    }).join(' ');
                 }
             },
             {
                 data: null,
                 render: function(data, type, row) {
                     if (!row.daily_consumption) return '<span class="text-muted">Calculating...</span>';
-                    return `
-                        <div class="consumption-stats">
-                            <span class="stat-item">Daily: ${row.daily_consumption}</span>
-                            <span class="stat-item">Weekly: ${row.weekly_consumption}</span>
-                        </div>
-                    `;
+                    return '<div class="consumption-stats">' +
+                           '<span class="stat-item">Daily: ' + row.daily_consumption + '</span>' +
+                           '<span class="stat-item">Weekly: ' + row.weekly_consumption + '</span>' +
+                           '</div>';
                 }
             },
             {
                 data: null,
                 render: function(data, type, row) {
-                    return `
-                        <button class="btn btn-sm btn-info view-fuel" data-id="${row.structure_id}">
-                            <i class="fas fa-chart-line"></i>
-                        </button>
-                    `;
+                    return '<button class="btn btn-sm btn-info view-fuel" data-id="' + row.structure_id + '">' +
+                           '<i class="fas fa-chart-line"></i>' +
+                           '</button>';
                 }
             }
         ],
-        order: [[5, 'asc']], // Sort by days remaining
+        order: [[5, 'asc']],
         pageLength: 25,
         drawCallback: function() {
             updateFuelSummary();
         }
     });
+    
+    console.log('DataTable initialized');
     
     // Filters
     $('#corporation-filter, #fuel-filter').on('change', function() {
@@ -220,38 +310,24 @@ $(document).ready(function() {
     
     // View fuel history
     $(document).on('click', '.view-fuel', function() {
-        let structureId = $(this).data('id');
+        var structureId = $(this).data('id');
         loadFuelHistory(structureId);
     });
     
-    function updateFuelSummary() {
-        let critical = 0, warning = 0, normal = 0;
-        table.rows().data().each(function(row) {
-            if (row.fuel_status === 'critical') critical++;
-            else if (row.fuel_status === 'warning') warning++;
-            else if (row.fuel_status === 'normal') normal++;
-        });
-        
-        $('#critical-count').text(critical);
-        $('#warning-count').text(warning);
-        $('#normal-count').text(normal);
-    }
-    
-    let fuelChart = null;
+    var fuelChart = null;
     
     function loadFuelHistory(structureId) {
-        $.get(`{{ url('structure-manager/fuel-history') }}/${structureId}`, function(data) {
+        $.get('{{ url('structure-manager/fuel-history') }}/' + structureId, function(data) {
             $('#fuelModal').modal('show');
             
-            // Prepare chart data
-            let labels = data.map(d => moment(d.created_at).format('MM-DD'));
-            let fuelData = data.map(d => d.days_remaining);
+            var labels = data.map(function(d) { return moment(d.created_at).format('MM-DD'); });
+            var fuelData = data.map(function(d) { return d.days_remaining; });
             
             if (fuelChart) {
                 fuelChart.destroy();
             }
             
-            let ctx = document.getElementById('fuelChart').getContext('2d');
+            var ctx = document.getElementById('fuelChart').getContext('2d');
             fuelChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -278,30 +354,21 @@ $(document).ready(function() {
                 }
             });
             
-            // Calculate and display consumption details
             if (data.length > 1) {
-                let latest = data[0];
-                let oldest = data[data.length - 1];
-                let daysDiff = moment(latest.created_at).diff(moment(oldest.created_at), 'days');
-                let fuelUsed = oldest.days_remaining - latest.days_remaining;
-                let avgDaily = daysDiff > 0 ? (fuelUsed / daysDiff).toFixed(2) : 0;
+                var latest = data[0];
+                var oldest = data[data.length - 1];
+                var daysDiff = moment(latest.created_at).diff(moment(oldest.created_at), 'days');
+                var fuelUsed = oldest.days_remaining - latest.days_remaining;
+                var avgDaily = daysDiff > 0 ? (fuelUsed / daysDiff).toFixed(2) : 0;
                 
-                $('#consumption-details').html(`
-                    <div class="row">
-                        <div class="col-md-3">
-                            <strong>Period:</strong> ${daysDiff} days
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Fuel Used:</strong> ~${fuelUsed} days
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Avg Daily:</strong> ${avgDaily} days/day
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Est. Blocks/Day:</strong> ${(avgDaily * 40).toFixed(0)}
-                        </div>
-                    </div>
-                `);
+                $('#consumption-details').html(
+                    '<div class="row">' +
+                    '<div class="col-md-3"><strong>Period:</strong> ' + daysDiff + ' days</div>' +
+                    '<div class="col-md-3"><strong>Fuel Used:</strong> ~' + fuelUsed + ' days</div>' +
+                    '<div class="col-md-3"><strong>Avg Daily:</strong> ' + avgDaily + ' days/day</div>' +
+                    '<div class="col-md-3"><strong>Est. Blocks/Day:</strong> ' + (avgDaily * 40).toFixed(0) + '</div>' +
+                    '</div>'
+                );
             }
         });
     }

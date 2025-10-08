@@ -6,6 +6,7 @@ use Seat\Services\AbstractSeatPlugin;
 use StructureManager\Console\Commands\TrackFuelCommand;
 use StructureManager\Console\Commands\CleanupHistoryCommand;
 use StructureManager\Console\Commands\AnalyzeConsumptionCommand;
+use StructureManager\Console\Commands\SetupPermissionsCommand;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
 {
@@ -43,9 +44,15 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
      */
     private function add_publications()
     {
+        // Publish config
         $this->publishes([
             __DIR__ . '/Config/structure-manager.config.php' => config_path('structure-manager.php'),
         ], ['config', 'seat']);
+        
+        // Publish assets
+        $this->publishes([
+            __DIR__ . '/resources/assets' => public_path('vendor/structure-manager'),
+        ], ['public', 'seat']);
     }
 
     /**
