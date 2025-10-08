@@ -30,6 +30,13 @@ return [
                 'route' => 'structure-manager.critical-alerts',
                 'permission' => 'structure-manager.view',
             ],
+            [
+                'name'  => 'About',
+                'label' => 'structure-manager::menu.about',
+                'icon'  => 'fas fa-info-circle',
+                'route' => 'structure-manager.about',
+                'permission' => 'structure-manager.view',
+            ],
         ]
     ]
 ];

@@ -2,7 +2,7 @@
 
 namespace StructureManager\Http\Controllers;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureFuelHistory;
@@ -10,99 +10,155 @@ use Carbon\Carbon;
 
 class StructureManagerController extends Controller
 {
+    /**
+     * Get user's accessible corporation IDs
+     */
+    private function getUserCorporations()
+    {
+        // Get corporation IDs from user's characters via refresh_tokens and character_affiliations
+        $corporationIds = DB::table('refresh_tokens')
+            ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
+            ->where('refresh_tokens.user_id', auth()->id())
+            ->whereNull('refresh_tokens.deleted_at')
+            ->pluck('character_affiliations.corporation_id')
+            ->unique()
+            ->filter()
+            ->toArray();
+        
+        return !empty($corporationIds) ? $corporationIds : null;
+    }
+    
     public function index()
     {
-        $corporations = DB::table('corporation_infos')
-            ->select('corporation_id', 'name')
-            ->orderBy('name')
-            ->get();
+        // Get corporations the user has access to
+        $userCorpIds = $this->getUserCorporations();
+        
+        if ($userCorpIds === null) {
+            // User has no specific corporations (superadmin), get all corporations with structures
+            $corporations = DB::table('corporation_infos')
+                ->join('corporation_structures', 'corporation_infos.corporation_id', '=', 'corporation_structures.corporation_id')
+                ->select('corporation_infos.corporation_id', 'corporation_infos.name')
+                ->distinct()
+                ->orderBy('corporation_infos.name')
+                ->get();
+        } else {
+            // Get only user's corporations
+            $corporations = DB::table('corporation_infos')
+                ->whereIn('corporation_id', $userCorpIds)
+                ->select('corporation_id', 'name')
+                ->orderBy('name')
+                ->get();
+        }
         
         return view('structure-manager::index', compact('corporations'));
     }
     
     public function getStructuresData(Request $request)
     {
-        $query = DB::table('corporation_structures as cs')
-            ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
-            ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
-            ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
-            ->join('corporation_infos as ci', 'cs.corporation_id', '=', 'ci.corporation_id')
-            ->leftJoin('corporation_structure_services as css', function($join) {
-                $join->on('cs.structure_id', '=', 'css.structure_id')
-                     ->where('css.state', '=', 'online');
-            })
-            ->select(
-                'cs.structure_id',
-                'us.name as structure_name',
-                'it.typeName as structure_type',
-                'md.itemName as system_name',
-                'md.security',
-                'ci.name as corporation_name',
-                'cs.fuel_expires',
-                'cs.state',
-                'cs.updated_at',
-                DB::raw('GROUP_CONCAT(css.name SEPARATOR ", ") as services'),
-                DB::raw('DATEDIFF(cs.fuel_expires, NOW()) as days_remaining'),
-                DB::raw('CASE 
-                    WHEN cs.fuel_expires IS NULL THEN "unknown"
-                    WHEN DATEDIFF(cs.fuel_expires, NOW()) < 7 THEN "critical"
-                    WHEN DATEDIFF(cs.fuel_expires, NOW()) < 14 THEN "warning"
-                    WHEN DATEDIFF(cs.fuel_expires, NOW()) < 30 THEN "normal"
-                    ELSE "good"
-                END as fuel_status')
-            )
-            ->groupBy(
-                'cs.structure_id',
-                'us.name',
-                'it.typeName',
-                'md.itemName',
-                'md.security',
-                'ci.name',
-                'cs.fuel_expires',
-                'cs.state',
-                'cs.updated_at'
-            );
-        
-        // Apply filters
-        if ($request->has('corporation_id') && $request->corporation_id != 'all') {
-            $query->where('cs.corporation_id', $request->corporation_id);
-        }
-        
-        if ($request->has('fuel_status') && $request->fuel_status != 'all') {
-            switch($request->fuel_status) {
-                case 'critical':
-                    $query->whereRaw('DATEDIFF(cs.fuel_expires, NOW()) < 7');
-                    break;
-                case 'warning':
-                    $query->whereRaw('DATEDIFF(cs.fuel_expires, NOW()) BETWEEN 7 AND 14');
-                    break;
-                case 'normal':
-                    $query->whereRaw('DATEDIFF(cs.fuel_expires, NOW()) BETWEEN 14 AND 30');
-                    break;
-                case 'good':
-                    $query->whereRaw('DATEDIFF(cs.fuel_expires, NOW()) > 30');
-                    break;
-            }
-        }
-        
-        $structures = $query->orderBy('days_remaining', 'asc')->get();
-        
-        // Calculate consumption rates from history
-        foreach ($structures as $structure) {
-            $consumption = $this->calculateConsumption($structure->structure_id);
-            $structure->daily_consumption = $consumption['daily'];
-            $structure->weekly_consumption = $consumption['weekly'];
-            $structure->monthly_consumption = $consumption['monthly'];
+        try {
+            // Get user's accessible corporations
+            $userCorpIds = $this->getUserCorporations();
             
-            // Estimate fuel blocks remaining based on consumption
-            if ($structure->days_remaining && $consumption['daily'] > 0) {
-                $structure->estimated_blocks = round($structure->days_remaining * $consumption['daily']);
-            } else {
-                $structure->estimated_blocks = null;
+            $query = DB::table('corporation_structures as cs')
+                ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
+                ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
+                ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
+                ->join('corporation_infos as ci', 'cs.corporation_id', '=', 'ci.corporation_id')
+                ->leftJoin('corporation_structure_services as css', function($join) {
+                    $join->on('cs.structure_id', '=', 'css.structure_id')
+                         ->where('css.state', '=', 'online');
+                })
+                ->select(
+                    'cs.structure_id',
+                    'us.name as structure_name',
+                    'it.typeName as structure_type',
+                    'cs.type_id',
+                    'md.itemName as system_name',
+                    'md.security',
+                    'ci.name as corporation_name',
+                    'cs.fuel_expires',
+                    'cs.state',
+                    'cs.updated_at',
+                    DB::raw('GROUP_CONCAT(css.name SEPARATOR ", ") as services'),
+                    DB::raw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) as hours_remaining'),
+                    DB::raw('FLOOR(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) / 24) as days_remaining'),
+                    DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires), 24) as remaining_hours'),
+                    DB::raw('CASE 
+                        WHEN cs.fuel_expires IS NULL THEN "unknown"
+                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 168 THEN "critical"
+                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 336 THEN "warning"
+                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 720 THEN "normal"
+                        ELSE "good"
+                    END as fuel_status')
+                )
+                ->groupBy(
+                    'cs.structure_id',
+                    'us.name',
+                    'it.typeName',
+                    'cs.type_id',
+                    'md.itemName',
+                    'md.security',
+                    'ci.name',
+                    'cs.fuel_expires',
+                    'cs.state',
+                    'cs.updated_at'
+                );
+            
+            // Filter by user's corporations (unless they have access to all)
+            if ($userCorpIds !== null) {
+                $query->whereIn('cs.corporation_id', $userCorpIds);
             }
+            
+            // Apply corporation filter if selected
+            if ($request->has('corporation_id') && $request->corporation_id != 'all') {
+                $query->where('cs.corporation_id', $request->corporation_id);
+            }
+            
+            // Apply fuel status filter
+            if ($request->has('fuel_status') && $request->fuel_status != 'all') {
+                switch($request->fuel_status) {
+                    case 'critical':
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 168'); // < 7 days
+                        break;
+                    case 'warning':
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) BETWEEN 168 AND 336'); // 7-14 days
+                        break;
+                    case 'normal':
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) BETWEEN 336 AND 720'); // 14-30 days
+                        break;
+                    case 'good':
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) > 720'); // > 30 days
+                        break;
+                }
+            }
+            
+            $structures = $query->orderBy('hours_remaining', 'asc')->get();
+            
+            // Calculate consumption rates from history
+            foreach ($structures as $structure) {
+                $consumption = $this->calculateConsumption($structure->structure_id);
+                $structure->daily_consumption = $consumption['daily'];
+                $structure->weekly_consumption = $consumption['weekly'];
+                $structure->monthly_consumption = $consumption['monthly'];
+                
+                // Estimate fuel blocks remaining based on consumption
+                if ($structure->hours_remaining && $consumption['daily'] > 0) {
+                    $structure->estimated_blocks = round(($structure->hours_remaining / 24) * $consumption['daily']);
+                } else {
+                    $structure->estimated_blocks = null;
+                }
+            }
+            
+            return response()->json(['data' => $structures]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Structure Manager - Error fetching structures data: ' . $e->getMessage());
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'data' => []
+            ], 500);
         }
-        
-        return response()->json(['data' => $structures]);
     }
     
     public function structureDetail($id)
@@ -201,7 +257,7 @@ class StructureManagerController extends Controller
         // Try to get actual consumption from historical data
         $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($structureId, 30);
         
-        if ($analysis['status'] === 'success' && $analysis['consumption']['average_daily'] > 0) {
+        if ($analysis['status'] === 'success' && isset($analysis['consumption']['average_daily']) && $analysis['consumption']['average_daily'] > 0) {
             return [
                 'daily' => $analysis['consumption']['average_daily'],
                 'weekly' => $analysis['consumption']['average_weekly'],
@@ -232,5 +288,10 @@ class StructureManagerController extends Controller
     {
         $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($id, 30);
         return response()->json($analysis);
+    }
+
+    public function about()
+    {
+        return view('structure-manager::about');
     }
 }

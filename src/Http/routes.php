@@ -37,18 +37,28 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
 
+    // Critical Alerts - View
     Route::get('/critical-alerts', [
         'as' => 'structure-manager.critical-alerts',
+        'uses' => 'FuelAlertController@criticalAlertsView',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // Critical Alerts - JSON Data
+    Route::get('/critical-alerts-data', [
+        'as' => 'structure-manager.critical-alerts-data',
         'uses' => 'FuelAlertController@getCriticalAlerts',
         'middleware' => 'can:structure-manager.view',
     ]);
     
+    // Logistics Report - View
     Route::get('/logistics-report', [
         'as' => 'structure-manager.logistics-report',
-        'uses' => 'FuelAlertController@getLogisticsReport',
+        'uses' => 'FuelAlertController@logisticsReportView',
         'middleware' => 'can:structure-manager.view',
     ]);
     
+    // Logistics Report - JSON Data
     Route::get('/logistics-data', [
         'as' => 'structure-manager.logistics-data',
         'uses' => 'FuelAlertController@getLogisticsReport',
@@ -58,6 +68,13 @@ Route::group([
     Route::get('/fuel-analysis/{id}', [
         'as' => 'structure-manager.fuel-analysis',
         'uses' => 'StructureManagerController@getFuelAnalysis',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+
+    // About page - View
+    Route::get('/about', [
+        'as' => 'structure-manager.about',
+        'uses' => 'StructureManagerController@about',
         'middleware' => 'can:structure-manager.view',
     ]);
     

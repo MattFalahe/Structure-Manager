@@ -1,0 +1,328 @@
+@extends('web::layouts.grids.12')
+
+@section('title', 'Critical Fuel Alerts')
+@section('page_header', 'Critical Fuel Alerts')
+
+@push('head')
+<style>
+    .alert-card {
+        border-left: 4px solid;
+        margin-bottom: 1rem;
+    }
+    
+    .alert-card.critical {
+        border-left-color: #dc3545;
+        background: #fff5f5;
+    }
+    
+    .alert-card.warning {
+        border-left-color: #ffc107;
+        background: #fffbf0;
+    }
+    
+    .fuel-critical { 
+        color: #dc3545; 
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    
+    .fuel-warning { 
+        color: #ffc107; 
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    
+    .structure-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+    }
+    
+    .alert-stats {
+        display: flex;
+        gap: 2rem;
+        margin-top: 0.5rem;
+    }
+    
+    .stat-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        background: white;
+        border: 1px solid #dee2e6;
+    }
+    
+    .no-alerts {
+        text-align: center;
+        padding: 3rem;
+    }
+    
+    .no-alerts i {
+        font-size: 4rem;
+        color: #28a745;
+        margin-bottom: 1rem;
+    }
+</style>
+@endpush
+
+@section('content')
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-exclamation-triangle text-danger"></i> 
+                    Critical Fuel Status
+                </h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-sm btn-primary" id="refresh-alerts">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="info-box bg-danger">
+                            <span class="info-box-icon"><i class="fas fa-exclamation-circle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Critical Alerts</span>
+                                <span class="info-box-number" id="critical-count">0</span>
+                                <span class="info-box-text"><small>Less than 7 days</small></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box bg-warning">
+                            <span class="info-box-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Warning Alerts</span>
+                                <span class="info-box-number" id="warning-count">0</span>
+                                <span class="info-box-text"><small>7-14 days remaining</small></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box bg-info">
+                            <span class="info-box-icon"><i class="fas fa-gas-pump"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Total Fuel Needed</span>
+                                <span class="info-box-number" id="total-blocks">0</span>
+                                <span class="info-box-text"><small>Blocks per week</small></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="alerts-container">
+                    <div class="text-center p-5">
+                        <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+                        <p class="mt-3">Loading alerts...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
+
+@push('javascript')
+{{-- Fix SeAT's mixed content issue first --}}
+<script>
+(function() {
+    // Wait for jQuery to be available
+    if (typeof $ !== 'undefined' && $.ajax) {
+        var originalAjax = $.ajax;
+        $.ajax = function(settings) {
+            if (settings && settings.url && typeof settings.url === 'string' && settings.url.startsWith('http://')) {
+                settings.url = settings.url.replace('http://', 'https://');
+            }
+            return originalAjax.call(this, settings);
+        };
+    }
+})();
+</script>
+
+<script src="{{ asset('vendor/structure-manager/js/moment.min.js') }}"></script>
+<script>
+$(document).ready(function() {
+    
+    function loadAlerts() {
+        $('#alerts-container').html(`
+            <div class="text-center p-5">
+                <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+                <p class="mt-3">Loading alerts...</p>
+            </div>
+        `);
+        
+        $.get('{{ route("structure-manager.critical-alerts-data") }}', function(data) {
+            let criticalCount = 0;
+            let warningCount = 0;
+            let totalBlocks = 0;
+            
+            if (!data || data.length === 0) {
+                $('#alerts-container').html(`
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle"></i>
+                        <h4>All Clear!</h4>
+                        <p class="text-muted">No structures require immediate attention.</p>
+                        <p class="text-muted">All structures have sufficient fuel (14+ days).</p>
+                    </div>
+                `);
+                $('#critical-count').text('0');
+                $('#warning-count').text('0');
+                $('#total-blocks').text('0');
+                return;
+            }
+            
+            // Count alerts by type
+            data.forEach(function(alert) {
+                if (alert.status === 'critical') {
+                    criticalCount++;
+                } else if (alert.status === 'warning') {
+                    warningCount++;
+                }
+                totalBlocks += alert.blocks_needed;
+            });
+            
+            // Update counters
+            $('#critical-count').text(criticalCount);
+            $('#warning-count').text(warningCount);
+            $('#total-blocks').text(totalBlocks.toLocaleString());
+            
+            // Build alerts HTML
+            let html = '';
+            
+            // Sort by hours remaining (most critical first)
+            data.sort(function(a, b) {
+                let aHours = a.hours_remaining || (a.days_remaining * 24);
+                let bHours = b.hours_remaining || (b.days_remaining * 24);
+                return aHours - bHours;
+            });
+            
+            data.forEach(function(alert) {
+                let statusClass = alert.status === 'critical' ? 'critical' : 'warning';
+                let statusIcon = alert.status === 'critical' ? 'fa-exclamation-circle' : 'fa-exclamation-triangle';
+                let statusColor = alert.status === 'critical' ? 'danger' : 'warning';
+                let daysClass = alert.status === 'critical' ? 'fuel-critical' : 'fuel-warning';
+                
+                // Format time display
+                let timeDisplay = '';
+                if (alert.days_remaining !== undefined && alert.remaining_hours !== undefined) {
+                    timeDisplay = alert.days_remaining + 'd ' + alert.remaining_hours + 'h';
+                } else {
+                    timeDisplay = alert.days_remaining + ' Days';
+                }
+                
+                // Calculate hours remaining
+                let hoursLeft = alert.hours_remaining || (alert.days_remaining * 24);
+                
+                // Calculate urgency message
+                let urgencyMsg = '';
+                if (hoursLeft < 72) { // < 3 days
+                    urgencyMsg = '<span class="badge badge-danger"><i class="fas fa-fire"></i> URGENT - Refuel immediately!</span>';
+                } else if (hoursLeft < 168) { // < 7 days
+                    urgencyMsg = '<span class="badge badge-danger">Critical - Refuel within 24 hours</span>';
+                } else if (hoursLeft < 240) { // < 10 days
+                    urgencyMsg = '<span class="badge badge-warning">Warning - Schedule refuel soon</span>';
+                } else {
+                    urgencyMsg = '<span class="badge badge-warning">Monitor - Refuel within a week</span>';
+                }
+                
+                // Fuel expires timestamp
+                let expiresAt = moment(alert.fuel_expires);
+                let timeUntilEmpty = expiresAt.fromNow();
+                
+                html += `
+                    <div class="alert-card ${statusClass} card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start">
+                                <div class="structure-icon text-${statusColor}">
+                                    <i class="fas ${statusIcon}"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h5 class="mb-1">
+                                                <a href="{{ url('structure-manager/structure') }}/${alert.structure_id}" class="text-dark">
+                                                    ${alert.structure_name}
+                                                </a>
+                                            </h5>
+                                            <p class="mb-2">
+                                                <span class="badge badge-secondary">${alert.structure_type}</span>
+                                                <span class="badge badge-info ml-1"><i class="fas fa-map-marker-alt"></i> ${alert.system_name}</span>
+                                            </p>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="${daysClass}">
+                                                ${timeDisplay}
+                                            </div>
+                                            <small class="text-muted">Remaining</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert-stats">
+                                        <div class="stat-badge">
+                                            <i class="far fa-clock text-${statusColor}"></i>
+                                            <strong>Fuel Expires:</strong><br>
+                                            <span class="text-muted">${expiresAt.format('YYYY-MM-DD HH:mm')}</span><br>
+                                            <small class="text-muted">(${timeUntilEmpty})</small>
+                                        </div>
+                                        <div class="stat-badge">
+                                            <i class="fas fa-gas-pump text-primary"></i>
+                                            <strong>Weekly Requirement:</strong><br>
+                                            <span class="text-muted">${alert.blocks_needed.toLocaleString()} blocks</span><br>
+                                            <small class="text-muted">(${(alert.blocks_needed * 5).toLocaleString()} m³)</small>
+                                        </div>
+                                        <div class="stat-badge">
+                                            <i class="fas fa-cubes text-info"></i>
+                                            <strong>30-Day Need:</strong><br>
+                                            <span class="text-muted">${(alert.blocks_needed * 4.3).toFixed(0).toLocaleString()} blocks</span><br>
+                                            <small class="text-muted">(${(alert.blocks_needed * 4.3 * 5).toFixed(0).toLocaleString()} m³)</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-2">
+                                        ${urgencyMsg}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            $('#alerts-container').html(html);
+            
+        }).fail(function(xhr, status, error) {
+            console.error('AJAX Error:', {xhr: xhr, status: status, error: error});
+            console.error('Response Text:', xhr.responseText);
+            
+            $('#alerts-container').html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Error loading alerts:</strong> ${error}
+                    <br><small>Please try refreshing the page.</small>
+                </div>
+            `);
+        });
+    }
+    
+    // Load alerts on page load
+    loadAlerts();
+    
+    // Refresh button
+    $('#refresh-alerts').on('click', function() {
+        let btn = $(this);
+        btn.find('i').addClass('fa-spin');
+        
+        loadAlerts();
+        
+        setTimeout(function() {
+            btn.find('i').removeClass('fa-spin');
+        }, 1000);
+    });
+    
+    // Auto-refresh every 5 minutes
+    setInterval(loadAlerts, 300000);
+});
+</script>
+@endpush
