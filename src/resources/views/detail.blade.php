@@ -3,6 +3,40 @@
 @section('title', $structure->structure_name)
 @section('page_header', $structure->structure_name)
 
+@push('head')
+<style>
+    /* Better contrast for dark themes */
+    .text-success-bright { color: #51cf66; }
+    .text-warning-bright { color: #ffd43b; }
+    .text-danger-bright { color: #ff6b6b; }
+    
+    /* DARK THEME COMPATIBLE - Service list items */
+    .list-group-item {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 0.5rem;
+    }
+    
+    .list-group-item:hover {
+        background: rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Better badge contrast */
+    .badge-success {
+        background-color: #28a745 !important;
+    }
+    
+    .badge-danger {
+        background-color: #dc3545 !important;
+    }
+    
+    .badge-warning {
+        background-color: #ffc107 !important;
+        color: #000000 !important;
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="row">
     <div class="col-md-6">
@@ -18,7 +52,7 @@
                     <dt class="col-sm-4">System:</dt>
                     <dd class="col-sm-8">
                         {{ $structure->system_name }} 
-                        <span class="{{ $structure->security >= 0.5 ? 'text-success' : ($structure->security > 0 ? 'text-warning' : 'text-danger') }}">
+                        <span class="{{ $structure->security >= 0.5 ? 'text-success-bright' : ($structure->security > 0 ? 'text-warning-bright' : 'text-danger-bright') }}">
                             ({{ number_format($structure->security, 1) }})
                         </span>
                     </dd>
@@ -44,7 +78,7 @@
                                 $totalHours = $fuelExpires->diffInHours($now);
                                 $days = floor($totalHours / 24);
                                 $hours = $totalHours % 24;
-                                $colorClass = $totalHours < 168 ? 'text-danger' : ($totalHours < 336 ? 'text-warning' : 'text-success');
+                                $colorClass = $totalHours < 168 ? 'text-danger-bright' : ($totalHours < 336 ? 'text-warning-bright' : 'text-success-bright');
                             @endphp
                             <strong class="{{ $colorClass }}">
                                 {{ $days }}d {{ $hours }}h remaining
@@ -150,7 +184,7 @@
         <h3 class="card-title">Recent Fuel Records</h3>
     </div>
     <div class="card-body">
-        <table class="table table-sm">
+        <table class="table table-sm table-hover">
             <thead>
                 <tr>
                     <th>Date</th>
@@ -172,9 +206,9 @@
                                     $change = $record->days_remaining - $prev->days_remaining;
                                 @endphp
                                 @if($change > 0)
-                                    <span class="text-success">+{{ $change }} days</span>
+                                    <span class="text-success-bright">+{{ $change }} days</span>
                                 @elseif($change < 0)
-                                    <span class="text-danger">{{ $change }} days</span>
+                                    <span class="text-danger-bright">{{ $change }} days</span>
                                 @else
                                     <span class="text-muted">No change</span>
                                 @endif
@@ -191,7 +225,9 @@
 @endsection
 
 @push('javascript')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+{{-- Use plugin's bundled Chart.js instead of CDN --}}
+<script src="{{ asset('vendor/structure-manager/js/chart.min.js') }}"></script>
+<script src="{{ asset('vendor/structure-manager/js/moment.min.js') }}"></script>
 <script>
 $(document).ready(function() {
     // Prepare fuel history chart data
@@ -200,7 +236,13 @@ $(document).ready(function() {
     let labels = fuelHistory.map(h => moment(h.created_at).format('MM-DD')).reverse();
     let daysData = fuelHistory.map(h => h.days_remaining).reverse();
     
-    let ctx = document.getElementById('fuelHistoryChart').getContext('2d');
+    // Fix chart height to prevent infinite growth
+    const canvas = document.getElementById('fuelHistoryChart');
+    const ctx = canvas.getContext('2d');
+    // Set fixed height for better visibility and prevent growth
+    canvas.parentNode.style.height = '400px';
+    canvas.parentNode.style.width = '100%';
+    
     new Chart(ctx, {
         type: 'line',
         data: {
@@ -210,18 +252,42 @@ $(document).ready(function() {
                 data: daysData,
                 borderColor: 'rgb(75, 192, 192)',
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.1
+                tension: 0.1,
+                fill: true
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#e0e0e0'
+                    }
+                }
+            },
             scales: {
                 y: {
                     beginAtZero: true,
                     title: {
                         display: true,
-                        text: 'Days Remaining'
+                        text: 'Days Remaining',
+                        color: '#e0e0e0'
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#a0a0a0'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
                     }
                 }
             }

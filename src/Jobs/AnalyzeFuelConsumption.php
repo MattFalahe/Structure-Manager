@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Services\FuelConsumptionTracker;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class AnalyzeFuelConsumption implements ShouldQueue
 {
@@ -82,17 +83,45 @@ class AnalyzeFuelConsumption implements ShouldQueue
                     'date' => now()->toDateString(),
                 ],
                 [
-                    'actual_daily_consumption' => $analysis['consumption']['actual_daily_avg'] ?? 0,
+                    'actual_daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
                     'average_hourly_rate' => $analysis['consumption']['average_hourly'] ?? 0,
                     'has_anomaly' => count($analysis['anomalies'] ?? []) > 0,
                     'anomaly_details' => json_encode($analysis['anomalies'] ?? []),
+                    'refuel_amount' => $this->getLatestRefuelAmount($structureId),
                     'updated_at' => now(),
                 ]
             );
             
             // Check for critical fuel levels
             $this->checkCriticalLevels($structureId, $analysis);
+            
+            Log::info("Structure Manager: Analyzed structure {$structureId}", [
+                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
+                'hourly_consumption' => $analysis['consumption']['average_hourly'] ?? 0,
+                'anomalies' => count($analysis['anomalies'] ?? []),
+                'refuels' => count($analysis['refuel_events'] ?? []),
+                'fuel_bay_records' => $analysis['analysis_period']['fuel_bay_records'] ?? 0,
+                'fallback_records' => $analysis['analysis_period']['fallback_records'] ?? 0,
+            ]);
+        } else {
+            Log::warning("Structure Manager: Insufficient data for structure {$structureId}", [
+                'data_points' => $analysis['data_points'] ?? 0,
+            ]);
         }
+    }
+    
+    /**
+     * Get the most recent refuel amount for a structure
+     */
+    private function getLatestRefuelAmount($structureId)
+    {
+        $latestRefuel = DB::table('structure_fuel_history')
+            ->where('structure_id', $structureId)
+            ->where('fuel_blocks_used', '<', 0) // Negative means fuel added
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        return $latestRefuel ? abs($latestRefuel->fuel_blocks_used) : null;
     }
     
     /**
@@ -108,17 +137,69 @@ class AnalyzeFuelConsumption implements ShouldQueue
             return;
         }
         
-        $daysRemaining = \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now());
+        $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
         
-        if ($daysRemaining < 7) {
-            Log::warning('Structure Manager: Critical fuel level detected', [
+        // Get current fuel status from analysis
+        $fuelStatus = $analysis['current_status'] ?? null;
+        
+        // Critical: Less than 7 days in fuel bay
+        if ($fuelStatus && isset($fuelStatus['bay_days_supply']) && $fuelStatus['bay_days_supply'] < 7) {
+            Log::warning('Structure Manager: CRITICAL fuel bay level', [
                 'structure_id' => $structureId,
-                'days_remaining' => $daysRemaining,
-                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0
+                'bay_days_supply' => $fuelStatus['bay_days_supply'],
+                'fuel_bay_blocks' => $fuelStatus['fuel_bay_blocks'] ?? 0,
+                'reserve_blocks' => $fuelStatus['reserve_blocks'] ?? 0,
+                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
             ]);
             
             // Here you could dispatch notification jobs or alerts
-            // dispatch(new SendFuelAlert($structureId, $daysRemaining));
+            // dispatch(new SendFuelAlert($structureId, $fuelStatus['bay_days_supply'], 'critical'));
+        } 
+        // Warning: Less than 14 days in fuel bay
+        elseif ($fuelStatus && isset($fuelStatus['bay_days_supply']) && $fuelStatus['bay_days_supply'] < 14) {
+            Log::info('Structure Manager: Warning fuel bay level', [
+                'structure_id' => $structureId,
+                'bay_days_supply' => $fuelStatus['bay_days_supply'],
+                'fuel_bay_blocks' => $fuelStatus['fuel_bay_blocks'] ?? 0,
+                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
+            ]);
+            
+            // dispatch(new SendFuelAlert($structureId, $fuelStatus['bay_days_supply'], 'warning'));
+        }
+        
+        // Check for overall fuel status (bay + reserves)
+        if ($daysRemaining < 7) {
+            Log::warning('Structure Manager: CRITICAL overall fuel level', [
+                'structure_id' => $structureId,
+                'days_remaining' => $daysRemaining,
+                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
+            ]);
+        }
+        
+        // Check for consumption anomalies
+        if (isset($analysis['anomalies']) && count($analysis['anomalies']) > 0) {
+            $latestAnomaly = end($analysis['anomalies']);
+            
+            Log::info('Structure Manager: Consumption anomaly detected', [
+                'structure_id' => $structureId,
+                'anomaly' => $latestAnomaly,
+            ]);
+        }
+        
+        // Check if reserve fuel needs to be moved to bay
+        // FIXED: Use isset() to safely check for reserve_blocks
+        if ($fuelStatus && 
+            isset($fuelStatus['reserve_blocks']) && 
+            $fuelStatus['reserve_blocks'] > 0 && 
+            isset($fuelStatus['bay_days_supply']) && 
+            $fuelStatus['bay_days_supply'] < 10) {
+            
+            Log::info('Structure Manager: Recommendation to move reserve fuel', [
+                'structure_id' => $structureId,
+                'bay_days_supply' => $fuelStatus['bay_days_supply'],
+                'reserve_blocks' => $fuelStatus['reserve_blocks'],
+                'message' => 'Consider moving reserve fuel from corporate hangar to fuel bay',
+            ]);
         }
     }
 }

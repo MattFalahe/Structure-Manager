@@ -15,7 +15,7 @@ class ScheduleSeeder extends Seeder
     protected $schedules = [
         [
             'command'           => 'structure-manager:track-fuel',
-            'expression'        => '0 * * * *', // Run every hour at minute 0
+            'expression'        => '15 * * * *', // Run every hour at :15 past
             'allow_overlap'     => false,
             'allow_maintenance' => false,
             'ping_before'       => null,
@@ -31,7 +31,7 @@ class ScheduleSeeder extends Seeder
         ],
         [
             'command'           => 'structure-manager:analyze-consumption',
-            'expression'        => '*/30 * * * *', // Run every 30 minutes
+            'expression'        => '30 * * * *', // Run every hour at :30 past
             'allow_overlap'     => false,
             'allow_maintenance' => false,
             'ping_before'       => null,
@@ -53,7 +53,13 @@ class ScheduleSeeder extends Seeder
                 Schedule::create($schedule);
                 $this->command->info('Seeded schedule for: ' . $schedule['command']);
             } else {
-                $this->command->info('Schedule already exists for: ' . $schedule['command']);
+                // Update existing schedule if expression changed
+                if ($existing->expression !== $schedule['expression']) {
+                    $existing->update(['expression' => $schedule['expression']]);
+                    $this->command->info('Updated schedule for: ' . $schedule['command'] . ' to ' . $schedule['expression']);
+                } else {
+                    $this->command->info('Schedule already exists for: ' . $schedule['command']);
+                }
             }
         }
     }

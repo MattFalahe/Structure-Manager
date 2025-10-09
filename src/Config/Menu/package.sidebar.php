@@ -17,6 +17,13 @@ return [
                 'permission' => 'structure-manager.view',
             ],
             [
+                'name'  => 'Fuel Reserves',
+                'label' => 'structure-manager::menu.fuel_reserves',
+                'icon'  => 'fas fa-warehouse',
+                'route' => 'structure-manager.reserves',
+                'permission' => 'structure-manager.view',
+            ],
+            [
                 'name'  => 'Logistics Report',
                 'label' => 'structure-manager::menu.logistics_report',
                 'icon'  => 'fas fa-truck',

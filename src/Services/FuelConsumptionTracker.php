@@ -5,11 +5,13 @@ namespace StructureManager\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureFuelHistory;
+use StructureManager\Models\StructureFuelReserves;
 
 class FuelConsumptionTracker
 {
     /**
      * Analyze fuel consumption patterns for a structure
+     * NOW USES ONLY FUEL BAY DATA (not reserves)
      */
     public static function analyzeFuelConsumption($structureId, $days = 30)
     {
@@ -22,95 +24,184 @@ class FuelConsumptionTracker
         if ($history->count() < 2) {
             return [
                 'status' => 'insufficient_data',
-                'message' => 'Need at least 2 data points to calculate consumption'
+                'message' => 'Need at least 2 data points to calculate consumption',
+                'data_points' => $history->count(),
             ];
         }
         
         $consumptionPeriods = [];
         $refuelEvents = [];
         $anomalies = [];
+        $fuelBayRecords = 0;
+        $fallbackRecords = 0;
         
         // Analyze each consecutive pair of records
         for ($i = 1; $i < $history->count(); $i++) {
             $previous = $history[$i - 1];
             $current = $history[$i];
             
-            // Skip if either record has null fuel_expires
+            // Track which method was used
+            if ($current->tracking_type === 'fuel_bay') {
+                $fuelBayRecords++;
+            } else {
+                $fallbackRecords++;
+            }
+            
+            // Skip if either record has null values
             if (!$previous->fuel_expires || !$current->fuel_expires) {
                 continue;
             }
             
-            $prevExpires = Carbon::parse($previous->fuel_expires);
-            $currExpires = Carbon::parse($current->fuel_expires);
-            $timeDiff = $previous->created_at->diffInHours($current->created_at);
+            $realHoursPassed = $previous->created_at->diffInHours($current->created_at);
             
-            if ($timeDiff == 0) continue;
+            if ($realHoursPassed == 0) continue;
             
-            // Calculate the change in fuel expiry time
-            $fuelExpiryDiff = $currExpires->diffInHours($prevExpires, false);
+            // Prefer fuel_bay method if available
+            if ($current->tracking_type === 'fuel_bay' && $previous->tracking_type === 'fuel_bay') {
+                $prevMeta = json_decode($previous->metadata, true);
+                $currMeta = json_decode($current->metadata, true);
+                
+                if (isset($prevMeta['fuel_blocks']) && isset($currMeta['fuel_blocks'])) {
+                    $blockChange = $prevMeta['fuel_blocks'] - $currMeta['fuel_blocks'];
+                    
+                    if ($blockChange < 0) {
+                        // Refuel detected
+                        $blocksAdded = abs($blockChange);
+                        $refuelEvents[] = [
+                            'timestamp' => $current->created_at,
+                            'blocks_added' => $blocksAdded,
+                            'previous_blocks' => $prevMeta['fuel_blocks'],
+                            'new_blocks' => $currMeta['fuel_blocks'],
+                            'method' => 'fuel_bay',
+                        ];
+                    } else {
+                        // Normal consumption
+                        $hourlyRate = $blockChange / $realHoursPassed;
+                        $dailyRate = $hourlyRate * 24;
+                        
+                        $consumptionPeriods[] = [
+                            'start' => $previous->created_at,
+                            'end' => $current->created_at,
+                            'hours' => $realHoursPassed,
+                            'blocks_consumed' => $blockChange,
+                            'hourly_rate' => round($hourlyRate, 2),
+                            'daily_rate' => round($dailyRate),
+                            'method' => 'fuel_bay',
+                            'type' => 'normal'
+                        ];
+                    }
+                    continue;
+                }
+            }
             
-            if ($fuelExpiryDiff > 0) {
-                // Fuel was added (expiry extended)
+            // Fallback to days_remaining method
+            if ($previous->days_remaining === null || $current->days_remaining === null) {
+                continue;
+            }
+            
+            $fuelDaysChange = $previous->days_remaining - $current->days_remaining;
+            
+            if ($fuelDaysChange < 0) {
+                // Refuel detected
+                $daysAdded = abs($fuelDaysChange);
                 $refuelEvents[] = [
                     'timestamp' => $current->created_at,
-                    'hours_added' => $fuelExpiryDiff,
-                    'blocks_added' => round($fuelExpiryDiff / 24 * ($previous->daily_consumption ?? 0)),
+                    'days_added' => $daysAdded,
+                    'estimated_blocks_added' => round($daysAdded * 40),
+                    'method' => 'days_remaining',
                 ];
             } else {
-                // Normal consumption period
-                $expectedConsumption = $timeDiff; // Hours that should have been consumed
-                $actualConsumption = abs($fuelExpiryDiff); // Hours actually consumed from expiry
+                // Normal consumption
+                $realDaysPassed = $realHoursPassed / 24;
+                $consumptionRate = $realDaysPassed > 0 ? $fuelDaysChange / $realDaysPassed : 0;
+                $blocksPerDay = round($consumptionRate * 40);
                 
-                // Check if consumption rate changed (could indicate service changes)
-                $consumptionRate = $actualConsumption / $timeDiff;
+                $consumptionPeriods[] = [
+                    'start' => $previous->created_at,
+                    'end' => $current->created_at,
+                    'real_days' => round($realDaysPassed, 2),
+                    'fuel_days_consumed' => $fuelDaysChange,
+                    'rate' => round($consumptionRate, 2),
+                    'blocks_per_day' => $blocksPerDay,
+                    'method' => 'days_remaining',
+                    'type' => $consumptionRate >= 0.95 && $consumptionRate <= 1.05 ? 'normal' : 'anomaly'
+                ];
                 
-                // If consumption rate is consistent (close to 1.0), it's normal
-                if ($consumptionRate >= 0.95 && $consumptionRate <= 1.05) {
-                    $consumptionPeriods[] = [
-                        'start' => $previous->created_at,
-                        'end' => $current->created_at,
-                        'hours' => $timeDiff,
-                        'fuel_consumed_hours' => $actualConsumption,
-                        'rate' => $consumptionRate,
-                        'blocks_per_day' => $previous->daily_consumption ?? 0,
-                        'type' => 'normal'
-                    ];
-                } else {
-                    // Anomaly detected (service activation/deactivation?)
+                // Detect anomalies
+                if ($consumptionRate < 0.95 || $consumptionRate > 1.05) {
                     $anomalies[] = [
                         'timestamp' => $current->created_at,
                         'expected_rate' => 1.0,
-                        'actual_rate' => $consumptionRate,
-                        'difference' => ($consumptionRate - 1.0) * 100 . '%',
+                        'actual_rate' => round($consumptionRate, 2),
+                        'difference' => round(($consumptionRate - 1.0) * 100, 1) . '%',
                         'possible_cause' => $consumptionRate > 1.05 ? 'service_activated' : 'service_deactivated'
                     ];
                 }
             }
         }
         
-        // Calculate average consumption
-        $validPeriods = array_filter($consumptionPeriods, function($p) {
+        // Calculate average consumption from normal periods
+        $normalPeriods = array_filter($consumptionPeriods, function($p) {
             return $p['type'] == 'normal';
         });
         
         $averageDailyBlocks = 0;
         $averageHourlyBlocks = 0;
         
-        if (count($validPeriods) > 0) {
-            // Calculate weighted average based on period duration
-            $totalHours = array_sum(array_column($validPeriods, 'hours'));
-            $totalBlocks = 0;
+        if (count($normalPeriods) > 0) {
+            // Prefer fuel_bay method calculations
+            $fuelBayPeriods = array_filter($normalPeriods, fn($p) => $p['method'] === 'fuel_bay');
             
-            foreach ($validPeriods as $period) {
-                $totalBlocks += $period['blocks_per_day'] * ($period['hours'] / 24);
+            if (count($fuelBayPeriods) > 0) {
+                // Use fuel bay data (most accurate)
+                $totalHours = array_sum(array_column($fuelBayPeriods, 'hours'));
+                $totalBlocks = array_sum(array_column($fuelBayPeriods, 'blocks_consumed'));
+                
+                if ($totalHours > 0) {
+                    $averageHourlyBlocks = round($totalBlocks / $totalHours, 2);
+                    $averageDailyBlocks = round($averageHourlyBlocks * 24);
+                }
+            } else {
+                // Fallback to days_remaining calculation
+                $totalRealDays = array_sum(array_column($normalPeriods, 'real_days'));
+                $totalBlocks = array_sum(array_column($normalPeriods, 'blocks_per_day'));
+                
+                if ($totalRealDays > 0) {
+                    $averageDailyBlocks = round($totalBlocks / count($normalPeriods));
+                    $averageHourlyBlocks = round($averageDailyBlocks / 24, 2);
+                }
             }
-            
-            $averageDailyBlocks = $totalHours > 0 ? round($totalBlocks / ($totalHours / 24)) : 0;
-            $averageHourlyBlocks = round($averageDailyBlocks / 24, 2);
         }
         
-        // Calculate actual consumption from database
-        $actualConsumption = self::calculateActualConsumption($structureId, $days);
+        // Get current fuel status - FUEL BAY ONLY
+        $latestRecord = $history->last();
+        $currentFuelStatus = null;
+        
+        if ($latestRecord && $latestRecord->metadata) {
+            $metadata = json_decode($latestRecord->metadata, true);
+            $fuelBayBlocks = $metadata['fuel_blocks'] ?? 0;
+            
+            $currentFuelStatus = [
+                'fuel_bay_blocks' => $fuelBayBlocks,
+                'days_remaining' => $latestRecord->days_remaining,
+            ];
+            
+            // Calculate days of fuel available IN BAY
+            if ($averageDailyBlocks > 0 && $fuelBayBlocks > 0) {
+                $currentFuelStatus['bay_days_supply'] = round($fuelBayBlocks / $averageDailyBlocks, 1);
+            }
+        }
+        
+        // Get reserves separately
+        $reserves = StructureFuelReserves::getTotalReserves($structureId);
+        if ($reserves > 0) {
+            $currentFuelStatus['reserve_blocks'] = $reserves;
+            $currentFuelStatus['total_blocks'] = $currentFuelStatus['fuel_bay_blocks'] + $reserves;
+            
+            if ($averageDailyBlocks > 0) {
+                $currentFuelStatus['total_days_supply'] = round($currentFuelStatus['total_blocks'] / $averageDailyBlocks, 1);
+            }
+        }
         
         return [
             'status' => 'success',
@@ -120,71 +211,28 @@ class FuelConsumptionTracker
                 'start' => Carbon::now()->subDays($days),
                 'end' => Carbon::now(),
                 'data_points' => $history->count(),
+                'fuel_bay_records' => $fuelBayRecords,
+                'fallback_records' => $fallbackRecords,
             ],
             'consumption' => [
-                'average_daily' => $averageDailyBlocks,
                 'average_hourly' => $averageHourlyBlocks,
+                'average_daily' => $averageDailyBlocks,
                 'average_weekly' => $averageDailyBlocks * 7,
                 'average_monthly' => $averageDailyBlocks * 30,
-                'actual_total' => $actualConsumption['total_blocks'],
-                'actual_daily_avg' => $actualConsumption['daily_average'],
             ],
+            'current_status' => $currentFuelStatus,
             'refuel_events' => $refuelEvents,
             'anomalies' => $anomalies,
             'consumption_periods' => $consumptionPeriods,
-            'recommendations' => self::generateRecommendations($averageDailyBlocks, $refuelEvents, $anomalies),
-        ];
-    }
-    
-    /**
-     * Calculate actual consumption based on fuel expiry changes
-     */
-    private static function calculateActualConsumption($structureId, $days)
-    {
-        $startDate = Carbon::now()->subDays($days);
-        
-        // Get first and last records in the period
-        $firstRecord = StructureFuelHistory::where('structure_id', $structureId)
-            ->where('created_at', '>=', $startDate)
-            ->orderBy('created_at', 'asc')
-            ->first();
-            
-        $lastRecord = StructureFuelHistory::where('structure_id', $structureId)
-            ->where('created_at', '>=', $startDate)
-            ->orderBy('created_at', 'desc')
-            ->first();
-        
-        if (!$firstRecord || !$lastRecord || !$firstRecord->fuel_expires || !$lastRecord->fuel_expires) {
-            return [
-                'total_blocks' => 0,
-                'daily_average' => 0,
-            ];
-        }
-        
-        // Calculate total fuel consumed (accounting for refueling)
-        $refuelTotal = StructureFuelHistory::where('structure_id', $structureId)
-            ->where('created_at', '>=', $startDate)
-            ->where('fuel_blocks_used', '<', 0) // Negative means fuel added
-            ->sum('fuel_blocks_used');
-        
-        $firstExpiry = Carbon::parse($firstRecord->fuel_expires);
-        $lastExpiry = Carbon::parse($lastRecord->fuel_expires);
-        $timePeriod = $firstRecord->created_at->diffInDays($lastRecord->created_at) ?: 1;
-        
-        // Total consumption = (initial fuel - final fuel) + refuels
-        $hoursConsumed = $firstExpiry->diffInHours($lastExpiry) - abs($refuelTotal);
-        $blocksConsumed = ($hoursConsumed / 24) * ($lastRecord->daily_consumption ?? 0);
-        
-        return [
-            'total_blocks' => round(abs($blocksConsumed)),
-            'daily_average' => round(abs($blocksConsumed) / $timePeriod),
+            'recommendations' => self::generateRecommendations($averageDailyBlocks, $refuelEvents, $anomalies, $currentFuelStatus),
         ];
     }
     
     /**
      * Generate recommendations based on consumption patterns
+     * UPDATED to account for separated fuel bay and reserves
      */
-    private static function generateRecommendations($avgDaily, $refuelEvents, $anomalies)
+    private static function generateRecommendations($avgDaily, $refuelEvents, $anomalies, $fuelStatus)
     {
         $recommendations = [];
         
@@ -194,7 +242,7 @@ class FuelConsumptionTracker
             if ($avgDaysBetweenRefuel < 7) {
                 $recommendations[] = [
                     'type' => 'efficiency',
-                    'message' => 'Frequent refueling detected. Consider larger fuel hauls to reduce logistics overhead.',
+                    'message' => 'Frequent refueling detected (' . round($avgDaysBetweenRefuel, 1) . ' days between refuels). Consider larger fuel hauls or moving more from reserves to fuel bay.',
                     'severity' => 'medium'
                 ];
             }
@@ -204,8 +252,41 @@ class FuelConsumptionTracker
         if (count($anomalies) > 2) {
             $recommendations[] = [
                 'type' => 'stability',
-                'message' => 'Multiple consumption rate changes detected. Review service activation patterns.',
+                'message' => 'Multiple consumption rate changes detected (' . count($anomalies) . ' anomalies). Review service activation patterns.',
                 'severity' => 'low'
+            ];
+        }
+        
+        // Fuel bay warning
+        if ($fuelStatus && isset($fuelStatus['bay_days_supply']) && $fuelStatus['bay_days_supply'] < 7) {
+            $recommendations[] = [
+                'type' => 'urgent',
+                'message' => sprintf('Fuel bay critically low! Only %.1f days supply remaining. Move fuel from reserves immediately.', $fuelStatus['bay_days_supply']),
+                'severity' => 'critical'
+            ];
+        } elseif ($fuelStatus && isset($fuelStatus['bay_days_supply']) && $fuelStatus['bay_days_supply'] < 14) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'message' => sprintf('Fuel bay running low. %.1f days supply remaining. Plan to refuel soon.', $fuelStatus['bay_days_supply']),
+                'severity' => 'warning'
+            ];
+        }
+        
+        // Reserve fuel check
+        if ($fuelStatus && isset($fuelStatus['reserve_blocks']) && $fuelStatus['reserve_blocks'] > 0 && isset($fuelStatus['bay_days_supply']) && $avgDaily > 0) {
+            $reserveDays = ($fuelStatus['reserve_blocks'] / $avgDaily);
+            $recommendations[] = [
+                'type' => 'info',
+                'message' => sprintf('Reserve fuel available: %s blocks (%.1f days supply). Can be moved to fuel bay when needed.', 
+                    number_format($fuelStatus['reserve_blocks']), 
+                    $reserveDays),
+                'severity' => 'info'
+            ];
+        } elseif ($fuelStatus && (!isset($fuelStatus['reserve_blocks']) || $fuelStatus['reserve_blocks'] == 0)) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'message' => 'No reserve fuel detected in CorpSAG hangars. Consider staging backup fuel.',
+                'severity' => 'medium'
             ];
         }
         
@@ -214,7 +295,9 @@ class FuelConsumptionTracker
             $monthlyRequired = $avgDaily * 30;
             $recommendations[] = [
                 'type' => 'planning',
-                'message' => sprintf('Plan for %s fuel blocks per month based on current average consumption.', number_format($monthlyRequired)),
+                'message' => sprintf('Monthly fuel requirement: %s blocks (%s m³). Plan logistics accordingly.', 
+                    number_format($monthlyRequired),
+                    number_format($monthlyRequired * 5)),
                 'severity' => 'info'
             ];
         }
@@ -242,16 +325,16 @@ class FuelConsumptionTracker
                 if ($ratio > $threshold) {
                     $spikes[] = [
                         'timestamp' => $recent[$i]->created_at,
-                        'previous_consumption' => $recent[$i-1]->daily_consumption,
-                        'new_consumption' => $recent[$i]->daily_consumption,
+                        'previous_consumption' => round($recent[$i-1]->daily_consumption, 2),
+                        'new_consumption' => round($recent[$i]->daily_consumption, 2),
                         'increase_percent' => round(($ratio - 1) * 100, 1),
                         'likely_cause' => 'Service activation or structure came out of low power'
                     ];
                 } elseif ($ratio < (1 / $threshold)) {
                     $spikes[] = [
                         'timestamp' => $recent[$i]->created_at,
-                        'previous_consumption' => $recent[$i-1]->daily_consumption,
-                        'new_consumption' => $recent[$i]->daily_consumption,
+                        'previous_consumption' => round($recent[$i-1]->daily_consumption, 2),
+                        'new_consumption' => round($recent[$i]->daily_consumption, 2),
                         'decrease_percent' => round((1 - $ratio) * 100, 1),
                         'likely_cause' => 'Service deactivation or structure entered low power'
                     ];
@@ -276,6 +359,10 @@ class FuelConsumptionTracker
             ->select('us.name', 'cs.fuel_expires')
             ->first();
         
+        // Get reserve information
+        $reserves = StructureFuelReserves::getCurrentReserves($structureId);
+        $totalReserves = $reserves->sum('reserve_quantity');
+        
         return [
             'structure' => $structure->name ?? 'Unknown',
             'report_date' => Carbon::now(),
@@ -284,14 +371,13 @@ class FuelConsumptionTracker
                 Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::now()) : null,
             'consumption_analysis' => $analysis,
             'consumption_spikes' => $spikes,
-            'fuel_efficiency' => [
-                'average_daily' => $analysis['consumption']['average_daily'],
-                'projected_monthly' => $analysis['consumption']['average_daily'] * 30,
-                'actual_last_30_days' => $analysis['consumption']['actual_total'],
-                'variance' => $analysis['consumption']['actual_total'] - ($analysis['consumption']['average_daily'] * 30),
+            'fuel_status' => $analysis['current_status'] ?? [],
+            'reserves' => [
+                'total_blocks' => $totalReserves,
+                'by_location' => $reserves,
+                'recent_movements' => StructureFuelReserves::getRefuelEvents($structureId, 30),
             ],
-            'recommendations' => $analysis['recommendations'],
+            'recommendations' => $analysis['recommendations'] ?? [],
         ];
     }
 }
-

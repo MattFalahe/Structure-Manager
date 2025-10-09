@@ -7,12 +7,19 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use StructureManager\Models\StructureFuelHistory;
+use StructureManager\Models\StructureFuelReserves;
 use Carbon\Carbon;
 
 class TrackFuelConsumption implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
+
+    /**
+     * Fuel block type IDs from EVE
+     */
+    const FUEL_BLOCK_TYPES = [4051, 4246, 4247, 4312];
 
     /**
      * Execute the job.
@@ -23,20 +30,60 @@ class TrackFuelConsumption implements ShouldQueue
             ->whereNotNull('fuel_expires')
             ->get();
         
+        Log::info('TrackFuelConsumption: Processing ' . $structures->count() . ' structures');
+        
+        $tracked = 0;
+        $skipped = 0;
+        $fuelBaySuccess = 0;
+        $fallbackMethod = 0;
+        $reservesTracked = 0;
+        
         foreach ($structures as $structure) {
-            $this->trackStructureFuel($structure);
+            $result = $this->trackStructureFuel($structure);
+            if ($result['tracked']) {
+                $tracked++;
+                if ($result['method'] === 'fuel_bay') {
+                    $fuelBaySuccess++;
+                } else {
+                    $fallbackMethod++;
+                }
+            } else {
+                $skipped++;
+            }
+            
+            // Track reserves separately
+            if ($this->trackStructureReserves($structure->structure_id, $structure->corporation_id)) {
+                $reservesTracked++;
+            }
         }
         
+        Log::info("TrackFuelConsumption: Completed. Tracked: $tracked (Fuel Bay: $fuelBaySuccess, Fallback: $fallbackMethod), Reserves: $reservesTracked, Skipped: $skipped");
+        
         // Clean old history (keep 6 months)
-        StructureFuelHistory::where('created_at', '<', Carbon::now()->subMonths(6))
-            ->delete();
+        $deleted = StructureFuelHistory::where('created_at', '<', Carbon::now()->subMonths(6))->delete();
+        if ($deleted > 0) {
+            Log::info("TrackFuelConsumption: Cleaned $deleted old history records");
+        }
+        
+        // Clean old reserve records (keep 3 months)
+        $deletedReserves = StructureFuelReserves::where('created_at', '<', Carbon::now()->subMonths(3))->delete();
+        if ($deletedReserves > 0) {
+            Log::info("TrackFuelConsumption: Cleaned $deletedReserves old reserve records");
+        }
     }
     
     /**
-     * Track fuel for a single structure
+     * Track fuel BAY ONLY for consumption analysis
      */
     private function trackStructureFuel($structure)
     {
+        // METHOD 1: Get fuel blocks from fuel bay ONLY (not reserves)
+        $fuelBayData = $this->getFuelBayQuantity($structure->structure_id);
+        
+        // METHOD 2: Calculate from days_remaining (FALLBACK)
+        $currentDaysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
+        
+        // Get last record for comparison
         $lastRecord = StructureFuelHistory::where('structure_id', $structure->structure_id)
             ->orderBy('created_at', 'desc')
             ->first();
@@ -44,63 +91,240 @@ class TrackFuelConsumption implements ShouldQueue
         $shouldCreateRecord = false;
         $fuelBlocksUsed = null;
         $dailyConsumption = null;
+        $trackingMethod = 'unknown';
         
+        // Determine if we should create a record
         if (!$lastRecord) {
-            // First record for this structure
             $shouldCreateRecord = true;
-        } elseif ($lastRecord->fuel_expires != $structure->fuel_expires) {
-            // Fuel was added or structure was refueled
+            $trackingMethod = $fuelBayData['available'] ? 'fuel_bay' : 'days_remaining';
+            Log::info("Structure {$structure->structure_id}: First snapshot (method: {$trackingMethod})");
+        } elseif ($lastRecord->created_at->diffInHours(now()) >= 1) {
             $shouldCreateRecord = true;
+        }
+        
+        // Calculate consumption if we have a previous record
+        if ($lastRecord && $shouldCreateRecord) {
+            $realHoursPassed = $lastRecord->created_at->diffInHours(now());
             
-            // Calculate fuel consumption
-            if ($lastRecord->fuel_expires && $structure->fuel_expires) {
-                $oldExpiry = Carbon::parse($lastRecord->fuel_expires);
-                $newExpiry = Carbon::parse($structure->fuel_expires);
-                $hoursSinceLastRecord = $lastRecord->created_at->diffInHours(now());
+            if ($realHoursPassed > 0) {
+                // METHOD 1: Use actual fuel bay quantities (BEST - ONLY FUEL BAY)
+                if ($fuelBayData['available'] && $lastRecord->metadata) {
+                    $metadata = json_decode($lastRecord->metadata, true);
+                    $previousFuelBlocks = $metadata['fuel_blocks'] ?? null;
+                    
+                    if ($previousFuelBlocks !== null && $previousFuelBlocks > 0) {
+                        $blockChange = $previousFuelBlocks - $fuelBayData['quantity'];
+                        
+                        if ($blockChange < 0) {
+                            // REFUEL detected - fuel bay was topped up
+                            $blocksAdded = abs($blockChange);
+                            $fuelBlocksUsed = $blockChange; // Negative = fuel added
+                            $dailyConsumption = 0;
+                            $trackingMethod = 'fuel_bay';
+                            Log::info("Structure {$structure->structure_id}: REFUEL detected via fuel bay - added {$blocksAdded} blocks");
+                        } else {
+                            // Normal consumption
+                            $hourlyRate = $blockChange / $realHoursPassed;
+                            $dailyRate = $hourlyRate * 24;
+                            $dailyConsumption = $dailyRate / 40; // Convert to fuel-days per real day
+                            $fuelBlocksUsed = round($blockChange);
+                            $trackingMethod = 'fuel_bay';
+                            
+                            Log::info("Structure {$structure->structure_id}: " . 
+                                     "Consumed {$blockChange} blocks over {$realHoursPassed}h = " . 
+                                     round($hourlyRate, 2) . " blocks/hour, " .
+                                     round($dailyRate) . " blocks/day (method: fuel_bay)");
+                        }
+                    }
+                }
                 
-                if ($newExpiry->gt($oldExpiry)) {
-                    // Fuel was added
-                    $daysAdded = $newExpiry->diffInDays($oldExpiry);
-                    $fuelBlocksUsed = $daysAdded * -40; // Negative indicates fuel added
-                } else {
-                    // Normal consumption
-                    $daysConsumed = $oldExpiry->diffInDays($newExpiry);
-                    if ($hoursSinceLastRecord > 0) {
-                        $dailyConsumption = ($daysConsumed / $hoursSinceLastRecord) * 24;
+                // METHOD 2: Fallback to days_remaining calculation
+                if ($trackingMethod === 'unknown' && $lastRecord->days_remaining !== null) {
+                    $fuelDaysChange = $lastRecord->days_remaining - $currentDaysRemaining;
+                    
+                    if ($fuelDaysChange < 0) {
+                        // REFUEL detected via days_remaining increase
+                        $daysAdded = abs($fuelDaysChange);
+                        $fuelBlocksUsed = -1 * round($daysAdded * 40); // Negative indicates fuel added
+                        $dailyConsumption = 0;
+                        $trackingMethod = 'days_remaining';
+                        Log::info("Structure {$structure->structure_id}: REFUEL detected via days_remaining - added ~{$daysAdded} fuel-days");
+                    } else {
+                        // Normal consumption
+                        $realDaysPassed = $realHoursPassed / 24;
+                        $consumptionRate = $realDaysPassed > 0 ? $fuelDaysChange / $realDaysPassed : 0;
+                        $dailyConsumption = $consumptionRate;
+                        $fuelBlocksUsed = round($consumptionRate * 40 * $realDaysPassed);
+                        $trackingMethod = 'days_remaining';
+                        
+                        Log::info("Structure {$structure->structure_id}: " . 
+                                 "Consumed {$fuelDaysChange} fuel-days over " . round($realDaysPassed, 2) . 
+                                 " real days = " . round($consumptionRate, 2) . " rate, ~{$fuelBlocksUsed} blocks (method: days_remaining)");
                     }
                 }
             }
-        } elseif ($lastRecord->created_at->diffInHours(now()) >= 24) {
-            // Create a daily snapshot even if fuel_expires hasn't changed
-            $shouldCreateRecord = true;
-            
-            // Calculate daily consumption based on time passed
-            $hoursPassed = $lastRecord->created_at->diffInHours(now());
-            $daysPassed = $hoursPassed / 24;
-            
-            if ($lastRecord->days_remaining !== null) {
-                $currentDaysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
-                $daysConsumed = $lastRecord->days_remaining - $currentDaysRemaining;
-                
-                if ($daysPassed > 0) {
-                    $dailyConsumption = $daysConsumed / $daysPassed;
-                    $fuelBlocksUsed = round($dailyConsumption * 40); // Assuming 40 blocks per day
-                }
-            }
         }
         
+        // Create the snapshot record - FUEL BAY ONLY
         if ($shouldCreateRecord) {
-            $daysRemaining = $structure->fuel_expires ? 
-                Carbon::parse($structure->fuel_expires)->diffInDays(now()) : null;
+            $metadata = [
+                'tracking_method' => $trackingMethod,
+                'fuel_blocks' => $fuelBayData['quantity'],
+                'fuel_bay_available' => $fuelBayData['available'],
+                'fuel_type_id' => $fuelBayData['fuel_type_id'],
+                // NOTE: Reserves are tracked separately now
+            ];
             
-            StructureFuelHistory::create([
+            $record = StructureFuelHistory::create([
                 'structure_id' => $structure->structure_id,
                 'corporation_id' => $structure->corporation_id,
                 'fuel_expires' => $structure->fuel_expires,
-                'days_remaining' => $daysRemaining,
+                'days_remaining' => $currentDaysRemaining,
                 'fuel_blocks_used' => $fuelBlocksUsed,
                 'daily_consumption' => $dailyConsumption,
+                'consumption_rate' => $dailyConsumption,
+                'tracking_type' => $trackingMethod,
+                'metadata' => json_encode($metadata),
             ]);
+            
+            Log::info("Structure {$structure->structure_id}: Created fuel bay snapshot #{$record->id} " .
+                     "(days: {$currentDaysRemaining}, bay: " . ($fuelBayData['quantity'] ?? 'N/A') . 
+                     ", method: {$trackingMethod})");
+            
+            return ['tracked' => true, 'method' => $trackingMethod];
         }
+        
+        return ['tracked' => false, 'method' => null];
+    }
+    
+    /**
+     * Track RESERVES SEPARATELY (CorpSAG hangars)
+     * Now handles nested Office containers inside structures
+     */
+    private function trackStructureReserves($structureId, $corporationId)
+    {
+        // METHOD 1: Direct - Fuel in structure's CorpSAG
+        $directReserves = DB::table('corporation_assets')
+            ->where('location_id', $structureId)
+            ->where('location_flag', 'LIKE', 'CorpSAG%')
+            ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
+            ->get();
+        
+        // METHOD 2: Nested - Fuel in Office containers inside the structure
+        $nestedReserves = DB::table('corporation_assets as fuel')
+            ->join('corporation_assets as office', 'fuel.location_id', '=', 'office.item_id')
+            ->join('invTypes as office_type', 'office.type_id', '=', 'office_type.typeID')
+            ->where('office.location_id', $structureId)
+            ->where('office_type.typeName', 'Office')
+            ->where('fuel.location_flag', 'LIKE', 'CorpSAG%')
+            ->whereIn('fuel.type_id', self::FUEL_BLOCK_TYPES)
+            ->select(
+                'fuel.item_id',
+                'fuel.type_id',
+                'fuel.quantity',
+                'fuel.location_flag',
+                'fuel.location_id'
+            )
+            ->get();
+        
+        // Combine both methods
+        $reserves = $directReserves->merge($nestedReserves);
+        
+        if ($reserves->isEmpty()) {
+            return false;
+        }
+        
+        Log::debug("Structure {$structureId}: Found {$reserves->count()} reserve stacks (Direct: {$directReserves->count()}, Nested: {$nestedReserves->count()})");
+        
+        $tracked = false;
+        
+        foreach ($reserves as $reserve) {
+            // Get last reserve record
+            $lastReserve = StructureFuelReserves::where('structure_id', $structureId)
+                ->where('fuel_type_id', $reserve->type_id)
+                ->where('location_flag', $reserve->location_flag)
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            $shouldTrack = false;
+            $quantityChange = null;
+            $isRefuelEvent = false;
+            
+            if (!$lastReserve) {
+                // First time tracking this reserve
+                $shouldTrack = true;
+                Log::info("Structure {$structureId}: First time tracking {$reserve->quantity} blocks in {$reserve->location_flag}");
+            } elseif ($lastReserve->reserve_quantity != $reserve->quantity) {
+                // Quantity changed
+                $shouldTrack = true;
+                $quantityChange = $reserve->quantity - $lastReserve->reserve_quantity;
+                
+                // Negative change = fuel moved to bay (refuel event)
+                if ($quantityChange < 0) {
+                    $isRefuelEvent = true;
+                    Log::info("Structure {$structureId}: Reserve fuel moved - {$quantityChange} blocks from {$reserve->location_flag}");
+                } else {
+                    Log::info("Structure {$structureId}: Reserve fuel added - +{$quantityChange} blocks to {$reserve->location_flag}");
+                }
+            } elseif ($lastReserve->created_at->diffInHours(now()) >= 24) {
+                // Create daily snapshot even if no change
+                $shouldTrack = true;
+                $quantityChange = 0;
+            }
+            
+            if ($shouldTrack) {
+                StructureFuelReserves::create([
+                    'structure_id' => $structureId,
+                    'corporation_id' => $corporationId,
+                    'fuel_type_id' => $reserve->type_id,
+                    'reserve_quantity' => $reserve->quantity,
+                    'location_flag' => $reserve->location_flag,
+                    'previous_quantity' => $lastReserve ? $lastReserve->reserve_quantity : null,
+                    'quantity_change' => $quantityChange,
+                    'is_refuel_event' => $isRefuelEvent,
+                    'metadata' => json_encode([
+                        'item_id' => $reserve->item_id,
+                        'location_id' => $reserve->location_id,
+                        'tracking_method' => isset($reserve->location_id) && $reserve->location_id != $structureId ? 'nested_office' : 'direct',
+                    ]),
+                ]);
+                
+                $tracked = true;
+            }
+        }
+        
+        return $tracked;
+    }
+    
+    /**
+     * Get fuel block quantity from structure's fuel bay ONLY
+     * NO RESERVES - Those are tracked separately
+     */
+    private function getFuelBayQuantity($structureId)
+    {
+        $result = [
+            'quantity' => 0,
+            'available' => false,
+            'fuel_type_id' => null,
+        ];
+        
+        // Get fuel from StructureFuel bay ONLY (what's being consumed)
+        $fuelBayAsset = DB::table('corporation_assets')
+            ->where('location_id', $structureId)
+            ->where('location_flag', 'StructureFuel')
+            ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
+            ->first();
+        
+        if ($fuelBayAsset) {
+            $result['quantity'] = $fuelBayAsset->quantity;
+            $result['available'] = true;
+            $result['fuel_type_id'] = $fuelBayAsset->type_id;
+            
+            Log::debug("Structure {$structureId}: Found {$fuelBayAsset->quantity} blocks (type {$fuelBayAsset->type_id}) in fuel bay");
+        } else {
+            Log::debug("Structure {$structureId}: No fuel bay data found, will use days_remaining method");
+        }
+        
+        return $result;
     }
 }

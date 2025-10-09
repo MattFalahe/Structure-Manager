@@ -15,6 +15,13 @@ class StructureFuelHistory extends Model
         'days_remaining',
         'fuel_blocks_used',
         'daily_consumption',
+        'consumption_rate',
+        'tracking_type',
+        'metadata',
+    ];
+    
+    protected $casts = [
+        'metadata' => 'array',
     ];
     
     protected $dates = [

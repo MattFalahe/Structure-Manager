@@ -10,24 +10,68 @@
         margin-bottom: 1rem;
     }
     
+    /* DARK THEME COMPATIBLE - Changed from light backgrounds */
     .alert-card.critical {
-        border-left-color: #dc3545;
-        background: #fff5f5;
+        border-left-color: #dc3545 !important;
+        background: rgba(220, 53, 69, 0.1) !important;
     }
     
     .alert-card.warning {
-        border-left-color: #ffc107;
-        background: #fffbf0;
+        border-left-color: #ffc107 !important;
+        background: rgba(255, 193, 7, 0.1) !important;
     }
     
+    /* Force info-box backgrounds to show */
+    .info-box.bg-danger {
+        background: #dc3545 !important;
+        color: #fff !important;
+    }
+    
+    .info-box.bg-warning {
+        background: #ffc107 !important;
+        color: #000 !important;
+    }
+    
+    .info-box.bg-info {
+        background: #17a2b8 !important;
+        color: #fff !important;
+    }
+    
+    .info-box-icon i {
+        color: rgba(255, 255, 255, 0.3) !important;
+    }
+    
+    .info-box.bg-danger .info-box-icon i {
+        color: rgba(255, 255, 255, 0.4) !important;
+    }
+    
+    .info-box.bg-warning .info-box-icon i {
+        color: #6c757d !important;
+        opacity: 0.6 !important;
+    }
+    
+    .info-box.bg-info .info-box-icon i {
+        color: rgba(255, 255, 255, 0.4) !important;
+    }
+    
+    .info-box-content {
+        color: inherit !important;
+    }
+    
+    .info-box-text,
+    .info-box-number {
+        color: inherit !important;
+    }
+    
+    /* Better contrast for dark themes */
     .fuel-critical { 
-        color: #dc3545; 
+        color: #ff6b6b !important;
         font-weight: bold;
         font-size: 1.1rem;
     }
     
     .fuel-warning { 
-        color: #ffc107; 
+        color: #ffd43b !important;
         font-weight: bold;
         font-size: 1.1rem;
     }
@@ -43,11 +87,12 @@
         margin-top: 0.5rem;
     }
     
+    /* DARK THEME COMPATIBLE - Changed from white background */
     .stat-badge {
         padding: 0.5rem 1rem;
         border-radius: 0.25rem;
-        background: white;
-        border: 1px solid #dee2e6;
+        background: rgba(0, 0, 0, 0.2) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
     
     .no-alerts {
@@ -57,8 +102,29 @@
     
     .no-alerts i {
         font-size: 4rem;
-        color: #28a745;
+        color: #51cf66;
         margin-bottom: 1rem;
+    }
+    
+    /* Badge styling */
+    .badge-danger {
+        background-color: #dc3545 !important;
+        color: #fff !important;
+    }
+    
+    .badge-warning {
+        background-color: #ffc107 !important;
+        color: #000 !important;
+    }
+    
+    .badge-info {
+        background-color: #17a2b8 !important;
+        color: #fff !important;
+    }
+    
+    .badge-secondary {
+        background-color: #6c757d !important;
+        color: #fff !important;
     }
 </style>
 @endpush
@@ -163,8 +229,8 @@ $(document).ready(function() {
                     <div class="no-alerts">
                         <i class="fas fa-check-circle"></i>
                         <h4>All Clear!</h4>
-                        <p class="text-muted">No structures require immediate attention.</p>
-                        <p class="text-muted">All structures have sufficient fuel (14+ days).</p>
+                        <p>No structures require immediate attention.</p>
+                        <p>All structures have sufficient fuel (14+ days).</p>
                     </div>
                 `);
                 $('#critical-count').text('0');
@@ -242,7 +308,7 @@ $(document).ready(function() {
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
                                             <h5 class="mb-1">
-                                                <a href="{{ url('structure-manager/structure') }}/${alert.structure_id}" class="text-dark">
+                                                <a href="{{ url('structure-manager/structure') }}/${alert.structure_id}">
                                                     ${alert.structure_name}
                                                 </a>
                                             </h5>
@@ -255,7 +321,7 @@ $(document).ready(function() {
                                             <div class="${daysClass}">
                                                 ${timeDisplay}
                                             </div>
-                                            <small class="text-muted">Remaining</small>
+                                            <small>Remaining</small>
                                         </div>
                                     </div>
                                     
@@ -263,20 +329,20 @@ $(document).ready(function() {
                                         <div class="stat-badge">
                                             <i class="far fa-clock text-${statusColor}"></i>
                                             <strong>Fuel Expires:</strong><br>
-                                            <span class="text-muted">${expiresAt.format('YYYY-MM-DD HH:mm')}</span><br>
-                                            <small class="text-muted">(${timeUntilEmpty})</small>
+                                            <span>${expiresAt.format('YYYY-MM-DD HH:mm')}</span><br>
+                                            <small>(${timeUntilEmpty})</small>
                                         </div>
                                         <div class="stat-badge">
                                             <i class="fas fa-gas-pump text-primary"></i>
                                             <strong>Weekly Requirement:</strong><br>
-                                            <span class="text-muted">${alert.blocks_needed.toLocaleString()} blocks</span><br>
-                                            <small class="text-muted">(${(alert.blocks_needed * 5).toLocaleString()} m³)</small>
+                                            <span>${alert.blocks_needed.toLocaleString()} blocks</span><br>
+                                            <small>(${(alert.blocks_needed * 5).toLocaleString()} m³)</small>
                                         </div>
                                         <div class="stat-badge">
                                             <i class="fas fa-cubes text-info"></i>
                                             <strong>30-Day Need:</strong><br>
-                                            <span class="text-muted">${(alert.blocks_needed * 4.3).toFixed(0).toLocaleString()} blocks</span><br>
-                                            <small class="text-muted">(${(alert.blocks_needed * 4.3 * 5).toFixed(0).toLocaleString()} m³)</small>
+                                            <span>${(alert.blocks_needed * 4.3).toFixed(0).toLocaleString()} blocks</span><br>
+                                            <small>(${(alert.blocks_needed * 4.3 * 5).toFixed(0).toLocaleString()} m³)</small>
                                         </div>
                                     </div>
                                     

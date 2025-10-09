@@ -77,5 +77,33 @@ Route::group([
         'uses' => 'StructureManagerController@about',
         'middleware' => 'can:structure-manager.view',
     ]);
+
+    // Fuel Reserves Management - View
+    Route::get('/reserves', [
+        'as' => 'structure-manager.reserves',
+        'uses' => 'FuelReserveController@index',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // Fuel Reserves - JSON Data
+    Route::get('/reserves-data', [
+        'as' => 'structure-manager.reserves-data',
+        'uses' => 'FuelReserveController@getReservesData',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // Refuel Events History
+    Route::get('/refuel-history/{days?}', [
+        'as' => 'structure-manager.refuel-history',
+        'uses' => 'FuelReserveController@getRefuelHistory',
+        'middleware' => 'can:structure-manager.view',
+    ])->where('days', '[0-9]+');
+    
+    // Structure Reserve History
+    Route::get('/structure-reserves/{id}', [
+        'as' => 'structure-manager.structure-reserves',
+        'uses' => 'FuelReserveController@getStructureReserveHistory',
+        'middleware' => 'can:structure-manager.view',
+    ]);
     
 });
