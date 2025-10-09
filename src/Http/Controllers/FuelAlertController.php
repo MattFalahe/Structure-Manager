@@ -78,10 +78,12 @@ class FuelAlertController extends Controller
         
         // Calculate fuel blocks needed for each structure
         foreach ($structures as $structure) {
-            $structure->blocks_needed = FuelCalculator::getFuelRequirement(
-                $structure->type_id, 
-                'weekly'
-            );
+            // FIXED: Pass structure_id to get actual service data
+           $structure->blocks_needed = FuelCalculator::getFuelRequirement(
+            $structure->type_id,
+            $structure->structure_id,
+            'weekly'
+        );
             
             $structure->status = $structure->hours_remaining < 168 ? 'critical' : 'warning'; // 168 hours = 7 days
         }
@@ -138,9 +140,14 @@ class FuelAlertController extends Controller
                 ];
             }
             
-            $blocks30d = FuelCalculator::getFuelRequirement($structure->type_id, 'monthly');
+            // FIXED: Pass structure_id as second parameter to get actual services
+            $blocks30d = FuelCalculator::getFuelRequirement(
+                $structure->type_id,
+                $structure->structure_id,
+                'monthly'
+            );
             $blocks60d = $blocks30d * 2;
-            $blocks90d = FuelCalculator::getFuelRequirement($structure->type_id, 'quarterly');
+            $blocks90d = $blocks30d * 3;
             
             $report[$system]['structures'][] = [
                 'name' => $structure->structure_name,
@@ -168,8 +175,8 @@ class FuelAlertController extends Controller
                 'total_structures' => $structures->count(),
                 'total_systems' => count($report),
                 'total_blocks_30d' => $totalBlocksNeeded,
-                'total_volume_30d' => $totalBlocksNeeded * 5,
-                'total_hauler_trips' => ceil(($totalBlocksNeeded * 5) / 60000),
+                'total_volume_30d' => $totalBlocksNeeded * 5, // Each fuel block is 5 m³
+                'total_hauler_trips' => ceil(($totalBlocksNeeded * 5) / 60000), // 60,000 m³ = typical hauler capacity
             ],
         ]);
     }

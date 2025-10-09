@@ -6,6 +6,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureFuelHistory;
+use StructureManager\Models\StructureFuelReserves; 
 use Carbon\Carbon;
 
 class StructureManagerController extends Controller
@@ -251,39 +252,80 @@ class StructureManagerController extends Controller
         
         return response()->json(['success' => true]);
     }
-    
+
+    /**
+     * Calculate consumption rates for a structure
+     * Prioritizes actual tracked data, falls back to service-based estimates
+     */
     private function calculateConsumption($structureId)
     {
-        // Try to get actual consumption from historical data
-        $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($structureId, 30);
+        try {
+            // Try to get actual consumption from historical tracking data (BEST)
+            $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($structureId, 30);
+            
+            if ($analysis['status'] === 'success' && isset($analysis['consumption']['average_daily']) && $analysis['consumption']['average_daily'] > 0) {
+                return [
+                    'hourly' => round($analysis['consumption']['average_hourly'], 2),
+                    'daily' => round($analysis['consumption']['average_daily']),
+                    'weekly' => round($analysis['consumption']['average_weekly']),
+                    'monthly' => round($analysis['consumption']['average_monthly']),
+                    'quarterly' => round($analysis['consumption']['average_monthly'] * 3),
+                    'method' => 'tracked',
+                    'data_points' => $analysis['analysis_period']['data_points'] ?? 0,
+                ];
+            }
+        } catch (\Exception $e) {
+            \Log::error("Structure Manager: Error analyzing consumption for structure {$structureId}: " . $e->getMessage());
+        }
         
-        if ($analysis['status'] === 'success' && isset($analysis['consumption']['average_daily']) && $analysis['consumption']['average_daily'] > 0) {
+        // Fall back to service-based calculation (GOOD)
+        try {
+            $structure = DB::table('corporation_structures')
+                ->where('structure_id', $structureId)
+                ->first();
+            
+            if (!$structure) {
+                return [
+                    'hourly' => 0,
+                    'daily' => 0,
+                    'weekly' => 0,
+                    'monthly' => 0,
+                    'quarterly' => 0,
+                    'method' => 'error',
+                ];
+            }
+            
+            // Get hourly consumption from calculator
+            $hourly = \StructureManager\Helpers\FuelCalculator::getFuelRequirement(
+                $structure->type_id, 
+                $structureId,
+                'hourly'
+            );
+            
             return [
-                'daily' => $analysis['consumption']['average_daily'],
-                'weekly' => $analysis['consumption']['average_weekly'],
-                'monthly' => $analysis['consumption']['average_monthly'],
-                'quarterly' => $analysis['consumption']['average_monthly'] * 3,
+                'hourly' => round($hourly, 2),
+                'daily' => round($hourly * 24),
+                'weekly' => round($hourly * 24 * 7),
+                'monthly' => round($hourly * 24 * 30),
+                'quarterly' => round($hourly * 24 * 90),
+                'method' => 'estimated',
+                'note' => 'Based on active services.',
+            ];
+        } catch (\Exception $e) {
+            \Log::error("Structure Manager: Error calculating fallback consumption for structure {$structureId}: " . $e->getMessage());
+            
+            return [
+                'hourly' => 0,
+                'daily' => 0,
+                'weekly' => 0,
+                'monthly' => 0,
+                'quarterly' => 0,
+                'method' => 'error',
+                'error' => $e->getMessage(),
             ];
         }
-        
-        // Fall back to basic estimates if no historical data
-        $structure = DB::table('corporation_structures')
-            ->where('structure_id', $structureId)
-            ->first();
-        
-        if (!$structure) {
-            return ['daily' => 0, 'weekly' => 0, 'monthly' => 0, 'quarterly' => 0];
-        }
-        
-        // Use basic rates as fallback
-        return [
-            'daily' => \StructureManager\Helpers\FuelCalculator::getFuelRequirement($structure->type_id, 'daily'),
-            'weekly' => \StructureManager\Helpers\FuelCalculator::getFuelRequirement($structure->type_id, 'weekly'),
-            'monthly' => \StructureManager\Helpers\FuelCalculator::getFuelRequirement($structure->type_id, 'monthly'),
-            'quarterly' => \StructureManager\Helpers\FuelCalculator::getFuelRequirement($structure->type_id, 'quarterly'),
-        ];
     }
-
+    
     public function getFuelAnalysis($id)
     {
         $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($id, 30);

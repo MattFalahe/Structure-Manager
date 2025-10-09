@@ -4,14 +4,15 @@
 @section('page_header', trans('structure-manager::common.structure_manager'))
 
 @push('head')
-<link rel="stylesheet" href="{{ asset('vendor/structure-manager/css/dataTables.bootstrap4.min.css') }}">
 <style>
-    .fuel-critical { color: #dc3545; font-weight: bold; }
-    .fuel-warning { color: #ffc107; font-weight: bold; }
-    .fuel-normal { color: #28a745; }
+    /* Better contrast for dark themes */
+    .fuel-critical { color: #ff6b6b; font-weight: bold; }
+    .fuel-warning { color: #ffd43b; font-weight: bold; }
+    .fuel-normal { color: #51cf66; }
     .fuel-good { color: #17a2b8; }
-    .fuel-unknown { color: #6c757d; }
+    .fuel-unknown { color: #a0a0a0; }
     
+    /* DARK THEME COMPATIBLE - Status badges */
     .status-badge {
         padding: 0.25rem 0.5rem;
         border-radius: 0.25rem;
@@ -19,9 +20,23 @@
         font-weight: 600;
     }
     
-    .status-online { background-color: #d4edda; color: #155724; }
-    .status-offline { background-color: #f8d7da; color: #721c24; }
-    .status-shield_vulnerable { background-color: #fff3cd; color: #856404; }
+    .status-online { 
+        background-color: rgba(40, 167, 69, 0.2);
+        color: #51cf66;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+    
+    .status-offline { 
+        background-color: rgba(220, 53, 69, 0.2);
+        color: #ff6b6b;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+    
+    .status-shield_vulnerable { 
+        background-color: rgba(255, 193, 7, 0.2);
+        color: #ffd43b;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
     
     .consumption-stats {
         display: flex;
@@ -29,10 +44,55 @@
         font-size: 0.875rem;
     }
     
+    /* DARK THEME COMPATIBLE - Changed from #f8f9fa */
     .stat-item {
         padding: 0.25rem 0.5rem;
-        background: #f8f9fa;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 0.25rem;
+    }
+    
+    /* Service badges - matching consumption column style */
+    .badge-info {
+        background-color: rgba(23, 162, 184, 0.15) !important;
+        color: #5dade2 !important;
+        border: 1px solid rgba(23, 162, 184, 0.3) !important;
+        font-weight: 500 !important;
+    }
+    
+    .badge-secondary {
+        background-color: rgba(108, 117, 125, 0.15) !important;
+        color: #a0a0a0 !important;
+        border: 1px solid rgba(108, 117, 125, 0.3) !important;
+        font-weight: 500 !important;
+    }
+    
+    .badge-primary {
+        background-color: rgba(0, 123, 255, 0.15) !important;
+        color: #5dade2 !important;
+        border: 1px solid rgba(0, 123, 255, 0.3) !important;
+        font-weight: 500 !important;
+    }
+    
+    .badge-success {
+        background-color: rgba(40, 167, 69, 0.15) !important;
+        color: #51cf66 !important;
+        border: 1px solid rgba(40, 167, 69, 0.3) !important;
+        font-weight: 500 !important;
+    }
+    
+    .badge-warning {
+        background-color: rgba(255, 193, 7, 0.15) !important;
+        color: #ffd43b !important;
+        border: 1px solid rgba(255, 193, 7, 0.3) !important;
+        font-weight: 500 !important;
+    }
+    
+    .badge-danger {
+        background-color: rgba(220, 53, 69, 0.15) !important;
+        color: #ff6b6b !important;
+        border: 1px solid rgba(220, 53, 69, 0.3) !important;
+        font-weight: 500 !important;
     }
 </style>
 @endpush

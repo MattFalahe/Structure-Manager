@@ -15,19 +15,24 @@
         margin-bottom: 2rem;
     }
     
+    /* DARK THEME COMPATIBLE - Changed from #f8f9fa */
     .summary-box {
-        background: #f8f9fa;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 1rem;
     }
     
-    .fuel-critical { color: #dc3545; font-weight: bold; }
-    .fuel-warning { color: #ffc107; font-weight: bold; }
-    .fuel-normal { color: #28a745; }
+    /* Better contrast for dark themes */
+    .fuel-critical { color: #ff6b6b; font-weight: bold; }
+    .fuel-warning { color: #ffd43b; font-weight: bold; }
+    .fuel-normal { color: #51cf66; }
     
+    /* DARK THEME COMPATIBLE - Changed from #e9ecef */
     .system-header {
-        background: #e9ecef;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         padding: 0.75rem 1rem;
         border-radius: 0.25rem;
         margin-bottom: 0.5rem;
@@ -70,7 +75,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>Estimated Hauler Trips:</strong> <span id="hauler-trips">Loading...</span>
-                    <small class="text-muted d-block">(60,000 m³ capacity)</small>
+                    <small class="d-block">(60,000 m³ capacity)</small>
                 </div>
             </div>
             <div class="row mt-2">
@@ -155,7 +160,7 @@ $(document).ready(function() {
                     <div class="system-header">
                         <h5 class="mb-0">
                             <i class="fas fa-map-marker-alt"></i> ${system}
-                            <span class="badge badge-info ml-2">${systemData.structures.length} Structure${systemData.structures.length > 1 ? 's' : ''}</span>
+                            <span class="badge badge-success ml-2">${systemData.structures.length} Structure${systemData.structures.length > 1 ? 's' : ''}</span>
                         </h5>
                         <div class="system-stats">
                             <span><strong>30-Day:</strong> ${systemData.total_blocks_30d.toLocaleString()} blocks (${(systemData.total_blocks_30d * 5).toLocaleString()} m³)</span>
@@ -165,7 +170,7 @@ $(document).ready(function() {
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
-                            <thead class="thead-light">
+                            <thead>
                                 <tr>
                                     <th>Structure</th>
                                     <th>Type</th>
@@ -198,7 +203,7 @@ $(document).ready(function() {
                     <tr>
                         <td>${structure.name}</td>
                         <td><span class="badge badge-secondary">${structure.type}</span></td>
-                        <td><small class="text-muted">${structure.corporation}</small></td>
+                        <td><small>${structure.corporation}</small></td>
                         <td>${moment(structure.fuel_expires).format('YYYY-MM-DD HH:mm')}</td>
                         <td class="text-center ${daysClass}">${timeDisplay}</td>
                         <td class="text-right">${structure.blocks_30d.toLocaleString()}</td>
@@ -211,7 +216,7 @@ $(document).ready(function() {
             html += `
                             </tbody>
                             <tfoot class="font-weight-bold">
-                                <tr class="table-active">
+                                <tr style="background: rgba(0, 0, 0, 0.2); border-top: 2px solid rgba(255, 255, 255, 0.2);">
                                     <th colspan="5">System Total</th>
                                     <th class="text-right">${systemData.total_blocks_30d.toLocaleString()}</th>
                                     <th class="text-right">${systemData.total_blocks_60d.toLocaleString()}</th>
