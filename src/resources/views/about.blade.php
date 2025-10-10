@@ -154,7 +154,7 @@
         </div>
 
         <div class="about-section">
-            <h4><i class="fas fa-rocket"></i> What's New in v1.0.2</h4>
+            <h4><i class="fas fa-rocket"></i> What's New in v1.0.3</h4>
             
             <div class="changelog-section">
                 <h5><i class="fas fa-wrench"></i> Critical Bug Fixes</h5>
@@ -293,7 +293,7 @@
         <div class="about-section">
             <h4><i class="fas fa-code-branch"></i> Version</h4>
             <div class="text-center">
-                <span class="badge badge-primary badge-custom">v1.0.2</span>
+                <span class="badge badge-primary badge-custom">v1.0.3</span>
                 <span class="badge badge-success badge-custom">Stable</span>
             </div>
             <p class="mt-3 text-center">
