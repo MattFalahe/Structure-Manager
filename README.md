@@ -66,7 +66,46 @@ php artisan migrate
 php artisan structure-manager:setup
 ```
 
-## What's New in v1.0.2
+## What's New in v1.0.4
+
+### 🐛 Critical Bug Fix: Service-to-Module Calculation
+
+**Fixed fuel consumption calculation for multi-service modules**
+- Previously, the plugin calculated fuel consumption per service instead of per module
+- This caused structures with modules that provide multiple services to show **incorrect fuel consumption rates**
+
+**Example Issue (Now Fixed):**
+- **Standup Research Lab I** provides 3 services:
+  - Blueprint Copying
+  - Material Efficiency Research  
+  - Time Efficiency Research
+- **OLD BUG**: Calculated as 3 separate modules = 27 blocks/hour (incorrect!)
+- **NOW FIXED**: Correctly calculated as 1 module = 9 blocks/hour ✓
+
+**Impact:**
+- Raitaru with Research Lab + Invention Lab:
+  - Before: ~36 blocks/hour (incorrect)
+  - After: **18 blocks/hour** (correct) ✓
+- Azbel with Manufacturing Plant + Capital Shipyard:
+  - Before: ~18 blocks/hour (incorrect)  
+  - After: **27 blocks/hour** (correct) ✓
+
+**Technical Changes:**
+- Added `SERVICE_TO_MODULE_MAP` constant mapping services to their source modules
+- Implemented proper module grouping to count each unique module only once
+- Updated `calculateFromActiveServices()` to group services by module before calculating fuel
+- Service names now use exact case-sensitive matching from EVE API
+
+This fix ensures **accurate fuel consumption calculations** for all structures, especially those using Research Labs, Manufacturing Plants, and other multi-service modules.
+
+---
+
+## Previous Updates
+
+### v1.0.3
+- Fixed migration issues for cleaner installation process
+
+### v1.0.2
 
 ### 🐛 Critical Fuel Calculation Fixes
 - **Fixed Moon Drill fuel consumption**: Now correctly uses 120 blocks/day (5/hour) on ALL refineries

@@ -154,53 +154,28 @@
         </div>
 
         <div class="about-section">
-            <h4><i class="fas fa-rocket"></i> What's New in v1.0.3</h4>
+            <h4><i class="fas fa-rocket"></i> What's New in v1.0.4</h4>
             
             <div class="changelog-section">
-                <h5><i class="fas fa-wrench"></i> Critical Bug Fixes</h5>
+                <h5><i class="fas fa-bug"></i> Critical Bug Fix: Module-Based Fuel Calculation</h5>
                 <ul class="changelog-list">
-                    <li><strong>Fixed Moon Drill fuel consumption</strong> - Now correctly uses 120 blocks/day (5 blocks/hour) on ALL refineries</li>
-                    <li><strong>Corrected fuel reduction bonuses</strong> - Properly apply only to Reprocessing and Reaction service modules
+                    <li><strong>Fixed service-to-module calculation</strong> - Services are now correctly grouped by their source module
                         <ul style="list-style: disc; margin-left: 2rem; margin-top: 0.5rem;">
-                            <li>Athanor: 20% reduction (96 blocks/day for reprocessing/reactions)</li>
-                            <li>Tatara: 25% reduction (90 blocks/day for reprocessing/reactions)</li>
-                            <li>Moon Drill: NO reduction (always 120 blocks/day)</li>
+                            <li>Research Lab provides 3 services but consumes fuel as 1 module (9 blocks/hour on Engineering Complexes)</li>
+                            <li>Raitaru with Research + Invention: Now correctly shows 18 blocks/hour (was ~36)</li>
+                            <li>Azbel with Manufacturing + Capital Shipyard: Now correctly shows 27 blocks/hour (was ~18)</li>
                         </ul>
                     </li>
+                    <li><strong>Added SERVICE_TO_MODULE_MAP</strong> - Proper mapping of all EVE Online services to their source modules</li>
+                    <li><strong>Improved service detection</strong> - Case-sensitive exact matching with EVE API service names</li>
+                    <li><strong>Enhanced module breakdown display</strong> - Shows which services each module provides</li>
                 </ul>
             </div>
             
             <div class="changelog-section">
-                <h5><i class="fas fa-warehouse"></i> New Feature: Fuel Reserves Management</h5>
-                <ul class="changelog-list">
-                    <li>Track staged fuel blocks in CorpSAG hangars</li>
-                    <li>Nested Office container support for reserve detection</li>
-                    <li>Refuel event logging when fuel moves from reserves to bay</li>
-                    <li>Custom division name display for organized fuel storage</li>
-                    <li>Reserve recommendations based on consumption patterns</li>
-                    <li>System-grouped reserve overview with volume calculations</li>
-                </ul>
-            </div>
-            
-            <div class="changelog-section">
-                <h5><i class="fas fa-paint-brush"></i> UI/UX Improvements</h5>
-                <ul class="changelog-list">
-                    <li>Dark theme optimization with better contrast and readability</li>
-                    <li>Enhanced color schemes for improved visibility</li>
-                    <li>Better visual hierarchy across all pages</li>
-                    <li>Responsive tables for improved mobile experience</li>
-                    <li>Consistent styling across Fuel Status, Reserves, and Logistics pages</li>
-                </ul>
-            </div>
-            
-            <div class="changelog-section">
-                <h5><i class="fas fa-tachometer-alt"></i> Performance Enhancements</h5>
-                <ul class="changelog-list">
-                    <li>Optimized fuel bay tracking with more efficient database queries</li>
-                    <li>Improved consumption predictions using actual service data</li>
-                    <li>Better anomaly detection for service activation/deactivation events</li>
-                    <li>Enhanced refuel event logging for both bay and reserve movements</li>
-                </ul>
+                <h5><i class="fas fa-history"></i> Previous Updates</h5>
+                <p><strong>v1.0.3</strong> - Fixed migration issues for cleaner installation</p>
+                <p><strong>v1.0.2</strong> - Moon Drill fuel calculation corrections, UI/UX improvements, fuel reserves management</p>
             </div>
         </div>
 
@@ -208,16 +183,16 @@
             <h4><i class="fas fa-star"></i> Key Features</h4>
             <ul class="feature-list">
                 <li><strong>Real-time Fuel Bay Monitoring</strong> - Track fuel levels with precise day and hour accuracy</li>
-                <li class="new-feature"><strong>Fuel Reserves Management</strong> - Monitor staged fuel in CorpSAG hangars and Office containers</li>
+                <li><strong>Fuel Reserves Management</strong> - Monitor staged fuel in CorpSAG hangars and Office containers</li>
                 <li><strong>Critical Alerts</strong> - Get notified about structures running low on fuel</li>
                 <li><strong>Consumption Analytics</strong> - Analyze historical fuel usage patterns with hourly tracking</li>
-                <li class="new-feature"><strong>Refuel Event Tracking</strong> - Automatic detection when fuel is moved to structures</li>
+                <li><strong>Refuel Event Tracking</strong> - Automatic detection when fuel is moved to structures</li>
                 <li><strong>Logistics Reports</strong> - Plan fuel hauling with detailed system-by-system breakdowns</li>
                 <li><strong>Visual Status Indicators</strong> - Color-coded fuel status (Critical, Warning, Normal, Good)</li>
                 <li><strong>Service Tracking</strong> - Monitor online services and their accurate fuel consumption rates</li>
                 <li><strong>Multi-Corporation Support</strong> - Filter and view structures by corporation</li>
                 <li><strong>Export Capabilities</strong> - Export logistics data to CSV for planning</li>
-                <li class="new-feature"><strong>Dual Tracking Method</strong> - Primary fuel bay monitoring with days-remaining fallback</li>
+                <li><strong>Dual Tracking Method</strong> - Primary fuel bay monitoring with days-remaining fallback</li>
             </ul>
         </div>
 
@@ -231,7 +206,7 @@
                 and consumption analytics.
             </p>
 
-            <h5 class="mt-3"><i class="fas fa-warehouse"></i> Fuel Reserves <span class="badge badge-success badge-sm">NEW</span></h5>
+            <h5 class="mt-3"><i class="fas fa-warehouse"></i> Fuel Reserves</h5>
             <p>
                 Monitor staged fuel blocks across all your structures. See reserves organized by system and structure, 
                 track which hangar divisions contain fuel, and view recent refuel events. Custom division names make 
@@ -277,6 +252,7 @@
             <ul>
                 <li><strong>Upwell structures</strong> consume ZERO fuel themselves</li>
                 <li><strong>Only online service modules</strong> consume fuel blocks</li>
+                <li><strong>One module = one fuel cost</strong> - Even if a module provides multiple services (e.g., Research Lab provides 3 services but counts as 1 module)</li>
                 <li><strong>Moon Drills</strong> always use 120 blocks/day (5 blocks/hour) - NO bonuses</li>
                 <li><strong>Reprocessing & Reactions</strong> get fuel reduction bonuses:
                     <ul style="list-style: disc; margin-left: 2rem;">
@@ -293,7 +269,7 @@
         <div class="about-section">
             <h4><i class="fas fa-code-branch"></i> Version</h4>
             <div class="text-center">
-                <span class="badge badge-primary badge-custom">v1.0.3</span>
+                <span class="badge badge-primary badge-custom">v1.0.4</span>
                 <span class="badge badge-success badge-custom">Stable</span>
             </div>
             <p class="mt-3 text-center">

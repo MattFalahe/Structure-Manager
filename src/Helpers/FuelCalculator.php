@@ -13,6 +13,55 @@ class FuelCalculator
      */
     
     /**
+     * CRITICAL: Map services to their source modules
+     * One module can provide multiple services but only consumes fuel ONCE
+     * Service names are CASE-SENSITIVE and must match EVE API exactly
+     */
+    const SERVICE_TO_MODULE_MAP = [
+        // Research Lab provides 3 services but is 1 module
+        'Blueprint Copying' => 'research_lab',
+        'Material Efficiency Research' => 'research_lab',
+        'Time Efficiency Research' => 'research_lab',
+        
+        // Invention Lab provides 1 service
+        'Invention' => 'invention_lab',
+        
+        // Manufacturing Plant provides 1 service
+        'Manufacturing (Standard)' => 'manufacturing_plant',
+        
+        // Capital Shipyard provides 1 service
+        'Manufacturing (Capitals)' => 'capital_shipyard',
+        
+        // Supercapital Shipyard provides 1 service (Sotiyo only)
+        'Manufacturing (Supercapitals)' => 'supercapital_shipyard',
+        
+        // Reprocessing Facility provides 1 service
+        'Reprocessing' => 'reprocessing_facility',
+        
+        // Moon Drill provides 1 service (Athanor/Tatara)
+        'Moon Drilling' => 'moon_drill',
+        
+        // Automatic Moon Drilling (Metenox Moon Drill - mobile structure, different fuel system)
+        'Automatic Moon Drilling' => 'metenox_moon_drill',
+        
+        // Reactors provide 1 service each
+        'Composite Reactions' => 'composite_reactor',
+        'Biochemical Reactions' => 'biochemical_reactor',
+        'Hybrid Reactions' => 'hybrid_reactor',
+        
+        // Market Hub provides 1 service
+        'Market' => 'market_hub',
+        
+        // Cloning Center provides 1 service
+        'Clone Bay' => 'cloning_center',
+        
+        // Navigation structures (if you have them)
+        'Jump Gate' => 'ansiblex_jump_bridge',
+        'Cynosural Beacon' => 'pharolux_cyno_beacon',
+        'Cynosural Jammer' => 'tenebrex_cyno_jammer',
+    ];
+    
+    /**
      * Service module fuel consumption rates (blocks per hour)
      * Based on actual EVE Online mechanics as of 2025
      */
@@ -97,6 +146,12 @@ class FuelCalculator
             'base' => 40,
             'restrictions' => 'Requires sov, up to 3 per system',
         ],
+        
+        // Metenox Moon Drill (mobile structure, not Upwell)
+        'metenox_moon_drill' => [
+            'base' => 0,
+            'note' => 'Metenox Moon Drills use fuel blocks + magmatic gas. Consumption rates differ from Upwell structures and are not tracked by this plugin.',
+        ],
     ];
     
     /**
@@ -158,6 +213,7 @@ class FuelCalculator
     /**
      * Get estimated fuel consumption based on active services
      * This is the PRIMARY method - it analyzes actual online services
+     * FIXED: Now groups services by module to avoid double-counting
      */
     public static function calculateFromActiveServices($structureId)
     {
@@ -187,15 +243,45 @@ class FuelCalculator
         }
         
         $structureInfo = self::STRUCTURE_TYPES[$structure->type_id] ?? null;
-        $totalHourly = 0;
+        
+        // CRITICAL FIX: Group services by their source module
+        $activeModules = [];
         $serviceBreakdown = [];
         
         foreach ($services as $service) {
-            $consumption = self::estimateServiceConsumption($service->name, $structureInfo);
-            $totalHourly += $consumption;
+            // Use exact service name (case-sensitive)
+            $serviceName = $service->name;
+            
+            // Map service to its module
+            $moduleName = self::SERVICE_TO_MODULE_MAP[$serviceName] ?? 'unknown';
+            
+            // Only count each module once
+            if (!isset($activeModules[$moduleName])) {
+                $consumption = self::getModuleConsumption($moduleName, $structureInfo);
+                $activeModules[$moduleName] = $consumption;
+            }
+            
+            // Track which services are provided by which module
             $serviceBreakdown[] = [
-                'name' => $service->name,
-                'estimated_hourly' => $consumption,
+                'service_name' => $service->name,
+                'module' => $moduleName,
+                'fuel_consumption' => $activeModules[$moduleName] ?? 0,
+            ];
+        }
+        
+        // Sum fuel consumption from unique modules
+        $totalHourly = array_sum($activeModules);
+        
+        // Group services by module for display
+        $moduleBreakdown = [];
+        foreach ($activeModules as $module => $consumption) {
+            $servicesForModule = array_filter($serviceBreakdown, fn($s) => $s['module'] === $module);
+            $serviceNames = array_map(fn($s) => $s['service_name'], $servicesForModule);
+            
+            $moduleBreakdown[] = [
+                'module' => $module,
+                'services_provided' => $serviceNames,
+                'hourly_consumption' => $consumption,
             ];
         }
         
@@ -205,59 +291,66 @@ class FuelCalculator
             'weekly' => round($totalHourly * 24 * 7),
             'monthly' => round($totalHourly * 24 * 30),
             'method' => 'active_services',
-            'services' => $serviceBreakdown,
+            'modules' => $moduleBreakdown,
             'structure_type' => $structureInfo['name'] ?? 'Unknown',
-            'note' => 'Estimated based on ' . count($services) . ' online service(s)',
+            'note' => 'Based on ' . count($activeModules) . ' active module(s) providing ' . count($services) . ' service(s)',
         ];
     }
     
     /**
-     * Estimate fuel consumption for a specific service
-     * FIXED: Moon Drill now correctly returns 5 blocks/hour on ALL refineries
+     * Get fuel consumption for a specific module (not service)
+     * FIXED: Now calculates per MODULE instead of per SERVICE
+     */
+    private static function getModuleConsumption($moduleName, $structureInfo)
+    {
+        $rate = self::SERVICE_FUEL_RATES[$moduleName] ?? null;
+        
+        if (!$rate) {
+            // Unknown module - log warning and use safe default
+            if ($moduleName !== 'unknown') {
+                \Log::warning("Structure Manager: Unknown module '{$moduleName}' - using default 10 blocks/hour");
+            }
+            return 10;
+        }
+        
+        // Special case: Metenox Moon Drill uses different fuel (not fuel blocks)
+        if ($moduleName === 'metenox_moon_drill') {
+            return 0;
+        }
+        
+        $category = $structureInfo['category'] ?? 'unknown';
+        $structureName = $structureInfo['name'] ?? '';
+        
+        // Apply structure bonuses
+        if ($category === 'citadel' && isset($rate['citadel_bonus'])) {
+            return $rate['citadel_bonus'];
+        } elseif ($category === 'engineering' && isset($rate['engineering_bonus'])) {
+            return $rate['engineering_bonus'];
+        } elseif ($category === 'refinery') {
+            // Moon Drill NEVER gets bonuses
+            if ($moduleName === 'moon_drill') {
+                return $rate['base'];
+            }
+            
+            if ($structureName === 'Tatara' && isset($rate['tatara_bonus'])) {
+                return $rate['tatara_bonus'];
+            } elseif ($structureName === 'Athanor' && isset($rate['athanor_bonus'])) {
+                return $rate['athanor_bonus'];
+            }
+        }
+        
+        return $rate['base'];
+    }
+    
+    /**
+     * @deprecated - Use calculateFromActiveServices instead
      */
     private static function estimateServiceConsumption($serviceName, $structureInfo)
     {
-        $serviceName = strtolower($serviceName);
-        
-        // Map service names to fuel rates
-        if (strpos($serviceName, 'market') !== false) {
-            return $structureInfo['category'] === 'citadel' ? 30 : 40;
-        }
-        if (strpos($serviceName, 'clone') !== false || strpos($serviceName, 'cloning') !== false) {
-            return $structureInfo['category'] === 'citadel' ? 7.5 : 10;
-        }
-        if (strpos($serviceName, 'manufacturing') !== false) {
-            return $structureInfo['category'] === 'engineering' ? 9 : 12;
-        }
-        if (strpos($serviceName, 'research') !== false) {
-            return $structureInfo['category'] === 'engineering' ? 9 : 12;
-        }
-        if (strpos($serviceName, 'invention') !== false) {
-            return $structureInfo['category'] === 'engineering' ? 9 : 12;
-        }
-        if (strpos($serviceName, 'reprocessing') !== false) {
-            if ($structureInfo['name'] === 'Tatara') return 7.5;
-            if ($structureInfo['name'] === 'Athanor') return 8;
-            return 10;
-        }
-        // FIXED: Moon Drill ALWAYS uses 5 blocks/hour - NO BONUSES
-        if (strpos($serviceName, 'moon') !== false) {
-            return 5;  // Always 5 blocks/hour (120/day) regardless of structure
-        }
-        if (strpos($serviceName, 'reactor') !== false || strpos($serviceName, 'reaction') !== false) {
-            if ($structureInfo['name'] === 'Tatara') return 11.25;
-            if ($structureInfo['name'] === 'Athanor') return 12;
-            return 15;
-        }
-        if (strpos($serviceName, 'capital') !== false && strpos($serviceName, 'shipyard') !== false) {
-            return $structureInfo['category'] === 'engineering' ? 18 : 24;
-        }
-        if (strpos($serviceName, 'supercapital') !== false) {
-            return $structureInfo['category'] === 'engineering' ? 27 : 36;
-        }
-        
-        // Default estimate for unknown services
-        return 10;
+        // This method is deprecated but kept for backwards compatibility
+        // Map to module and get consumption (use exact service name)
+        $moduleName = self::SERVICE_TO_MODULE_MAP[$serviceName] ?? 'unknown';
+        return self::getModuleConsumption($moduleName, $structureInfo);
     }
     
     /**
