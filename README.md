@@ -6,6 +6,8 @@
 
 A comprehensive fuel management system for EVE Online corporation structures in SeAT. Track fuel consumption, monitor reserves, predict refuel schedules, and optimize logistics across all your Upwell structures.
 
+📸 **[See screenshots in the Wiki →](https://github.com/MattFalahe/Structure-Manager/wiki)**
+
 ## Features
 
 ### 🔥 Real-Time Fuel Tracking
