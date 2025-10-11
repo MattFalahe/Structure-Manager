@@ -153,9 +153,9 @@
     
     .badge-success {
         background-color: #4caf50 !important;
-        color: #fff !important;
+        color: #000 !important;
         font-weight: bold;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
     }
     
     /* Metenox badges */
@@ -185,11 +185,11 @@
         background: rgba(0, 0, 0, 0.05);
     }
     
-    /* Limiting factor badge - High contrast for all themes */
+    /* Limiting factor badge - Small badge inside dual fuel display */
     .limiting-factor-badge {
-        background-color: #dc3545;
-        color: #ffffff;
-        border: 2px solid #ffffff;
+        background-color: #dc3545 !important;
+        color: #ffffff !important;
+        border: 2px solid #ffffff !important;
         padding: 0.25rem 0.6rem;
         border-radius: 0.25rem;
         font-size: 0.75rem;
@@ -210,21 +210,17 @@
         }
     }
     
-    /* Prominent limiting factor indicator - Universal contrast */
+    /* Prominent limiting factor indicator - Large badge next to structure name */
     .limiting-indicator {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
-        background: #ff9800;
-        border: 2px solid #e65100;
         padding: 0.5rem 1rem;
         border-radius: 0.5rem;
         font-weight: bold;
         font-size: 0.95rem;
         margin-left: 0.5rem;
-        color: #000000;
         box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
-        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
     }
     
     .limiting-indicator i {
@@ -244,14 +240,19 @@
         }
     }
     
+    /* Color variants for limiting indicator */
     .limiting-fuel {
-        background: #ff5722;
-        border-color: #d32f2f;
+        background: #2196f3 !important;
+        border: 2px solid #0d47a1 !important;
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     
     .limiting-gas {
-        background: #ffb300;
-        border-color: #f57c00;
+        background: #ff9800 !important;
+        border: 2px solid #e65100 !important;
+        color: #000000 !important;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
     }
 </style>
 @endpush
