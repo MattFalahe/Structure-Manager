@@ -410,11 +410,11 @@ $(document).ready(function() {
                 
                 // Calculate urgency message
                 let urgencyMsg = '';
-                if (hoursLeft < 72) { // < 3 days
+                if (hoursLeft < 72) {
                     urgencyMsg = '<span class="badge badge-danger"><i class="fas fa-fire"></i> URGENT - Refuel immediately!</span>';
-                } else if (hoursLeft < 168) { // < 7 days
+                } else if (hoursLeft < 168) {
                     urgencyMsg = '<span class="badge badge-danger">Critical - Refuel within 24 hours</span>';
-                } else if (hoursLeft < 240) { // < 10 days
+                } else if (hoursLeft < 240) {
                     urgencyMsg = '<span class="badge badge-warning">Warning - Schedule refuel soon</span>';
                 } else {
                     urgencyMsg = '<span class="badge badge-warning">Monitor - Refuel within a week</span>';
@@ -443,11 +443,11 @@ $(document).ready(function() {
                                                 </a>
                 `;
                 
-                // Add prominent limiting factor indicator for Metenox ONLY
-                if (isMetenox) {
+                // Add PROMINENT limiting factor badge for Metenox
+                if (isMetenox && alert.metenox_data.limiting_factor !== 'unknown') {
                     let limitingFactor = alert.metenox_data.limiting_factor;
-                    let limitingIcon = limitingFactor === 'fuel_blocks' ? 'fa-battery-quarter' : 'fa-wind';
-                    let limitingText = limitingFactor === 'fuel_blocks' ? 'Fuel Blocks Limiting' : 'Magmatic Gas Limiting';
+                    let limitingIcon = limitingFactor === 'fuel_blocks' ? 'fa-fire' : 'fa-wind';
+                    let limitingText = limitingFactor === 'fuel_blocks' ? 'FUEL BLOCKS LIMITING' : 'MAGMATIC GAS LIMITING';
                     let limitingClass = limitingFactor === 'fuel_blocks' ? 'limiting-fuel' : 'limiting-gas';
                     
                     html += `
@@ -482,8 +482,8 @@ $(document).ready(function() {
                                     </div>
                 `;
                 
-                // Show Metenox dual fuel status - ONLY for Metenox
-                if (isMetenox) {
+                // Show Metenox dual fuel status with CLEAR limiting factor
+                if (isMetenox && alert.metenox_data.limiting_factor !== 'unknown') {
                     let md = alert.metenox_data;
                     let fuelBlocksClass = md.limiting_factor === 'fuel_blocks' ? 'fuel-critical' : '';
                     let gasClass = md.limiting_factor === 'magmatic_gas' ? 'fuel-critical' : '';
@@ -501,7 +501,9 @@ $(document).ready(function() {
                                     <span class="${fuelBlocksClass}" style="font-size: 1.1rem;">${md.fuel_blocks_days.toFixed(1)} days</span>
                                     <span style="opacity: 0.7; margin-left: 0.5rem;">(${md.fuel_blocks_quantity.toLocaleString()} blocks)</span>
                                 </span>
-                                ${md.limiting_factor === 'fuel_blocks' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : '<span class="badge badge-success" style="background: #4caf50 !important;">OK</span>'}
+                                ${md.limiting_factor === 'fuel_blocks' ? 
+                                    '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
+                                    '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>'}
                             </div>
                             <div class="metenox-resource">
                                 <span>
@@ -510,7 +512,9 @@ $(document).ready(function() {
                                     <span class="${gasClass}" style="font-size: 1.1rem;">${md.magmatic_gas_days.toFixed(1)} days</span>
                                     <span style="opacity: 0.7; margin-left: 0.5rem;">(${md.magmatic_gas_quantity.toLocaleString()} units)</span>
                                 </span>
-                                ${md.limiting_factor === 'magmatic_gas' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : '<span class="badge badge-success" style="background: #4caf50 !important;">OK</span>'}
+                                ${md.limiting_factor === 'magmatic_gas' ? 
+                                    '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
+                                    '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>'}
                             </div>
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(156, 39, 176, 0.3); opacity: 0.85;">
                                 <small>
@@ -544,7 +548,7 @@ $(document).ready(function() {
                                         </div>
                 `;
                 
-                // Add magmatic gas requirements for Metenox ONLY
+                // Add magmatic gas requirements for Metenox
                 if (isMetenox) {
                     html += `
                                         <div class="stat-badge">
@@ -604,4 +608,3 @@ $(document).ready(function() {
     setInterval(loadAlerts, 300000);
 });
 </script>
-@endpush
