@@ -76,16 +76,36 @@ class FuelAlertController extends Controller
             ->limit(10)
             ->get();
         
-        // Calculate fuel blocks needed for each structure
+        // Calculate fuel blocks needed and add Metenox data
         foreach ($structures as $structure) {
-            // FIXED: Pass structure_id to get actual service data
-           $structure->blocks_needed = FuelCalculator::getFuelRequirement(
-            $structure->type_id,
-            $structure->structure_id,
-            'weekly'
-        );
+            $structure->blocks_needed = FuelCalculator::getFuelRequirement(
+                $structure->type_id,
+                $structure->structure_id,
+                'weekly'
+            );
             
-            $structure->status = $structure->hours_remaining < 168 ? 'critical' : 'warning'; // 168 hours = 7 days
+            $structure->status = $structure->hours_remaining < 168 ? 'critical' : 'warning';
+            
+            // Add Metenox limiting factor data if applicable
+            if ($structure->type_id == self::METENOX_TYPE_ID) {
+                // Get latest fuel history record for this Metenox
+                $latestHistory = DB::table('structure_fuel_history')
+                    ->where('structure_id', $structure->structure_id)
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                
+                if ($latestHistory && $latestHistory->metadata) {
+                    $metadata = json_decode($latestHistory->metadata, true);
+                    
+                    $structure->metenox_data = [
+                        'fuel_blocks_quantity' => $metadata['fuel_blocks'] ?? 0,
+                        'magmatic_gas_quantity' => $latestHistory->magmatic_gas_quantity ?? 0,
+                        'fuel_blocks_days' => $metadata['fuel_days_remaining'] ?? 0,
+                        'magmatic_gas_days' => $latestHistory->magmatic_gas_days ?? 0,
+                        'limiting_factor' => $metadata['limiting_factor'] ?? 'unknown',
+                    ];
+                }
+            }
         }
         
         return response()->json($structures);
