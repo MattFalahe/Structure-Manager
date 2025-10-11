@@ -66,9 +66,33 @@ php artisan migrate
 php artisan structure-manager:setup
 ```
 
-## What's New in v1.0.4
+## What's New in v1.0.5
 
-### 🐛 Critical Bug Fix: Service-to-Module Calculation
+### 🎨 Enhanced Structure Detail Page
+
+**Comprehensive Fuel Dashboard**
+- **Detailed consumption breakdown cards** showing hourly, daily, weekly, monthly, and quarterly rates
+- **Improved fuel projections** with estimated blocks remaining, volume in m³, and precise time calculations
+- **Historical analysis integration** displaying fuel bay snapshot data and refuel event detection
+- **Consumption anomaly alerts** to identify potential service changes
+
+**Visual Improvements**
+- **Enhanced dark theme support** with better contrast and improved color palette
+- **Service status indicators** with clear online/offline visual display
+- **Modern chart visualization** with dark-themed gradients and improved tooltips
+- **Better event tracking** in fuel history table with change indicators and event badges
+
+**User Experience**
+- Clearer explanation of service-based calculations
+- Real-time consumption updates when services change
+- Better mobile responsiveness
+- Improved data presentation and readability
+
+---
+
+## Previous Updates
+
+### v1.0.4 - Critical Bug Fix: Service-to-Module Calculation
 
 **Fixed fuel consumption calculation for multi-service modules**
 - Previously, the plugin calculated fuel consumption per service instead of per module
@@ -96,41 +120,18 @@ php artisan structure-manager:setup
 - Updated `calculateFromActiveServices()` to group services by module before calculating fuel
 - Service names now use exact case-sensitive matching from EVE API
 
-This fix ensures **accurate fuel consumption calculations** for all structures, especially those using Research Labs, Manufacturing Plants, and other multi-service modules.
-
----
-
-## Previous Updates
-
 ### v1.0.3
 - Fixed migration issues for cleaner installation process
 
-### v1.0.2
-
-### 🐛 Critical Fuel Calculation Fixes
+### v1.0.2 - Moon Drill Fixes & UI Improvements
 - **Fixed Moon Drill fuel consumption**: Now correctly uses 120 blocks/day (5/hour) on ALL refineries
-  - Previously incorrectly applied 20% Athanor bonus (96 blocks/day)
-  - Previously incorrectly applied 25% Tatara bonus (90 blocks/day)
 - **Corrected fuel reduction bonuses**: Only apply to Reprocessing and Reaction service modules
-  - Athanor: 20% reduction (96 blocks/day for reprocessing/reactions)
-  - Tatara: 25% reduction (90 blocks/day for reprocessing/reactions)
-  - Moon Drill: NO reduction (always 120 blocks/day)
+- **Dark theme optimization**: Better contrast and color schemes
+- **Performance enhancements**: Optimized fuel bay tracking and nested Office detection
 
-### 🎨 UI/UX Improvements
-- **Dark theme optimization**: Better contrast and color schemes for dark mode users
-- **Improved readability**: Enhanced text colors and backgrounds
-- **Better visual hierarchy**: Clearer distinction between sections
-- **Responsive tables**: Better mobile experience for logistics reports
+📖 **[View full changelog on GitHub Wiki →](https://github.com/MattFalahe/Structure-Manager/wiki/Changelog)**
 
-### ⚡ Performance Enhancements
-- **Optimized fuel bay tracking**: More efficient database queries
-- **Improved nested Office detection**: Better handling of fuel in Office containers
-- **Reduced API call overhead**: Smarter caching strategies
-
-### 📊 Enhanced Analytics
-- **More accurate consumption predictions**: Uses actual service data when available
-- **Better anomaly detection**: Identifies service activation/deactivation events
-- **Improved refuel event logging**: Tracks both bay refuels and reserve movements
+---
 
 ## Usage
 
@@ -172,9 +173,10 @@ Plan your fuel hauling operations:
 ### Structure Details
 Deep dive into individual structure fuel data:
 - Complete fuel history with consumption graphs
-- Service module breakdown
-- Refuel event timeline
-- Reserve status and recommendations
+- Service module breakdown with consumption rates
+- Fuel projections and refuel recommendations
+- Historical analysis with refuel event timeline
+- Reserve status and movement tracking
 
 ## EVE Online Fuel Mechanics
 
@@ -202,6 +204,7 @@ Deep dive into individual structure fuel data:
 ### Important Notes
 - Upwell structures themselves consume **ZERO fuel**
 - Only **online service modules** consume fuel blocks
+- **One module = one fuel cost** (even if a module provides multiple services)
 - Fuel reduction bonuses apply **ONLY** to Reprocessing and Reaction services
 - Moon Drills **ALWAYS** use 120 blocks/day regardless of structure type
 
@@ -282,6 +285,7 @@ php artisan structure-manager:cleanup-history --days=180
 
 - **Issues**: [GitHub Issues](https://github.com/MattFalahe/structure-manager/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/MattFalahe/structure-manager/discussions)
+- **Wiki**: [Full documentation and changelog](https://github.com/MattFalahe/structure-manager/wiki)
 - **Pull Requests**: Always welcome!
 
 ## License
@@ -295,11 +299,11 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 ## Credits
 
 **Author**: Matt Falahe  
-**Version**: 1.0.2  
+**Version**: 1.0.5  
 **SeAT Compatibility**: 5.x
 
 Built for the EVE Online community. Special thanks to the SeAT development team and all contributors.
 
 ---
 
-*EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide. All other trademarks are the property of their respective owners. EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property of CCP hf. All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.*
+*EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide. All other trademarks are the property of their respective owners. EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf. All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.*
