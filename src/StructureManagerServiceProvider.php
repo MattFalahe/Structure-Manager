@@ -7,6 +7,7 @@ use StructureManager\Console\Commands\TrackFuelCommand;
 use StructureManager\Console\Commands\CleanupHistoryCommand;
 use StructureManager\Console\Commands\AnalyzeConsumptionCommand;
 use StructureManager\Console\Commands\SetupPermissionsCommand;
+use StructureManager\Console\Commands\CreateTestMetenoxCommand;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
 {
@@ -29,6 +30,7 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 CleanupHistoryCommand::class,
                 AnalyzeConsumptionCommand::class,
                 SetupPermissionsCommand::class,
+                CreateTestMetenoxCommand::class,
             ]);
         }
 
