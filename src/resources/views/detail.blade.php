@@ -78,6 +78,28 @@
         margin-bottom: 1rem;
         border-radius: 0.25rem;
     }
+    
+    /* Metenox-specific styles */
+    .metenox-banner {
+        background: rgba(156, 39, 176, 0.1);
+        border-left: 4px solid #9c27b0;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        border-radius: 0.25rem;
+    }
+    
+    .resource-card {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 0.25rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .limiting-factor {
+        border: 2px solid #ff6b6b;
+        background: rgba(220, 53, 69, 0.1);
+    }
 </style>
 @endpush
 
@@ -91,7 +113,12 @@
             <div class="card-body">
                 <dl class="row">
                     <dt class="col-sm-4">Type:</dt>
-                    <dd class="col-sm-8">{{ $structure->structure_type }}</dd>
+                    <dd class="col-sm-8">
+                        {{ $structure->structure_type }}
+                        @if($structure->structure_type == 'Metenox Moon Drill')
+                            <span class="badge badge-info">Deployable</span>
+                        @endif
+                    </dd>
                     
                     <dt class="col-sm-4">System:</dt>
                     <dd class="col-sm-8">
@@ -127,6 +154,9 @@
                             <strong class="{{ $colorClass }}">
                                 <i class="fas fa-clock"></i> {{ $days }}d {{ $hours }}h remaining
                             </strong>
+                            @if($structure->structure_type == 'Metenox Moon Drill')
+                                <br><small class="text-warning-bright"><i class="fas fa-exclamation-triangle"></i> Fuel blocks only - check gas below!</small>
+                            @endif
                         @else
                             <span class="text-muted">Unknown</span>
                         @endif
@@ -141,6 +171,103 @@
             </div>
         </div>
         
+        {{-- Metenox Dual Fuel Display --}}
+        @if($structure->structure_type == 'Metenox Moon Drill' && isset($consumption['method']) && $consumption['method'] == 'metenox_drill')
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-gas-pump"></i> Metenox Fuel Status</h3>
+            </div>
+            <div class="card-body">
+                <div class="metenox-banner">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    <strong>Dual Fuel System:</strong> Metenox requires both fuel blocks AND magmatic gas. Structure stops when EITHER runs out!
+                </div>
+                
+                @php
+                    $fuelBlocks = $consumption['fuel_blocks'] ?? [];
+                    $magmaticGas = $consumption['magmatic_gas'] ?? [];
+                    $limitingFactor = $consumption['limiting_factor'] ?? 'unknown';
+                    $actualDays = $consumption['actual_days_remaining'] ?? 0;
+                @endphp
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="resource-card {{ $limitingFactor == 'fuel_blocks' ? 'limiting-factor' : '' }}">
+                            <h5>
+                                <i class="fas fa-battery-three-quarters text-info-bright"></i> Fuel Blocks
+                                @if($limitingFactor == 'fuel_blocks')
+                                    <span class="badge badge-danger">LIMITING</span>
+                                @endif
+                            </h5>
+                            <div class="stat-number">{{ number_format($fuelBlocks['current_quantity'] ?? 0) }}</div>
+                            <div class="stat-label">blocks available</div>
+                            
+                            <hr>
+                            
+                            <dl class="row mb-0">
+                                <dt class="col-sm-6">Days Remaining:</dt>
+                                <dd class="col-sm-6">
+                                    <strong class="{{ ($fuelBlocks['days_remaining'] ?? 0) < 7 ? 'text-danger-bright' : (($fuelBlocks['days_remaining'] ?? 0) < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                                        {{ number_format($fuelBlocks['days_remaining'] ?? 0, 1) }} days
+                                    </strong>
+                                </dd>
+                                
+                                <dt class="col-sm-6">Consumption:</dt>
+                                <dd class="col-sm-6">5 blocks/hour</dd>
+                                
+                                <dt class="col-sm-6">Daily Use:</dt>
+                                <dd class="col-sm-6">120 blocks/day</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="resource-card {{ $limitingFactor == 'magmatic_gas' ? 'limiting-factor' : '' }}">
+                            <h5>
+                                <i class="fas fa-wind text-warning-bright"></i> Magmatic Gas
+                                @if($limitingFactor == 'magmatic_gas')
+                                    <span class="badge badge-danger">LIMITING</span>
+                                @endif
+                            </h5>
+                            <div class="stat-number">{{ number_format($magmaticGas['current_quantity'] ?? 0) }}</div>
+                            <div class="stat-label">units available</div>
+                            
+                            <hr>
+                            
+                            <dl class="row mb-0">
+                                <dt class="col-sm-6">Days Remaining:</dt>
+                                <dd class="col-sm-6">
+                                    <strong class="{{ ($magmaticGas['days_remaining'] ?? 0) < 7 ? 'text-danger-bright' : (($magmaticGas['days_remaining'] ?? 0) < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                                        {{ number_format($magmaticGas['days_remaining'] ?? 0, 1) }} days
+                                    </strong>
+                                </dd>
+                                
+                                <dt class="col-sm-6">Consumption:</dt>
+                                <dd class="col-sm-6">200 gas/hour</dd>
+                                
+                                <dt class="col-sm-6">Daily Use:</dt>
+                                <dd class="col-sm-6">4,800 gas/day</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-{{ $actualDays < 7 ? 'danger' : ($actualDays < 14 ? 'warning' : 'info') }} mb-0">
+                    <h5 class="mb-2">
+                        <i class="fas fa-stopwatch"></i> Actual Time Until Empty
+                    </h5>
+                    <div style="font-size: 1.5rem; font-weight: bold;">
+                        {{ number_format($actualDays, 1) }} days
+                    </div>
+                    @if(isset($consumption['warning']) && $consumption['warning'])
+                        <hr>
+                        <p class="mb-0"><i class="fas fa-exclamation-triangle"></i> {{ $consumption['warning'] }}</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+        @else
+        {{-- Standard Upwell Structure Fuel Display --}}
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-fire"></i> Fuel Consumption Statistics</h3>
@@ -236,6 +363,7 @@
                 @endif
             </div>
         </div>
+        @endif
     </div>
     
     <div class="col-md-6">
@@ -279,7 +407,13 @@
                         </small>
                     </div>
                 @else
-                    <p class="text-muted">No services installed</p>
+                    @if($structure->structure_type == 'Metenox Moon Drill')
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> Metenox Moon Drills do not have service modules. They automatically mine moons and consume fuel blocks + magmatic gas.
+                        </div>
+                    @else
+                        <p class="text-muted">No services installed</p>
+                    @endif
                 @endif
             </div>
         </div>
@@ -306,6 +440,10 @@
                     <th>Date</th>
                     <th>Fuel Expires</th>
                     <th>Days Remaining</th>
+                    @if($structure->structure_type == 'Metenox Moon Drill')
+                        <th>Magmatic Gas Days</th>
+                        <th>Limiting Factor</th>
+                    @endif
                     <th>Change</th>
                     <th>Event</th>
                 </tr>
@@ -316,6 +454,22 @@
                         <td>{{ \Carbon\Carbon::parse($record->created_at)->format('Y-m-d H:i') }}</td>
                         <td>{{ $record->fuel_expires ? \Carbon\Carbon::parse($record->fuel_expires)->format('Y-m-d H:i') : 'N/A' }}</td>
                         <td>{{ $record->days_remaining ?? 'N/A' }}</td>
+                        @if($structure->structure_type == 'Metenox Moon Drill')
+                            <td>{{ $record->magmatic_gas_days ? number_format($record->magmatic_gas_days, 1) : 'N/A' }}</td>
+                            <td>
+                                @if($record->metadata && isset($record->metadata['limiting_factor']))
+                                    @if($record->metadata['limiting_factor'] == 'magmatic_gas')
+                                        <span class="badge badge-warning">Gas</span>
+                                    @elseif($record->metadata['limiting_factor'] == 'fuel_blocks')
+                                        <span class="badge badge-info">Fuel</span>
+                                    @else
+                                        <span class="badge badge-secondary">N/A</span>
+                                    @endif
+                                @else
+                                    <span class="badge badge-secondary">N/A</span>
+                                @endif
+                            </td>
+                        @endif
                         <td>
                             @if($loop->index < $fuelHistory->count() - 1)
                                 @php
