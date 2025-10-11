@@ -43,6 +43,28 @@
         gap: 2rem;
         margin-top: 0.5rem;
         font-size: 0.9rem;
+        flex-wrap: wrap;
+    }
+    
+    /* Metenox indicator in table */
+    .metenox-row {
+        background: rgba(156, 39, 176, 0.05) !important;
+    }
+    
+    .metenox-badge {
+        background-color: rgba(156, 39, 176, 0.2);
+        color: #ce93d8;
+        border: 1px solid rgba(156, 39, 176, 0.3);
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+    
+    .gas-requirement {
+        color: #ffd43b;
+        font-style: italic;
+        font-size: 0.85rem;
     }
 </style>
 @endpush
@@ -88,7 +110,15 @@
                 <div class="col-md-3">
                     <strong>90-Day Blocks:</strong> <span id="total-blocks-90d">Loading...</span>
                 </div>
+                <div class="col-md-3">
+                    <strong>Magmatic Gas (30d):</strong> <span id="total-gas" class="gas-requirement">Loading...</span>
+                </div>
             </div>
+        </div>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <strong>Note:</strong> Metenox Moon Drills require BOTH fuel blocks AND magmatic gas. Gas requirements are shown separately below.
         </div>
         
         <div id="logistics-data">
@@ -137,15 +167,28 @@ $(document).ready(function() {
         $('#total-volume').text(data.summary.total_volume_30d.toLocaleString());
         $('#hauler-trips').text(data.summary.total_hauler_trips);
         
-        // Calculate 60d and 90d totals
+        // Calculate 60d and 90d totals, plus gas requirements
         let total60d = 0;
         let total90d = 0;
+        let totalGas30d = 0;
+        let metenoxCount = 0;
+        
         for (let system in data.systems) {
             total60d += data.systems[system].total_blocks_60d;
             total90d += data.systems[system].total_blocks_90d;
+            
+            // Count Metenox structures and calculate gas
+            data.systems[system].structures.forEach(function(structure) {
+                if (structure.type === 'Metenox Moon Drill') {
+                    metenoxCount++;
+                    totalGas30d += 4800 * 30; // 4,800 gas/day * 30 days
+                }
+            });
         }
+        
         $('#total-blocks-60d').text(total60d.toLocaleString());
         $('#total-blocks-90d').text(total90d.toLocaleString());
+        $('#total-gas').text(totalGas30d.toLocaleString() + ' units (' + metenoxCount + ' Metenox)');
         
         // Build system sections
         let html = '';
@@ -155,17 +198,35 @@ $(document).ready(function() {
             systemCount++;
             let systemData = data.systems[system];
             
+            // Count Metenox in this system
+            let systemMetenoxCount = systemData.structures.filter(s => s.type === 'Metenox Moon Drill').length;
+            let systemGas30d = systemMetenoxCount * 4800 * 30;
+            
             html += `
                 <div class="system-section">
                     <div class="system-header">
                         <h5 class="mb-0">
                             <i class="fas fa-map-marker-alt"></i> ${system}
                             <span class="badge badge-success ml-2">${systemData.structures.length} Structure${systemData.structures.length > 1 ? 's' : ''}</span>
+            `;
+            
+            if (systemMetenoxCount > 0) {
+                html += `<span class="metenox-badge ml-2"><i class="fas fa-wind"></i> ${systemMetenoxCount} Metenox</span>`;
+            }
+            
+            html += `
                         </h5>
                         <div class="system-stats">
                             <span><strong>30-Day:</strong> ${systemData.total_blocks_30d.toLocaleString()} blocks (${(systemData.total_blocks_30d * 5).toLocaleString()} m³)</span>
                             <span><strong>60-Day:</strong> ${systemData.total_blocks_60d.toLocaleString()} blocks</span>
                             <span><strong>90-Day:</strong> ${systemData.total_blocks_90d.toLocaleString()} blocks</span>
+            `;
+            
+            if (systemMetenoxCount > 0) {
+                html += `<span class="gas-requirement"><strong>Gas (30d):</strong> ${systemGas30d.toLocaleString()} units</span>`;
+            }
+            
+            html += `
                         </div>
                     </div>
                     <div class="table-responsive">
@@ -180,6 +241,7 @@ $(document).ready(function() {
                                     <th class="text-right">30d Blocks</th>
                                     <th class="text-right">60d Blocks</th>
                                     <th class="text-right">90d Blocks</th>
+                                    <th class="text-right">Gas (30d)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -199,16 +261,29 @@ $(document).ready(function() {
                     timeDisplay = structure.days_remaining + ' days';
                 }
                 
+                // Check if Metenox
+                let isMetenox = structure.type === 'Metenox Moon Drill';
+                let rowClass = isMetenox ? 'metenox-row' : '';
+                let gasRequirement = isMetenox ? (4800 * 30).toLocaleString() : '-';
+                
+                // Add limiting factor badge for Metenox
+                let typeBadge = '<span class="badge badge-secondary">' + structure.type + '</span>';
+                if (isMetenox && structure.metenox_data) {
+                    let limitingText = structure.metenox_data.limiting_factor === 'fuel_blocks' ? 'Fuel' : 'Gas';
+                    typeBadge += ' <span class="metenox-badge">' + limitingText + ' Limiting</span>';
+                }
+                
                 html += `
-                    <tr>
+                    <tr class="${rowClass}">
                         <td>${structure.name}</td>
-                        <td><span class="badge badge-secondary">${structure.type}</span></td>
+                        <td>${typeBadge}</td>
                         <td><small>${structure.corporation}</small></td>
                         <td>${moment(structure.fuel_expires).format('YYYY-MM-DD HH:mm')}</td>
                         <td class="text-center ${daysClass}">${timeDisplay}</td>
                         <td class="text-right">${structure.blocks_30d.toLocaleString()}</td>
                         <td class="text-right">${structure.blocks_60d.toLocaleString()}</td>
                         <td class="text-right">${structure.blocks_90d.toLocaleString()}</td>
+                        <td class="text-right ${isMetenox ? 'gas-requirement' : ''}">${gasRequirement}</td>
                     </tr>
                 `;
             });
@@ -221,6 +296,7 @@ $(document).ready(function() {
                                     <th class="text-right">${systemData.total_blocks_30d.toLocaleString()}</th>
                                     <th class="text-right">${systemData.total_blocks_60d.toLocaleString()}</th>
                                     <th class="text-right">${systemData.total_blocks_90d.toLocaleString()}</th>
+                                    <th class="text-right gas-requirement">${systemGas30d > 0 ? systemGas30d.toLocaleString() : '-'}</th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -267,14 +343,19 @@ $(document).ready(function() {
             return;
         }
         
-        let csv = 'System,Structure,Type,Corporation,Fuel Expires,Days Left,Hours Left,30d Blocks,60d Blocks,90d Blocks\n';
+        let csv = 'System,Structure,Type,Corporation,Fuel Expires,Days Left,Hours Left,30d Blocks,60d Blocks,90d Blocks,Gas (30d),Limiting Factor\n';
         
         for (let system in reportData.systems) {
             reportData.systems[system].structures.forEach(function(structure) {
                 let hoursLeft = structure.hours_remaining || (structure.days_remaining * 24);
+                let isMetenox = structure.type === 'Metenox Moon Drill';
+                let gasRequirement = isMetenox ? (4800 * 30) : 0;
+                let limitingFactor = (isMetenox && structure.metenox_data) ? structure.metenox_data.limiting_factor : 'N/A';
+                
                 csv += '"' + system + '","' + structure.name + '","' + structure.type + '","' + structure.corporation + '",';
                 csv += '"' + structure.fuel_expires + '",' + structure.days_remaining + ',' + hoursLeft + ',';
-                csv += structure.blocks_30d + ',' + structure.blocks_60d + ',' + structure.blocks_90d + '\n';
+                csv += structure.blocks_30d + ',' + structure.blocks_60d + ',' + structure.blocks_90d + ',';
+                csv += gasRequirement + ',' + limitingFactor + '\n';
             });
         }
         
@@ -286,6 +367,20 @@ $(document).ready(function() {
         csv += 'Total 30-Day Blocks,' + reportData.summary.total_blocks_30d + '\n';
         csv += 'Total Volume (m³),' + reportData.summary.total_volume_30d + '\n';
         csv += 'Hauler Trips Needed,' + reportData.summary.total_hauler_trips + '\n';
+        
+        // Count Metenox and gas
+        let metenoxCount = 0;
+        let totalGas = 0;
+        for (let system in reportData.systems) {
+            reportData.systems[system].structures.forEach(function(structure) {
+                if (structure.type === 'Metenox Moon Drill') {
+                    metenoxCount++;
+                    totalGas += 4800 * 30;
+                }
+            });
+        }
+        csv += 'Metenox Structures,' + metenoxCount + '\n';
+        csv += 'Total Gas Required (30d),' + totalGas + '\n';
         
         // Create download link
         let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
