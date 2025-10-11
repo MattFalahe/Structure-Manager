@@ -303,6 +303,85 @@
                 @endif
             </div>
         </div>
+
+        {{-- METENOX CONSUMPTION STATISTICS --}}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-fire"></i> Fuel Consumption Statistics</h3>
+            </div>
+            <div class="card-body">
+                <div class="info-banner">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Metenox Moon Drill:</strong> Consumption rates are fixed at 5 blocks/hour (120/day) and 200 gas/hour (4,800/day).
+                </div>
+                
+                {{-- Fuel Blocks Consumption --}}
+                <h5 class="mb-3"><i class="fas fa-fire text-warning-bright"></i> Fuel Blocks</h5>
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar-day"></i> Daily</h4>
+                            <div class="stat-number">120</div>
+                            <div class="stat-label">blocks/day</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar-week"></i> Weekly</h4>
+                            <div class="stat-number">840</div>
+                            <div class="stat-label">blocks/week</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar-alt"></i> Monthly</h4>
+                            <div class="stat-number">3,600</div>
+                            <div class="stat-label">blocks/month</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar"></i> Quarterly</h4>
+                            <div class="stat-number">10,800</div>
+                            <div class="stat-label">blocks/quarter</div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Magmatic Gas Consumption --}}
+                <h5 class="mb-3"><i class="fas fa-wind text-info-bright"></i> Magmatic Gas</h5>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar-day"></i> Daily</h4>
+                            <div class="stat-number">4,800</div>
+                            <div class="stat-label">units/day</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar-week"></i> Weekly</h4>
+                            <div class="stat-number">33,600</div>
+                            <div class="stat-label">units/week</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar-alt"></i> Monthly</h4>
+                            <div class="stat-number">144,000</div>
+                            <div class="stat-label">units/month</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4><i class="fas fa-calendar"></i> Quarterly</h4>
+                            <div class="stat-number">432,000</div>
+                            <div class="stat-label">units/quarter</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         @else
         {{-- Standard Upwell Structure Fuel Display --}}
         <div class="card">
@@ -494,10 +573,13 @@
                         @if($isMetenox)
                             <td>{{ $record->magmatic_gas_days ? number_format($record->magmatic_gas_days, 1) : 'N/A' }}</td>
                             <td>
-                                @if($record->metadata && isset($record->metadata['limiting_factor']))
-                                    @if($record->metadata['limiting_factor'] == 'magmatic_gas')
+                                @php
+                                    $metadata = is_string($record->metadata) ? json_decode($record->metadata, true) : $record->metadata;
+                                @endphp
+                                @if($metadata && isset($metadata['limiting_factor']))
+                                    @if($metadata['limiting_factor'] == 'magmatic_gas')
                                         <span class="badge badge-warning">Gas</span>
-                                    @elseif($record->metadata['limiting_factor'] == 'fuel_blocks')
+                                    @elseif($metadata['limiting_factor'] == 'fuel_blocks')
                                         <span class="badge badge-info">Fuel</span>
                                     @else
                                         <span class="badge badge-secondary">N/A</span>
