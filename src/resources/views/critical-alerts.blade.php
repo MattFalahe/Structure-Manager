@@ -336,8 +336,28 @@
 </script>
 
 <script src="{{ asset('vendor/structure-manager/js/moment.min.js') }}"></script>
+
 <script>
-$(document).ready(function() {
+// Wait for jQuery and Moment.js to be fully loaded
+(function checkLibraries() {
+    if (typeof $ === 'undefined') {
+        console.log('Waiting for jQuery...');
+        setTimeout(checkLibraries, 50);
+        return;
+    }
+    
+    if (typeof moment === 'undefined') {
+        console.log('Waiting for Moment.js...');
+        setTimeout(checkLibraries, 50);
+        return;
+    }
+    
+    // Both jQuery and Moment.js are loaded, initialize
+    initializeCriticalAlerts();
+})();
+
+function initializeCriticalAlerts() {
+    console.log('Initializing Critical Alerts...');
     
     function loadAlerts() {
         $('#alerts-container').html(`
@@ -607,5 +627,6 @@ $(document).ready(function() {
     
     // Auto-refresh every 5 minutes
     setInterval(loadAlerts, 300000);
-});
+}
 </script>
+@endpush
