@@ -10,6 +10,11 @@ use Carbon\Carbon;
 class FuelAlertController extends Controller
 {
     /**
+     * Metenox Moon Drill type ID
+     */
+    const METENOX_TYPE_ID = 81826;
+    
+    /**
      * Get user's accessible corporation IDs
      */
     private function getUserCorporations()
@@ -48,67 +53,117 @@ class FuelAlertController extends Controller
      */
     public function getCriticalAlerts()
     {
-        $query = DB::table('corporation_structures as cs')
-            ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
-            ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
-            ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
-            ->whereNotNull('cs.fuel_expires')
-            ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 336'); // < 14 days
-        
-        // Filter by user's corporations
-        $userCorps = $this->getUserCorporations();
-        if ($userCorps !== null) {
-            $query->whereIn('cs.corporation_id', $userCorps);
-        }
-        
-        $structures = $query->select(
-                'cs.structure_id',
-                'us.name as structure_name',
-                'it.typeName as structure_type',
-                'cs.type_id',
-                'md.itemName as system_name',
-                'cs.fuel_expires',
-                DB::raw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) as hours_remaining'),
-                DB::raw('FLOOR(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) / 24) as days_remaining'),
-                DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires), 24) as remaining_hours')
-            )
-            ->orderBy('hours_remaining', 'asc')
-            ->limit(10)
-            ->get();
-        
-        // Calculate fuel blocks needed and add Metenox data
-        foreach ($structures as $structure) {
-            $structure->blocks_needed = FuelCalculator::getFuelRequirement(
-                $structure->type_id,
-                $structure->structure_id,
-                'weekly'
-            );
+        try {
+            $query = DB::table('corporation_structures as cs')
+                ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
+                ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
+                ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
+                ->whereNotNull('cs.fuel_expires')
+                ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 336'); // < 14 days
             
-            $structure->status = $structure->hours_remaining < 168 ? 'critical' : 'warning';
+            // Filter by user's corporations
+            $userCorps = $this->getUserCorporations();
+            if ($userCorps !== null) {
+                $query->whereIn('cs.corporation_id', $userCorps);
+            }
             
-            // Add Metenox limiting factor data if applicable
-            if ($structure->type_id == self::METENOX_TYPE_ID) {
-                // Get latest fuel history record for this Metenox
-                $latestHistory = DB::table('structure_fuel_history')
-                    ->where('structure_id', $structure->structure_id)
-                    ->orderBy('created_at', 'desc')
-                    ->first();
+            $structures = $query->select(
+                    'cs.structure_id',
+                    'us.name as structure_name',
+                    'it.typeName as structure_type',
+                    'cs.type_id',
+                    'md.itemName as system_name',
+                    'cs.fuel_expires',
+                    DB::raw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) as hours_remaining'),
+                    DB::raw('FLOOR(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) / 24) as days_remaining'),
+                    DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires), 24) as remaining_hours')
+                )
+                ->orderBy('hours_remaining', 'asc')
+                ->limit(10)
+                ->get();
+            
+            // Calculate fuel blocks needed and add Metenox data
+            foreach ($structures as $structure) {
+                try {
+                    $structure->blocks_needed = FuelCalculator::getFuelRequirement(
+                        $structure->type_id,
+                        $structure->structure_id,
+                        'weekly'
+                    );
+                } catch (\Exception $e) {
+                    \Log::warning("Failed to calculate fuel requirement for structure {$structure->structure_id}: " . $e->getMessage());
+                    $structure->blocks_needed = 0;
+                }
                 
-                if ($latestHistory && $latestHistory->metadata) {
-                    $metadata = json_decode($latestHistory->metadata, true);
-                    
-                    $structure->metenox_data = [
-                        'fuel_blocks_quantity' => $metadata['fuel_blocks'] ?? 0,
-                        'magmatic_gas_quantity' => $latestHistory->magmatic_gas_quantity ?? 0,
-                        'fuel_blocks_days' => $metadata['fuel_days_remaining'] ?? 0,
-                        'magmatic_gas_days' => $latestHistory->magmatic_gas_days ?? 0,
-                        'limiting_factor' => $metadata['limiting_factor'] ?? 'unknown',
-                    ];
+                $structure->status = $structure->hours_remaining < 168 ? 'critical' : 'warning';
+                
+                // Add Metenox limiting factor data if applicable
+                if ($structure->type_id == self::METENOX_TYPE_ID) {
+                    try {
+                        // Get latest fuel history record for this Metenox
+                        $latestHistory = DB::table('structure_fuel_history')
+                            ->where('structure_id', $structure->structure_id)
+                            ->orderBy('created_at', 'desc')
+                            ->first();
+                        
+                        if ($latestHistory) {
+                            $metadata = null;
+                            
+                            // Safely decode metadata
+                            if ($latestHistory->metadata) {
+                                if (is_string($latestHistory->metadata)) {
+                                    $metadata = json_decode($latestHistory->metadata, true);
+                                } else {
+                                    $metadata = $latestHistory->metadata;
+                                }
+                            }
+                            
+                            // Only add metenox_data if we have valid metadata
+                            if ($metadata && is_array($metadata)) {
+                                $structure->metenox_data = [
+                                    'fuel_blocks_quantity' => $metadata['fuel_blocks'] ?? 0,
+                                    'magmatic_gas_quantity' => $latestHistory->magmatic_gas_quantity ?? 0,
+                                    'fuel_blocks_days' => $metadata['fuel_days_remaining'] ?? 0,
+                                    'magmatic_gas_days' => $latestHistory->magmatic_gas_days ?? 0,
+                                    'limiting_factor' => $metadata['limiting_factor'] ?? 'unknown',
+                                ];
+                            } else {
+                                // Fallback metenox data if metadata is missing
+                                $structure->metenox_data = [
+                                    'fuel_blocks_quantity' => 0,
+                                    'magmatic_gas_quantity' => 0,
+                                    'fuel_blocks_days' => 0,
+                                    'magmatic_gas_days' => 0,
+                                    'limiting_factor' => 'unknown',
+                                ];
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning("Failed to fetch Metenox data for structure {$structure->structure_id}: " . $e->getMessage());
+                        // Set default metenox_data on error
+                        $structure->metenox_data = [
+                            'fuel_blocks_quantity' => 0,
+                            'magmatic_gas_quantity' => 0,
+                            'fuel_blocks_days' => 0,
+                            'magmatic_gas_days' => 0,
+                            'limiting_factor' => 'unknown',
+                        ];
+                    }
                 }
             }
+            
+            return response()->json($structures);
+            
+        } catch (\Exception $e) {
+            \Log::error('Structure Manager - Error in getCriticalAlerts: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'error' => true,
+                'message' => 'Failed to load critical alerts',
+                'debug' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
         }
-        
-        return response()->json($structures);
     }
     
     /**
