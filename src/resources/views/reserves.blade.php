@@ -31,6 +31,7 @@
         gap: 2rem;
         margin-top: 0.5rem;
         font-size: 0.9rem;
+        flex-wrap: wrap;
     }
     
     .structure-card {
@@ -88,6 +89,37 @@
     .sec-high { background-color: #51cf66; color: #000; }
     .sec-low { background-color: #ffd43b; color: #000; }
     .sec-null { background-color: #ff6b6b; color: #fff; }
+    
+    /* Metenox specific */
+    .metenox-structure .structure-card-header {
+        background: rgba(156, 39, 176, 0.15);
+        border-color: rgba(156, 39, 176, 0.3);
+    }
+    
+    .metenox-badge {
+        background-color: rgba(156, 39, 176, 0.2);
+        color: #ce93d8;
+        border: 1px solid rgba(156, 39, 176, 0.3);
+    }
+    
+    .gas-row {
+        background: rgba(255, 193, 7, 0.05);
+    }
+    
+    .fuel-type-icon {
+        width: 20px;
+        text-align: center;
+        margin-right: 0.25rem;
+    }
+    
+    .reserve-totals {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.9rem;
+    }
 </style>
 @endpush
 
@@ -169,7 +201,16 @@ $(document).ready(function() {
         4051: 'Nitrogen Fuel Block',
         4246: 'Hydrogen Fuel Block',
         4247: 'Helium Fuel Block',
-        4312: 'Oxygen Fuel Block'
+        4312: 'Oxygen Fuel Block',
+        16273: 'Magmatic Gas'  // NEW: Add gas
+    };
+    
+    const fuelTypeIcons = {
+        4051: '<i class="fas fa-fire text-primary fuel-type-icon"></i>',
+        4246: '<i class="fas fa-fire text-info fuel-type-icon"></i>',
+        4247: '<i class="fas fa-fire text-success fuel-type-icon"></i>',
+        4312: '<i class="fas fa-fire text-danger fuel-type-icon"></i>',
+        16273: '<i class="fas fa-wind text-warning fuel-type-icon"></i>'  // NEW: Gas icon
     };
     
     // Base route URLs
@@ -192,6 +233,9 @@ $(document).ready(function() {
                     const secClass = systemData.security >= 0.5 ? 'sec-high' : 
                                    systemData.security > 0 ? 'sec-low' : 'sec-null';
                     
+                    // Count Metenox structures
+                    const metenoxCount = systemData.structures.filter(s => s.type === 'Metenox Moon Drill').length;
+                    
                     html += `
                         <div class="system-section">
                             <div class="system-header">
@@ -199,55 +243,139 @@ $(document).ready(function() {
                                     <i class="fas fa-map-marker-alt"></i> ${system}
                                     <span class="badge ${secClass} ml-2">${systemData.security.toFixed(1)}</span>
                                     <span class="badge badge-success ml-2">${systemData.structures.length} Structure${systemData.structures.length > 1 ? 's' : ''}</span>
+                    `;
+                    
+                    if (metenoxCount > 0) {
+                        html += `<span class="badge metenox-badge ml-2"><i class="fas fa-wind"></i> ${metenoxCount} Metenox</span>`;
+                    }
+                    
+                    html += `
                                 </h5>
                                 <div class="system-stats">
-                                    <span><strong>Total Reserves:</strong> ${systemData.total_reserves.toLocaleString()} blocks</span>
+                                    <span><strong>Total Fuel Blocks:</strong> ${systemData.total_reserves.toLocaleString()} blocks</span>
                                     <span><strong>Volume:</strong> ${(systemData.total_reserves * 5).toLocaleString()} m³</span>
+                    `;
+                    
+                    // Add gas total if any Metenox structures
+                    if (metenoxCount > 0) {
+                        // Calculate total gas from all structures
+                        let totalGas = 0;
+                        systemData.structures.forEach(s => {
+                            if (s.type === 'Metenox Moon Drill' && s.reserves) {
+                                s.reserves.forEach(r => {
+                                    if (r.fuel_type_id === 16273) {
+                                        totalGas += r.quantity;
+                                    }
+                                });
+                            }
+                        });
+                        
+                        if (totalGas > 0) {
+                            html += `<span class="text-warning"><strong>Total Magmatic Gas:</strong> ${totalGas.toLocaleString()} units</span>`;
+                        }
+                    }
+                    
+                    html += `
                                 </div>
                             </div>
                             <div class="row">
                     `;
                     
                     for (const structure of systemData.structures) {
+                        const isMetenox = structure.type === 'Metenox Moon Drill';
+                        const cardClass = isMetenox ? 'metenox-structure' : '';
+                        
+                        // Separate fuel blocks and gas
+                        const fuelReserves = structure.reserves.filter(r => r.fuel_type_id !== 16273);
+                        const gasReserves = structure.reserves.filter(r => r.fuel_type_id === 16273);
+                        
+                        // Calculate totals
+                        const totalFuelBlocks = fuelReserves.reduce((sum, r) => sum + r.quantity, 0);
+                        const totalGas = gasReserves.reduce((sum, r) => sum + r.quantity, 0);
+                        
                         html += `
                             <div class="col-md-6 mb-3">
-                                <div class="structure-card">
+                                <div class="structure-card ${cardClass}">
                                     <div class="structure-card-header">
                                         <strong>${structure.name}</strong>
-                                        <br><small class="text-muted">${structure.type} - ${structure.corporation}</small>
-                                    </div>
-                                    <div class="mb-2">
-                                        <strong>Total Reserves:</strong> 
-                                        <span class="badge badge-info">${structure.total_reserves.toLocaleString()} blocks</span>
-                                        <small class="text-muted">(${(structure.total_reserves * 5).toLocaleString()} m³)</small>
-                                    </div>
-                                    <table class="table table-sm reserve-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Division</th>
-                                                <th class="text-right">Quantity</th>
-                                                <th>Type</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
                         `;
                         
-                        for (const reserve of structure.reserves) {
-                            html += `
-                                <tr>
-                                    <td>
-                                        <strong>${reserve.division_name}</strong>
-                                        <br><small class="text-muted">${reserve.location}</small>
-                                    </td>
-                                    <td class="text-right"><strong>${reserve.quantity.toLocaleString()}</strong></td>
-                                    <td><small>${fuelTypeNames[reserve.fuel_type_id] || 'Unknown'}</small></td>
-                                </tr>
-                            `;
+                        if (isMetenox) {
+                            html += `<span class="badge metenox-badge ml-2"><i class="fas fa-wind"></i> Metenox</span>`;
                         }
                         
                         html += `
-                                        </tbody>
-                                    </table>
+                                        <br><small class="text-muted">${structure.type} - ${structure.corporation}</small>
+                                    </div>
+                        `;
+                        
+                        // Show totals
+                        if (isMetenox) {
+                            html += `
+                                <div class="reserve-totals">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <i class="fas fa-fire text-primary"></i> <strong>Fuel Blocks:</strong>
+                                            <span class="badge badge-info">${totalFuelBlocks.toLocaleString()}</span>
+                                            <small class="text-muted">(${(totalFuelBlocks * 5).toLocaleString()} m³)</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <i class="fas fa-wind text-warning"></i> <strong>Magmatic Gas:</strong>
+                                            <span class="badge badge-warning">${totalGas.toLocaleString()}</span>
+                                            <small class="text-muted">(${(totalGas / 4800).toFixed(1)} days)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            html += `
+                                <div class="mb-2">
+                                    <strong>Total Reserves:</strong> 
+                                    <span class="badge badge-info">${totalFuelBlocks.toLocaleString()} blocks</span>
+                                    <small class="text-muted">(${(totalFuelBlocks * 5).toLocaleString()} m³)</small>
+                                </div>
+                            `;
+                        }
+                        
+                        if (structure.reserves.length > 0) {
+                            html += `
+                                <table class="table table-sm reserve-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Division</th>
+                                            <th class="text-right">Quantity</th>
+                                            <th>Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            `;
+                            
+                            for (const reserve of structure.reserves) {
+                                const isGas = reserve.fuel_type_id === 16273;
+                                const rowClass = isGas ? 'gas-row' : '';
+                                const icon = fuelTypeIcons[reserve.fuel_type_id] || '';
+                                
+                                html += `
+                                    <tr class="${rowClass}">
+                                        <td>
+                                            <strong>${reserve.division_name}</strong>
+                                            <br><small class="text-muted">${reserve.location}</small>
+                                        </td>
+                                        <td class="text-right"><strong>${reserve.quantity.toLocaleString()}</strong></td>
+                                        <td>${icon}<small>${fuelTypeNames[reserve.fuel_type_id] || 'Unknown'}</small></td>
+                                    </tr>
+                                `;
+                            }
+                            
+                            html += `
+                                    </tbody>
+                                </table>
+                            `;
+                        } else {
+                            html += `<p class="text-muted mb-0">No reserves found</p>`;
+                        }
+                        
+                        html += `
                                 </div>
                             </div>
                         `;
@@ -298,9 +426,11 @@ $(document).ready(function() {
                 for (const event of data) {
                     const timestamp = new Date(event.timestamp);
                     const detailUrl = structureDetailBaseUrl + event.structure_id;
+                    const isGas = event.fuel_type_id === 16273;
+                    const icon = fuelTypeIcons[event.fuel_type_id] || '';
                     
                     html += `
-                        <tr>
+                        <tr class="${isGas ? 'gas-row' : ''}">
                             <td>${timestamp.toLocaleString()}</td>
                             <td>${event.system_name}</td>
                             <td>
@@ -308,9 +438,9 @@ $(document).ready(function() {
                                     ${event.structure_name}
                                 </a>
                             </td>
-                            <td><strong>${event.blocks_moved.toLocaleString()}</strong> blocks</td>
+                            <td><strong>${event.blocks_moved.toLocaleString()}</strong> ${isGas ? 'units' : 'blocks'}</td>
                             <td><span class="badge badge-info">${event.from_location}</span></td>
-                            <td><small>${fuelTypeNames[event.fuel_type_id] || 'Unknown'}</small></td>
+                            <td>${icon}<small>${fuelTypeNames[event.fuel_type_id] || 'Unknown'}</small></td>
                         </tr>
                     `;
                 }
