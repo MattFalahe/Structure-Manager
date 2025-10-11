@@ -10,6 +10,16 @@ use Carbon\Carbon;
 class FuelReserveController extends Controller
 {
     /**
+     * Magmatic Gas type ID
+     */
+    const MAGMATIC_GAS_TYPE_ID = 81143;
+    
+    /**
+     * Metenox Moon Drill type ID
+     */
+    const METENOX_TYPE_ID = 81826;
+    
+    /**
      * Get user's accessible corporation IDs
      */
     private function getUserCorporations()
@@ -36,6 +46,7 @@ class FuelReserveController extends Controller
     
     /**
      * Get reserves data by system
+     * UPDATED: Now includes magmatic gas for Metenox structures
      */
     public function getReservesData()
     {
@@ -54,7 +65,8 @@ class FuelReserveController extends Controller
         
         $structures = $query->select(
                 'cs.structure_id',
-                'cs.corporation_id',  // ← ADD THIS
+                'cs.corporation_id',
+                'cs.type_id',  // ← ADD THIS for Metenox detection
                 'us.name as structure_name',
                 'it.typeName as structure_type',
                 'md.itemName as system_name',
@@ -68,10 +80,18 @@ class FuelReserveController extends Controller
         
         foreach ($structures as $structure) {
             $reserves = StructureFuelReserves::getCurrentReserves($structure->structure_id);
-            $totalReserves = $reserves->sum('reserve_quantity');
             
-            if ($totalReserves > 0) {
+            // Separate fuel blocks and magmatic gas
+            $fuelReserves = $reserves->where('fuel_type_id', '!=', self::MAGMATIC_GAS_TYPE_ID);
+            $gasReserves = $reserves->where('fuel_type_id', '=', self::MAGMATIC_GAS_TYPE_ID);
+            
+            $totalFuelBlocks = $fuelReserves->sum('reserve_quantity');
+            $totalGas = $gasReserves->sum('reserve_quantity');
+            
+            // Only include structures that have reserves (either fuel or gas)
+            if ($totalFuelBlocks > 0 || $totalGas > 0) {
                 $system = $structure->system_name;
+                $isMetenox = $structure->type_id == self::METENOX_TYPE_ID;
                 
                 if (!isset($systemReserves[$system])) {
                     $systemReserves[$system] = [
@@ -99,7 +119,7 @@ class FuelReserveController extends Controller
                     
                     $reserveDetails[] = [
                         'location' => $reserve->location_flag,
-                        'division_name' => $divisionName,  // ← ADD THIS
+                        'division_name' => $divisionName,
                         'quantity' => $reserve->reserve_quantity,
                         'fuel_type_id' => $reserve->fuel_type_id,
                     ];
@@ -110,11 +130,13 @@ class FuelReserveController extends Controller
                     'name' => $structure->structure_name,
                     'type' => $structure->structure_type,
                     'corporation' => $structure->corporation_name,
-                    'total_reserves' => $totalReserves,
+                    'total_reserves' => $totalFuelBlocks,  // Only fuel blocks for totals
+                    'total_gas' => $totalGas,  // NEW: Gas total
+                    'is_metenox' => $isMetenox,  // NEW: Flag for frontend
                     'reserves' => $reserveDetails,
                 ];
                 
-                $systemReserves[$system]['total_reserves'] += $totalReserves;
+                $systemReserves[$system]['total_reserves'] += $totalFuelBlocks;
             }
         }
         
@@ -123,6 +145,7 @@ class FuelReserveController extends Controller
     
     /**
      * Get refuel events history
+     * UPDATED: Now includes magmatic gas events
      */
     public function getRefuelHistory($days = 30)
     {
@@ -155,6 +178,7 @@ class FuelReserveController extends Controller
                 'blocks_moved' => abs($event->quantity_change),
                 'from_location' => $event->location_flag,
                 'fuel_type_id' => $event->fuel_type_id,
+                'is_gas' => $event->fuel_type_id == self::MAGMATIC_GAS_TYPE_ID,  // NEW: Flag for frontend
             ];
         }
         
