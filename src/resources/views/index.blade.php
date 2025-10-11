@@ -40,8 +40,9 @@
     
     .consumption-stats {
         display: flex;
-        gap: 1rem;
+        gap: 0.5rem;
         font-size: 0.875rem;
+        flex-wrap: wrap;
     }
     
     /* DARK THEME COMPATIBLE - Changed from #f8f9fa */
@@ -50,6 +51,12 @@
         background: rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 0.25rem;
+        white-space: nowrap;
+    }
+    
+    .stat-item i {
+        margin-right: 0.25rem;
+        opacity: 0.7;
     }
     
     /* Service badges - matching consumption column style */
@@ -334,23 +341,32 @@ $(document).ready(function() {
             {
                 data: null,
                 render: function(data, type, row) {
-                    if (!row.daily_consumption) return '<span class="text-muted">Calculating...</span>';
+                    if (!row.daily_consumption) {
+                        return '<span class="text-muted">Calculating...</span>';
+                    }
+                    
+                    // Format numbers with commas for readability
+                    var daily = Number(row.daily_consumption).toLocaleString();
+                    var weekly = Number(row.weekly_consumption).toLocaleString();
+                    var monthly = Number(row.monthly_consumption).toLocaleString();
+                    
                     return '<div class="consumption-stats">' +
-                           '<span class="stat-item">Daily: ' + row.daily_consumption + '</span>' +
-                           '<span class="stat-item">Weekly: ' + row.weekly_consumption + '</span>' +
+                           '<span class="stat-item" title="Daily consumption"><i class="fas fa-fire"></i>' + daily + '/day</span>' +
+                           '<span class="stat-item" title="Weekly consumption"><i class="fas fa-calendar-week"></i>' + weekly + '/week</span>' +
+                           '<span class="stat-item" title="Monthly consumption"><i class="fas fa-calendar"></i>' + monthly + '/month</span>' +
                            '</div>';
                 }
             },
             {
                 data: null,
                 render: function(data, type, row) {
-                    return '<button class="btn btn-sm btn-info view-fuel" data-id="' + row.structure_id + '">' +
+                    return '<button class="btn btn-sm btn-info view-fuel" data-id="' + row.structure_id + '" title="View fuel history">' +
                            '<i class="fas fa-chart-line"></i>' +
                            '</button>';
                 }
             }
         ],
-        order: [[5, 'asc']],
+        order: [[5, 'asc']], // Sort by days remaining (ascending = most critical first)
         pageLength: 25,
         drawCallback: function() {
             updateFuelSummary();
@@ -414,22 +430,27 @@ $(document).ready(function() {
                 }
             });
             
+            // Calculate consumption estimates from historical data
             if (data.length > 1) {
                 var latest = data[0];
                 var oldest = data[data.length - 1];
                 var daysDiff = moment(latest.created_at).diff(moment(oldest.created_at), 'days');
                 var fuelUsed = oldest.days_remaining - latest.days_remaining;
                 var avgDaily = daysDiff > 0 ? (fuelUsed / daysDiff).toFixed(2) : 0;
+                var estimatedBlocks = (avgDaily * 40).toFixed(0);
                 
                 $('#consumption-details').html(
                     '<div class="row">' +
                     '<div class="col-md-3"><strong>Period:</strong> ' + daysDiff + ' days</div>' +
                     '<div class="col-md-3"><strong>Fuel Used:</strong> ~' + fuelUsed + ' days</div>' +
                     '<div class="col-md-3"><strong>Avg Daily:</strong> ' + avgDaily + ' days/day</div>' +
-                    '<div class="col-md-3"><strong>Est. Blocks/Day:</strong> ' + (avgDaily * 40).toFixed(0) + '</div>' +
+                    '<div class="col-md-3"><strong>Est. Blocks/Day:</strong> ' + Number(estimatedBlocks).toLocaleString() + '</div>' +
                     '</div>'
                 );
             }
+        }).fail(function(xhr, status, error) {
+            console.error('Error loading fuel history:', error);
+            alert('Error loading fuel history. Please try again.');
         });
     }
 });
