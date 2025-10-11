@@ -62,7 +62,7 @@ class CreateTestMetenoxCommand extends Command
         $this->info('Creating test structures for Metenox dual fuel testing...');
         $this->newLine();
         
-        // Get a valid corporation and system from existing structures
+        // Get a valid corporation, system, and profile from existing structures
         $existingStructure = DB::table('corporation_structures')->first();
         
         if (!$existingStructure) {
@@ -72,14 +72,16 @@ class CreateTestMetenoxCommand extends Command
         
         $corpId = $existingStructure->corporation_id;
         $systemId = $existingStructure->system_id;
+        $profileId = $existingStructure->profile_id;
         
         $this->line("Using corporation ID: {$corpId}");
         $this->line("Using system ID: {$systemId}");
+        $this->line("Using profile ID: {$profileId}");
         $this->newLine();
         
         // ===== Create Metenox Moon Drill =====
         $this->info('📍 Creating Metenox Moon Drill...');
-        $this->createMetenoxStructure($corpId, $systemId);
+        $this->createMetenoxStructure($corpId, $systemId, $profileId);
         $this->createMetenoxName($systemId);
         $this->createMetenoxFuelBay($corpId);
         $this->createMetenoxService();
@@ -89,7 +91,7 @@ class CreateTestMetenoxCommand extends Command
         
         // ===== Create Astrahus (for reserves) =====
         $this->info('🏰 Creating Astrahus (Reserve Storage)...');
-        $this->createAstrahusStructure($corpId, $systemId);
+        $this->createAstrahusStructure($corpId, $systemId, $profileId);
         $this->createAstrahusName($systemId);
         $this->createAstrahusReserves($corpId);
         $this->createAstrahusService();
@@ -114,7 +116,7 @@ class CreateTestMetenoxCommand extends Command
     /**
      * Create the Metenox structure record
      */
-    private function createMetenoxStructure($corpId, $systemId)
+    private function createMetenoxStructure($corpId, $systemId, $profileId)
     {
         $this->line('  Creating structure record...');
         
@@ -122,6 +124,7 @@ class CreateTestMetenoxCommand extends Command
             ['structure_id' => self::TEST_METENOX_ID],
             [
                 'corporation_id' => $corpId,
+                'profile_id' => $profileId,
                 'system_id' => $systemId,
                 'type_id' => self::METENOX_TYPE_ID,
                 'fuel_expires' => Carbon::now()->addDays(14),
@@ -261,7 +264,7 @@ class CreateTestMetenoxCommand extends Command
     /**
      * Create the Astrahus structure record
      */
-    private function createAstrahusStructure($corpId, $systemId)
+    private function createAstrahusStructure($corpId, $systemId, $profileId)
     {
         $this->line('  Creating structure record...');
         
@@ -269,6 +272,7 @@ class CreateTestMetenoxCommand extends Command
             ['structure_id' => self::TEST_ASTRAHUS_ID],
             [
                 'corporation_id' => $corpId,
+                'profile_id' => $profileId,
                 'system_id' => $systemId,
                 'type_id' => self::ASTRAHUS_TYPE_ID,
                 'fuel_expires' => Carbon::now()->addDays(30),
