@@ -254,6 +254,22 @@
         color: #000000 !important;
         text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
     }
+
+    /* Limiting Factor stat badge - special styling */
+    .stat-badge.limiting-factor {
+        border: 2px solid !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .stat-badge.limiting-fuel {
+        background: rgba(33, 150, 243, 0.15) !important;
+        border-color: #2196f3 !important;
+    }
+    
+    .stat-badge.limiting-gas {
+        background: rgba(255, 152, 0, 0.15) !important;
+        border-color: #ff9800 !important;
+    }
 </style>
 @endpush
 
@@ -547,54 +563,76 @@ function initializeCriticalAlerts() {
                     `;
                 }
                 
+               html += `
+                    <div class="alert-stats">
+                        <div class="stat-badge">
+                            <i class="far fa-clock text-${statusColor}"></i>
+                            <strong>Fuel Expires:</strong><br>
+                            <span>${expiresAt.format('YYYY-MM-DD HH:mm')}</span><br>
+                            <small>(${timeUntilEmpty})</small>
+                        </div>
+                `;
+                
+                // Add Limiting Factor box for Metenox ONLY - right after Fuel Expires
+                if (isMetenox && alert.metenox_data.limiting_factor !== 'unknown') {
+                    let md = alert.metenox_data;
+                    let limitingIcon = md.limiting_factor === 'fuel_blocks' ? 'fa-fire' : 'fa-wind';
+                    let limitingText = md.limiting_factor === 'fuel_blocks' ? 'Fuel Blocks' : 'Magmatic Gas';
+                    let limitingColor = md.limiting_factor === 'fuel_blocks' ? 'info' : 'warning';
+                    let limitingBg = md.limiting_factor === 'fuel_blocks' ? 'rgba(33, 150, 243, 0.1)' : 'rgba(255, 152, 0, 0.1)';
+                    let limitingBorder = md.limiting_factor === 'fuel_blocks' ? '2px solid rgba(33, 150, 243, 0.3)' : '2px solid rgba(255, 152, 0, 0.3)';
+                    
+                    html += `
+                        <div class="stat-badge" style="background: ${limitingBg} !important; border: ${limitingBorder} !important;">
+                            <i class="fas ${limitingIcon} text-${limitingColor}"></i>
+                            <strong style="color: ${md.limiting_factor === 'fuel_blocks' ? '#2196f3' : '#ff9800'};">⚠️ Limiting Factor:</strong><br>
+                            <span style="font-size: 1.1rem; font-weight: bold; color: ${md.limiting_factor === 'fuel_blocks' ? '#2196f3' : '#ff9800'};">${limitingText}</span><br>
+                            <small>Runs out first at ${md.limiting_factor === 'fuel_blocks' ? md.fuel_blocks_days.toFixed(1) : md.magmatic_gas_days.toFixed(1)} days</small>
+                        </div>
+                    `;
+                }
+                
                 html += `
-                                    <div class="alert-stats">
-                                        <div class="stat-badge">
-                                            <i class="far fa-clock text-${statusColor}"></i>
-                                            <strong>Fuel Expires:</strong><br>
-                                            <span>${expiresAt.format('YYYY-MM-DD HH:mm')}</span><br>
-                                            <small>(${timeUntilEmpty})</small>
-                                        </div>
-                                        <div class="stat-badge">
-                                            <i class="fas fa-gas-pump text-primary"></i>
-                                            <strong>Weekly Requirement:</strong><br>
-                                            <span>${alert.blocks_needed.toLocaleString()} blocks</span><br>
-                                            <small>(${(alert.blocks_needed * 5).toLocaleString()} m³)</small>
-                                        </div>
-                                        <div class="stat-badge">
-                                            <i class="fas fa-cubes text-info"></i>
-                                            <strong>30-Day Need:</strong><br>
-                                            <span>${(alert.blocks_needed * 4.3).toFixed(0)} blocks</span><br>
-                                            <small>(${(alert.blocks_needed * 4.3 * 5).toFixed(0)} m³)</small>
-                                        </div>
+                        <div class="stat-badge">
+                            <i class="fas fa-gas-pump text-primary"></i>
+                            <strong>Weekly Requirement:</strong><br>
+                            <span>${alert.blocks_needed.toLocaleString()} blocks</span><br>
+                            <small>(${(alert.blocks_needed * 5).toLocaleString()} m³)</small>
+                        </div>
+                        <div class="stat-badge">
+                            <i class="fas fa-cubes text-info"></i>
+                            <strong>30-Day Need:</strong><br>
+                            <span>${(alert.blocks_needed * 4.3).toFixed(0)} blocks</span><br>
+                            <small>(${(alert.blocks_needed * 4.3 * 5).toFixed(0)} m³)</small>
+                        </div>
                 `;
                 
                 // Add magmatic gas requirements for Metenox
                 if (isMetenox) {
                     html += `
-                                        <div class="stat-badge">
-                                            <i class="fas fa-wind text-warning"></i>
-                                            <strong>Gas Required:</strong><br>
-                                            <span>${(4800 * 7).toLocaleString()} units/week</span><br>
-                                            <small>${(4800 * 30).toLocaleString()} units/month</small>
-                                        </div>
+                        <div class="stat-badge">
+                            <i class="fas fa-wind text-warning"></i>
+                            <strong>Gas Required:</strong><br>
+                            <span>${(4800 * 7).toLocaleString()} units/week</span><br>
+                            <small>${(4800 * 30).toLocaleString()} units/month</small>
+                        </div>
                     `;
                 }
                 
                 html += `
-                                    </div>
-                                    
-                                    <div class="mt-2">
-                                        ${urgencyMsg}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
-                `;
-            });
-            
-            $('#alerts-container').html(html);
+                    
+                    <div class="mt-2">
+                        ${urgencyMsg}
+                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            
+                            $('#alerts-container').html(html);
             
         }).fail(function(xhr, status, error) {
             console.error('AJAX Error:', {xhr: xhr, status: status, error: error});
