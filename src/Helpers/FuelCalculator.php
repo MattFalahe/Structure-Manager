@@ -13,6 +13,11 @@ class FuelCalculator
      */
     
     /**
+     * Magmatic Gas type ID
+     */
+    const MAGMATIC_GAS_TYPE_ID = 81143;
+    
+    /**
      * CRITICAL: Map services to their source modules
      * One module can provide multiple services but only consumes fuel ONCE
      * Service names are CASE-SENSITIVE and must match EVE API exactly
@@ -41,7 +46,7 @@ class FuelCalculator
         // Moon Drill provides 1 service (Athanor/Tatara)
         'Moon Drilling' => 'moon_drill',
         
-        // Automatic Moon Drilling (Metenox Moon Drill - mobile structure, different fuel system)
+        // Automatic Moon Drilling (Metenox Moon Drill - deployable structure)
         'Automatic Moon Drilling' => 'metenox_moon_drill',
         
         // Reactors provide 1 service each
@@ -55,7 +60,7 @@ class FuelCalculator
         // Cloning Center provides 1 service
         'Clone Bay' => 'cloning_center',
         
-        // Navigation structures (if you have them)
+        // Navigation structures
         'Jump Gate' => 'ansiblex_jump_bridge',
         'Cynosural Beacon' => 'pharolux_cyno_beacon',
         'Cynosural Jammer' => 'tenebrex_cyno_jammer',
@@ -147,10 +152,12 @@ class FuelCalculator
             'restrictions' => 'Requires sov, up to 3 per system',
         ],
         
-        // Metenox Moon Drill (mobile structure, not Upwell)
+        // Metenox Moon Drill (deployable structure, not Upwell)
         'metenox_moon_drill' => [
-            'base' => 0,
-            'note' => 'Metenox Moon Drills use fuel blocks + magmatic gas. Consumption rates differ from Upwell structures and are not tracked by this plugin.',
+            'base' => 5,  // 5 fuel blocks per hour
+            'magmatic_gas' => 200,  // 200 magmatic gas per hour
+            'note' => 'Metenox Moon Drills consume 5 fuel blocks/hour (120/day) + 200 magmatic gas/hour (4,800/day). CRITICAL: Magmatic gas often runs out BEFORE fuel blocks!',
+            'restrictions' => 'Deployable structure, requires magmatic gas in addition to fuel blocks',
         ],
     ];
     
@@ -177,6 +184,9 @@ class FuelCalculator
         35841 => ['name' => 'Ansiblex Jump Gate', 'category' => 'navigation', 'size' => 'medium'],
         35840 => ['name' => 'Pharolux Cyno Beacon', 'category' => 'navigation', 'size' => 'medium'],
         35839 => ['name' => 'Tenebrex Cyno Jammer', 'category' => 'navigation', 'size' => 'medium'],
+        
+        // Metenox Moon Drill (Deployable)
+        81826 => ['name' => 'Metenox Moon Drill', 'category' => 'deployable', 'size' => 'medium'],
     ];
     
     /**
@@ -198,6 +208,9 @@ class FuelCalculator
             'moon_mining' => ['moon_drill', 'reprocessing_facility'],  // 13 blocks/hour (Athanor), 12.5 (Tatara)
             'reactions' => ['moon_drill', 'reprocessing_facility', 'composite_reactor'],  // 25 blocks/hour (Athanor), 23.75 (Tatara)
         ],
+        'deployable' => [
+            'metenox' => ['metenox_moon_drill'],  // 5 blocks/hour + 200 gas/hour
+        ],
     ];
     
     /**
@@ -214,6 +227,7 @@ class FuelCalculator
      * Get estimated fuel consumption based on active services
      * This is the PRIMARY method - it analyzes actual online services
      * FIXED: Now groups services by module to avoid double-counting
+     * NEW: Supports Metenox with magmatic gas tracking
      */
     public static function calculateFromActiveServices($structureId)
     {
@@ -225,7 +239,14 @@ class FuelCalculator
             return ['hourly' => 0, 'daily' => 0, 'method' => 'unknown', 'error' => 'Structure not found'];
         }
         
-        // Get online services
+        $structureInfo = self::STRUCTURE_TYPES[$structure->type_id] ?? null;
+        
+        // Special handling for Metenox Moon Drill
+        if ($structureInfo && $structureInfo['category'] === 'deployable' && $structureInfo['name'] === 'Metenox Moon Drill') {
+            return self::calculateMetenoxConsumption($structureId, $structure);
+        }
+        
+        // Get online services (Upwell structures)
         $services = DB::table('corporation_structure_services')
             ->where('structure_id', $structureId)
             ->where('state', 'online')
@@ -241,8 +262,6 @@ class FuelCalculator
                 'note' => 'Structure has no online services - consuming 0 fuel',
             ];
         }
-        
-        $structureInfo = self::STRUCTURE_TYPES[$structure->type_id] ?? null;
         
         // CRITICAL FIX: Group services by their source module
         $activeModules = [];
@@ -290,10 +309,74 @@ class FuelCalculator
             'daily' => round($totalHourly * 24),
             'weekly' => round($totalHourly * 24 * 7),
             'monthly' => round($totalHourly * 24 * 30),
+            'quarterly' => round($totalHourly * 24 * 90),
             'method' => 'active_services',
             'modules' => $moduleBreakdown,
             'structure_type' => $structureInfo['name'] ?? 'Unknown',
             'note' => 'Based on ' . count($activeModules) . ' active module(s) providing ' . count($services) . ' service(s)',
+        ];
+    }
+    
+    /**
+     * Calculate consumption for Metenox Moon Drill
+     * Tracks BOTH fuel blocks AND magmatic gas
+     */
+    private static function calculateMetenoxConsumption($structureId, $structure)
+    {
+        // Get current fuel bay contents
+        $fuelBlocks = DB::table('corporation_assets')
+            ->where('location_id', $structureId)
+            ->where('location_flag', 'StructureFuel')
+            ->whereIn('type_id', array_keys(self::FUEL_BLOCKS))
+            ->sum('quantity');
+        
+        $magmaticGas = DB::table('corporation_assets')
+            ->where('location_id', $structureId)
+            ->where('location_flag', 'StructureFuel')
+            ->where('type_id', self::MAGMATIC_GAS_TYPE_ID)
+            ->sum('quantity');
+        
+        // Calculate days remaining for each resource
+        $fuelDaysRemaining = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;  // 5 blocks/hour
+        $gasDaysRemaining = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;  // 200 gas/hour
+        
+        // The REAL time until empty is whichever runs out first
+        $actualDaysRemaining = min($fuelDaysRemaining, $gasDaysRemaining);
+        
+        // Determine limiting factor
+        $limitingFactor = 'none';
+        if ($actualDaysRemaining > 0) {
+            $limitingFactor = $fuelDaysRemaining < $gasDaysRemaining ? 'fuel_blocks' : 'magmatic_gas';
+        }
+        
+        return [
+            'hourly' => 5,
+            'daily' => 120,
+            'weekly' => 840,
+            'monthly' => 3600,
+            'quarterly' => 10800,
+            'method' => 'metenox_drill',
+            'structure_type' => 'Metenox Moon Drill',
+            'magmatic_gas' => [
+                'hourly' => 200,
+                'daily' => 4800,
+                'weekly' => 33600,
+                'monthly' => 144000,
+                'current_quantity' => $magmaticGas,
+                'days_remaining' => round($gasDaysRemaining, 1),
+            ],
+            'fuel_blocks' => [
+                'current_quantity' => $fuelBlocks,
+                'days_remaining' => round($fuelDaysRemaining, 1),
+            ],
+            'actual_days_remaining' => round($actualDaysRemaining, 1),
+            'limiting_factor' => $limitingFactor,
+            'warning' => $limitingFactor === 'magmatic_gas' ? 
+                'WARNING: Magmatic gas will run out in ' . round($gasDaysRemaining, 1) . ' days (before fuel blocks at ' . round($fuelDaysRemaining, 1) . ' days)!' : 
+                ($limitingFactor === 'fuel_blocks' ? 
+                    'WARNING: Fuel blocks will run out in ' . round($fuelDaysRemaining, 1) . ' days (before magmatic gas at ' . round($gasDaysRemaining, 1) . ' days)!' : 
+                    null),
+            'note' => 'Metenox consumes 5 fuel blocks/hour + 200 magmatic gas/hour. Both must be stocked!',
         ];
     }
     
@@ -313,9 +396,9 @@ class FuelCalculator
             return 10;
         }
         
-        // Special case: Metenox Moon Drill uses different fuel (not fuel blocks)
+        // Special case: Metenox Moon Drill
         if ($moduleName === 'metenox_moon_drill') {
-            return 0;
+            return $rate['base'];  // Just return fuel blocks, gas tracked separately
         }
         
         $category = $structureInfo['category'] ?? 'unknown';
@@ -340,17 +423,6 @@ class FuelCalculator
         }
         
         return $rate['base'];
-    }
-    
-    /**
-     * @deprecated - Use calculateFromActiveServices instead
-     */
-    private static function estimateServiceConsumption($serviceName, $structureInfo)
-    {
-        // This method is deprecated but kept for backwards compatibility
-        // Map to module and get consumption (use exact service name)
-        $moduleName = self::SERVICE_TO_MODULE_MAP[$serviceName] ?? 'unknown';
-        return self::getModuleConsumption($moduleName, $structureInfo);
     }
     
     /**
@@ -426,12 +498,13 @@ class FuelCalculator
         if ($structureId) {
             $result = self::calculateFromActiveServices($structureId);
             
-            if ($result['method'] === 'active_services' || $result['method'] === 'no_services') {
+            if ($result['method'] === 'active_services' || $result['method'] === 'no_services' || $result['method'] === 'metenox_drill') {
                 switch ($period) {
                     case 'hourly': return $result['hourly'];
                     case 'daily': return $result['daily'];
                     case 'weekly': return $result['weekly'];
                     case 'monthly': return $result['monthly'];
+                    case 'quarterly': return $result['quarterly'] ?? ($result['monthly'] * 3);
                     default: return $result['daily'];
                 }
             }
@@ -499,15 +572,5 @@ class FuelCalculator
         }
         
         return $data;
-    }
-    
-    /**
-     * @deprecated - Use getServiceModifier() is no longer relevant
-     * Service consumption is calculated directly from active services
-     */
-    public static function getServiceModifier($services)
-    {
-        // This method is deprecated but kept for backwards compatibility
-        return 1.0;
     }
 }
