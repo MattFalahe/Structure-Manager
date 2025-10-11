@@ -59,6 +59,56 @@
         opacity: 0.7;
     }
     
+    /* Metenox specific styling */
+    .metenox-indicator {
+        display: inline-block;
+        padding: 0.15rem 0.4rem;
+        font-size: 0.75rem;
+        border-radius: 0.25rem;
+        margin-left: 0.25rem;
+    }
+    
+    .limiting-fuel {
+        background-color: rgba(23, 162, 184, 0.2);
+        color: #5dade2;
+        border: 1px solid rgba(23, 162, 184, 0.3);
+    }
+    
+    .limiting-gas {
+        background-color: rgba(255, 193, 7, 0.2);
+        color: #ffd43b;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+    
+    /* Tooltip styling */
+    .metenox-tooltip {
+        position: relative;
+        cursor: help;
+    }
+    
+    .metenox-tooltip .tooltip-content {
+        visibility: hidden;
+        background-color: rgba(0, 0, 0, 0.9);
+        color: #fff;
+        text-align: left;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 250px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .metenox-tooltip:hover .tooltip-content {
+        visibility: visible;
+        opacity: 1;
+    }
+    
     /* Service badges - matching consumption column style */
     .badge-info {
         background-color: rgba(23, 162, 184, 0.15) !important;
@@ -284,7 +334,23 @@ $(document).ready(function() {
                     return '<a href="{{ url('structure-manager/structure') }}/' + row.structure_id + '">' + data + '</a>';
                 }
             },
-            { data: 'structure_type' },
+            { 
+                data: 'structure_type',
+                render: function(data, type, row) {
+                    var output = data;
+                    
+                    // Add Metenox indicator if applicable
+                    if (data === 'Metenox Moon Drill' && row.metenox_data) {
+                        var limitingFactor = row.metenox_data.limiting_factor;
+                        var badgeClass = limitingFactor === 'fuel_blocks' ? 'limiting-fuel' : 'limiting-gas';
+                        var limitingText = limitingFactor === 'fuel_blocks' ? 'Fuel' : 'Gas';
+                        
+                        output += ' <span class="metenox-indicator ' + badgeClass + '" title="Limiting resource">' + limitingText + '</span>';
+                    }
+                    
+                    return output;
+                }
+            },
             { 
                 data: 'system_name',
                 render: function(data, type, row) {
@@ -325,12 +391,34 @@ $(document).ready(function() {
                         displayText = hours + ' hours';
                     }
                     
-                    return '<span class="' + className + '" title="' + row.hours_remaining + ' total hours">' + displayText + '</span>';
+                    var output = '<span class="' + className + '" title="' + row.hours_remaining + ' total hours">' + displayText + '</span>';
+                    
+                    // Add Metenox tooltip with dual fuel info
+                    if (row.structure_type === 'Metenox Moon Drill' && row.metenox_data) {
+                        var metenoxData = row.metenox_data;
+                        var tooltipContent = '<div class="metenox-tooltip">' + output +
+                            '<div class="tooltip-content">' +
+                            '<strong><i class="fas fa-exclamation-triangle"></i> Dual Fuel System</strong><br>' +
+                            '<hr style="margin: 0.3rem 0; border-color: rgba(255,255,255,0.2);">' +
+                            '<i class="fas fa-battery-three-quarters"></i> <strong>Fuel Blocks:</strong> ' + metenoxData.fuel_blocks_days.toFixed(1) + ' days<br>' +
+                            '<i class="fas fa-wind"></i> <strong>Magmatic Gas:</strong> ' + metenoxData.magmatic_gas_days.toFixed(1) + ' days<br>' +
+                            '<hr style="margin: 0.3rem 0; border-color: rgba(255,255,255,0.2);">' +
+                            '<i class="fas fa-stopwatch"></i> <strong>Limiting:</strong> ' + (metenoxData.limiting_factor === 'fuel_blocks' ? 'Fuel Blocks' : 'Magmatic Gas') +
+                            '</div></div>';
+                        output = tooltipContent;
+                    }
+                    
+                    return output;
                 }
             },
             { 
                 data: 'services',
-                render: function(data) {
+                render: function(data, type, row) {
+                    // Metenox has no services
+                    if (row.structure_type === 'Metenox Moon Drill') {
+                        return '<span class="badge badge-secondary">Auto-Mining</span>';
+                    }
+                    
                     if (!data) return '<span class="text-muted">None</span>';
                     var services = data.split(', ');
                     return services.map(function(s) { 
@@ -341,6 +429,14 @@ $(document).ready(function() {
             {
                 data: null,
                 render: function(data, type, row) {
+                    // Metenox shows dual consumption
+                    if (row.structure_type === 'Metenox Moon Drill') {
+                        return '<div class="consumption-stats">' +
+                               '<span class="stat-item" title="Fuel blocks daily"><i class="fas fa-fire"></i>120 blocks/day</span>' +
+                               '<span class="stat-item" title="Magmatic gas daily"><i class="fas fa-wind"></i>4,800 gas/day</span>' +
+                               '</div>';
+                    }
+                    
                     if (!row.daily_consumption) {
                         return '<span class="text-muted">Calculating...</span>';
                     }
