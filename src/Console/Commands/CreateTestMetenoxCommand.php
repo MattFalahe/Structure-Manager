@@ -177,7 +177,7 @@ class CreateTestMetenoxCommand extends Command
             ],
             [
                 'location_id' => self::TEST_METENOX_ID,
-                'location_type' => 'other',
+                'location_type' => 'item',
                 'type_id' => 4312, // Oxygen Fuel Block
                 'quantity' => 1860, // 15.5 days worth
                 'location_flag' => 'StructureFuel',
@@ -196,7 +196,7 @@ class CreateTestMetenoxCommand extends Command
             ],
             [
                 'location_id' => self::TEST_METENOX_ID,
-                'location_type' => 'other',
+                'location_type' => 'item',
                 'type_id' => self::MAGMATIC_GAS_TYPE_ID,
                 'quantity' => 59040, // 12.3 days worth - LIMITING FACTOR!
                 'location_flag' => 'StructureFuel',
@@ -325,7 +325,7 @@ class CreateTestMetenoxCommand extends Command
             ],
             [
                 'location_id' => self::TEST_ASTRAHUS_ID,
-                'location_type' => 'other',
+                'location_type' => 'item',
                 'type_id' => 4312, // Oxygen Fuel Block
                 'quantity' => 5000,
                 'location_flag' => 'CorpSAG3',
@@ -344,7 +344,7 @@ class CreateTestMetenoxCommand extends Command
             ],
             [
                 'location_id' => self::TEST_ASTRAHUS_ID,
-                'location_type' => 'other',
+                'location_type' => 'item',
                 'type_id' => self::MAGMATIC_GAS_TYPE_ID,
                 'quantity' => 144000, // 30 days worth
                 'location_flag' => 'CorpSAG4',
@@ -363,7 +363,7 @@ class CreateTestMetenoxCommand extends Command
             ],
             [
                 'location_id' => self::TEST_ASTRAHUS_ID,
-                'location_type' => 'other',
+                'location_type' => 'item',
                 'type_id' => 4312,
                 'quantity' => 400,
                 'location_flag' => 'StructureFuel',
