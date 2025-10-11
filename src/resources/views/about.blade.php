@@ -154,28 +154,32 @@
         </div>
 
         <div class="about-section">
-            <h4><i class="fas fa-rocket"></i> What's New in v1.0.4</h4>
+            <h4><i class="fas fa-rocket"></i> What's New in v1.0.5</h4>
             
             <div class="changelog-section">
-                <h5><i class="fas fa-bug"></i> Critical Bug Fix: Module-Based Fuel Calculation</h5>
+                <h5><i class="fas fa-paint-brush"></i> Enhanced Structure Detail Page</h5>
                 <ul class="changelog-list">
-                    <li><strong>Fixed service-to-module calculation</strong> - Services are now correctly grouped by their source module
-                        <ul style="list-style: disc; margin-left: 2rem; margin-top: 0.5rem;">
-                            <li>Research Lab provides 3 services but consumes fuel as 1 module (9 blocks/hour on Engineering Complexes)</li>
-                            <li>Raitaru with Research + Invention: Now correctly shows 18 blocks/hour (was ~36)</li>
-                            <li>Azbel with Manufacturing + Capital Shipyard: Now correctly shows 27 blocks/hour (was ~18)</li>
-                        </ul>
-                    </li>
-                    <li><strong>Added SERVICE_TO_MODULE_MAP</strong> - Proper mapping of all EVE Online services to their source modules</li>
-                    <li><strong>Improved service detection</strong> - Case-sensitive exact matching with EVE API service names</li>
-                    <li><strong>Enhanced module breakdown display</strong> - Shows which services each module provides</li>
+                    <li><strong>Comprehensive fuel consumption dashboard</strong> - Added detailed breakdown cards showing hourly, daily, weekly, monthly, and quarterly consumption rates</li>
+                    <li><strong>Improved fuel projections</strong> - Now displays estimated blocks remaining, volume in m³, precise time until empty, and hourly consumption rate</li>
+                    <li><strong>Historical analysis integration</strong> - Shows fuel bay snapshot tracking data, refuel event detection, and consumption anomaly alerts</li>
+                    <li><strong>Enhanced dark theme support</strong> - Better contrast and readability across all dark themes with improved color palette</li>
+                    <li><strong>Service status indicators</strong> - Clear visual display of online vs offline services with fuel consumption notes</li>
+                    <li><strong>Improved chart visualization</strong> - Dark-themed fuel history chart with gradients and better tooltip formatting</li>
                 </ul>
             </div>
             
             <div class="changelog-section">
-                <h5><i class="fas fa-history"></i> Previous Updates</h5>
+                <h5><i class="fas fa-history"></i> Recent Updates</h5>
+                <p><strong>v1.0.4</strong> - Critical bug fix: Module-based fuel calculation (Research Lab now correctly counts as 1 module, not 3 services)</p>
                 <p><strong>v1.0.3</strong> - Fixed migration issues for cleaner installation</p>
-                <p><strong>v1.0.2</strong> - Moon Drill fuel calculation corrections, UI/UX improvements, fuel reserves management</p>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+                <i class="fas fa-book"></i> 
+                <strong>Full Changelog:</strong> 
+                <a href="https://github.com/MattFalahe/Structure-Manager/wiki/Changelog" target="_blank" class="alert-link">
+                    View complete version history on GitHub Wiki →
+                </a>
             </div>
         </div>
 
@@ -269,7 +273,7 @@
         <div class="about-section">
             <h4><i class="fas fa-code-branch"></i> Version</h4>
             <div class="text-center">
-                <span class="badge badge-primary badge-custom">v1.0.4</span>
+                <span class="badge badge-primary badge-custom">v1.0.5</span>
                 <span class="badge badge-success badge-custom">Stable</span>
             </div>
             <p class="mt-3 text-center">
@@ -294,6 +298,11 @@
             <a href="https://github.com/MattFalahe/Structure-Manager" target="_blank" class="link-card">
                 <i class="fab fa-github"></i> <strong>GitHub Repository</strong><br>
                 <small>View source code and documentation</small>
+            </a>
+            
+            <a href="https://github.com/MattFalahe/Structure-Manager/wiki/Changelog" target="_blank" class="link-card">
+                <i class="fas fa-list-alt"></i> <strong>Full Changelog</strong><br>
+                <small>Complete version history</small>
             </a>
             
             <a href="https://github.com/MattFalahe/Structure-Manager/issues" target="_blank" class="link-card">

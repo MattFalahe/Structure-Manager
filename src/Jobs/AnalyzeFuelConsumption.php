@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Services\FuelConsumptionTracker;
+use StructureManager\Helpers\FuelCalculator;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -70,13 +71,15 @@ class AnalyzeFuelConsumption implements ShouldQueue
     
     /**
      * Analyze a single structure's consumption
+     * Focuses on EVENT DETECTION (refuels, anomalies, alerts)
+     * Display consumption comes from FuelCalculator service-based rates
      */
     private function analyzeStructure($structureId)
     {
         $analysis = FuelConsumptionTracker::analyzeFuelConsumption($structureId, 30);
         
         if ($analysis['status'] === 'success') {
-            // Store analysis results in consumption table
+            // Store analysis results in consumption table (for historical reference)
             DB::table('structure_fuel_consumption')->updateOrInsert(
                 [
                     'structure_id' => $structureId,
@@ -92,8 +95,14 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 ]
             );
             
-            // Check for critical fuel levels
+            // Check for critical fuel levels and anomalies
             $this->checkCriticalLevels($structureId, $analysis);
+            
+            // Log refuel events
+            $this->logRefuelEvents($structureId, $analysis);
+            
+            // Detect and log consumption anomalies (service changes)
+            $this->detectAnomalies($structureId, $analysis);
             
             Log::info("Structure Manager: Analyzed structure {$structureId}", [
                 'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
@@ -125,7 +134,7 @@ class AnalyzeFuelConsumption implements ShouldQueue
     }
     
     /**
-     * Check for critical fuel levels and trigger alerts if needed
+     * Check for critical fuel levels and trigger alerts
      */
     private function checkCriticalLevels($structureId, $analysis)
     {
@@ -142,6 +151,9 @@ class AnalyzeFuelConsumption implements ShouldQueue
         // Get current fuel status from analysis
         $fuelStatus = $analysis['current_status'] ?? null;
         
+        // Get expected consumption from current services
+        $expectedDaily = FuelCalculator::getFuelRequirement($structure->type_id, $structureId, 'daily');
+        
         // Critical: Less than 7 days in fuel bay
         if ($fuelStatus && isset($fuelStatus['bay_days_supply']) && $fuelStatus['bay_days_supply'] < 7) {
             Log::warning('Structure Manager: CRITICAL fuel bay level', [
@@ -149,10 +161,11 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 'bay_days_supply' => $fuelStatus['bay_days_supply'],
                 'fuel_bay_blocks' => $fuelStatus['fuel_bay_blocks'] ?? 0,
                 'reserve_blocks' => $fuelStatus['reserve_blocks'] ?? 0,
-                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
+                'expected_daily_consumption' => $expectedDaily,
+                'tracked_daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
             ]);
             
-            // Here you could dispatch notification jobs or alerts
+            // TODO: Dispatch notification jobs or alerts
             // dispatch(new SendFuelAlert($structureId, $fuelStatus['bay_days_supply'], 'critical'));
         } 
         // Warning: Less than 14 days in fuel bay
@@ -161,9 +174,10 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 'structure_id' => $structureId,
                 'bay_days_supply' => $fuelStatus['bay_days_supply'],
                 'fuel_bay_blocks' => $fuelStatus['fuel_bay_blocks'] ?? 0,
-                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
+                'expected_daily_consumption' => $expectedDaily,
             ]);
             
+            // TODO: Dispatch notification jobs or alerts
             // dispatch(new SendFuelAlert($structureId, $fuelStatus['bay_days_supply'], 'warning'));
         }
         
@@ -172,22 +186,11 @@ class AnalyzeFuelConsumption implements ShouldQueue
             Log::warning('Structure Manager: CRITICAL overall fuel level', [
                 'structure_id' => $structureId,
                 'days_remaining' => $daysRemaining,
-                'daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
-            ]);
-        }
-        
-        // Check for consumption anomalies
-        if (isset($analysis['anomalies']) && count($analysis['anomalies']) > 0) {
-            $latestAnomaly = end($analysis['anomalies']);
-            
-            Log::info('Structure Manager: Consumption anomaly detected', [
-                'structure_id' => $structureId,
-                'anomaly' => $latestAnomaly,
+                'expected_daily_consumption' => $expectedDaily,
             ]);
         }
         
         // Check if reserve fuel needs to be moved to bay
-        // FIXED: Use isset() to safely check for reserve_blocks
         if ($fuelStatus && 
             isset($fuelStatus['reserve_blocks']) && 
             $fuelStatus['reserve_blocks'] > 0 && 
@@ -199,6 +202,83 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 'bay_days_supply' => $fuelStatus['bay_days_supply'],
                 'reserve_blocks' => $fuelStatus['reserve_blocks'],
                 'message' => 'Consider moving reserve fuel from corporate hangar to fuel bay',
+            ]);
+        }
+    }
+    
+    /**
+     * Log refuel events
+     */
+    private function logRefuelEvents($structureId, $analysis)
+    {
+        if (!isset($analysis['refuel_events']) || empty($analysis['refuel_events'])) {
+            return;
+        }
+        
+        foreach ($analysis['refuel_events'] as $refuel) {
+            Log::info('Structure Manager: Refuel event detected', [
+                'structure_id' => $structureId,
+                'timestamp' => $refuel['timestamp'],
+                'blocks_added' => $refuel['blocks_added'] ?? $refuel['estimated_blocks_added'] ?? 'unknown',
+                'method' => $refuel['method'],
+            ]);
+        }
+    }
+    
+    /**
+     * Detect and log consumption anomalies (service activation/deactivation)
+     * Compares tracked consumption vs expected service-based rate
+     */
+    private function detectAnomalies($structureId, $analysis)
+    {
+        if (!isset($analysis['anomalies']) || empty($analysis['anomalies'])) {
+            return;
+        }
+        
+        // Get current expected consumption from services
+        $structure = DB::table('corporation_structures')
+            ->where('structure_id', $structureId)
+            ->first();
+        
+        if (!$structure) {
+            return;
+        }
+        
+        $expectedDaily = FuelCalculator::getFuelRequirement($structure->type_id, $structureId, 'daily');
+        $trackedDaily = $analysis['consumption']['average_daily'] ?? 0;
+        
+        // Calculate variance between expected and tracked
+        $variance = 0;
+        if ($expectedDaily > 0 && $trackedDaily > 0) {
+            $variance = (($trackedDaily - $expectedDaily) / $expectedDaily) * 100;
+        }
+        
+        // Log anomalies with context
+        foreach ($analysis['anomalies'] as $anomaly) {
+            Log::info('Structure Manager: Consumption anomaly detected', [
+                'structure_id' => $structureId,
+                'timestamp' => $anomaly['timestamp'],
+                'anomaly_details' => $anomaly,
+                'current_service_based_rate' => $expectedDaily,
+                'tracked_average_rate' => $trackedDaily,
+                'variance_percent' => round($variance, 1),
+                'possible_cause' => $anomaly['possible_cause'] ?? 'unknown',
+            ]);
+            
+            // TODO: If variance is significant, dispatch alert
+            // if (abs($variance) > 20) {
+            //     dispatch(new SendAnomalyAlert($structureId, $anomaly, $variance));
+            // }
+        }
+        
+        // Log significant variance even if no anomalies detected
+        if (abs($variance) > 15 && empty($analysis['anomalies'])) {
+            Log::info('Structure Manager: Consumption variance detected', [
+                'structure_id' => $structureId,
+                'expected_daily' => $expectedDaily,
+                'tracked_daily' => $trackedDaily,
+                'variance_percent' => round($variance, 1),
+                'note' => 'Tracked consumption differs from current service configuration. Services may have changed recently.',
             ]);
         }
     }

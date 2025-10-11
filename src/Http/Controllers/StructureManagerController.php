@@ -135,9 +135,9 @@ class StructureManagerController extends Controller
             
             $structures = $query->orderBy('hours_remaining', 'asc')->get();
             
-            // Calculate consumption rates from history
+            // Calculate consumption rates - NOW ALWAYS USES SERVICE-BASED CALCULATION
             foreach ($structures as $structure) {
-                $consumption = $this->calculateConsumption($structure->structure_id);
+                $consumption = $this->calculateConsumption($structure->structure_id, $structure->type_id);
                 $structure->daily_consumption = $consumption['daily'];
                 $structure->weekly_consumption = $consumption['weekly'];
                 $structure->monthly_consumption = $consumption['monthly'];
@@ -193,9 +193,21 @@ class StructureManagerController extends Controller
             ->limit(30)
             ->get();
         
-        $consumption = $this->calculateConsumption($id);
+        // Get service-based consumption for display
+        $consumption = $this->calculateConsumption($id, $structure->type_id);
         
-        return view('structure-manager::detail', compact('structure', 'services', 'fuelHistory', 'consumption'));
+        // Get historical analysis for trends/anomalies (optional - for detail page only)
+        $historicalAnalysis = null;
+        try {
+            $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($id, 30);
+            if ($analysis['status'] === 'success') {
+                $historicalAnalysis = $analysis;
+            }
+        } catch (\Exception $e) {
+            \Log::debug("Structure Manager: Could not load historical analysis for structure {$id}");
+        }
+        
+        return view('structure-manager::detail', compact('structure', 'services', 'fuelHistory', 'consumption', 'historicalAnalysis'));
     }
     
     public function getFuelHistory($id)
@@ -255,49 +267,36 @@ class StructureManagerController extends Controller
 
     /**
      * Calculate consumption rates for a structure
-     * Prioritizes actual tracked data, falls back to service-based estimates
+     * ALWAYS uses service-based calculation for accurate, real-time results
+     * Historical tracking continues in background for refuel/anomaly detection
      */
-    private function calculateConsumption($structureId)
+    private function calculateConsumption($structureId, $structureTypeId = null)
     {
         try {
-            // Try to get actual consumption from historical tracking data (BEST)
-            $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($structureId, 30);
-            
-            if ($analysis['status'] === 'success' && isset($analysis['consumption']['average_daily']) && $analysis['consumption']['average_daily'] > 0) {
-                return [
-                    'hourly' => round($analysis['consumption']['average_hourly'], 2),
-                    'daily' => round($analysis['consumption']['average_daily']),
-                    'weekly' => round($analysis['consumption']['average_weekly']),
-                    'monthly' => round($analysis['consumption']['average_monthly']),
-                    'quarterly' => round($analysis['consumption']['average_monthly'] * 3),
-                    'method' => 'tracked',
-                    'data_points' => $analysis['analysis_period']['data_points'] ?? 0,
-                ];
-            }
-        } catch (\Exception $e) {
-            \Log::error("Structure Manager: Error analyzing consumption for structure {$structureId}: " . $e->getMessage());
-        }
-        
-        // Fall back to service-based calculation (GOOD)
-        try {
-            $structure = DB::table('corporation_structures')
-                ->where('structure_id', $structureId)
-                ->first();
-            
-            if (!$structure) {
-                return [
-                    'hourly' => 0,
-                    'daily' => 0,
-                    'weekly' => 0,
-                    'monthly' => 0,
-                    'quarterly' => 0,
-                    'method' => 'error',
-                ];
+            // Get structure info if type not provided
+            if ($structureTypeId === null) {
+                $structure = DB::table('corporation_structures')
+                    ->where('structure_id', $structureId)
+                    ->first();
+                
+                if (!$structure) {
+                    return [
+                        'hourly' => 0,
+                        'daily' => 0,
+                        'weekly' => 0,
+                        'monthly' => 0,
+                        'quarterly' => 0,
+                        'method' => 'error',
+                        'error' => 'Structure not found',
+                    ];
+                }
+                
+                $structureTypeId = $structure->type_id;
             }
             
-            // Get hourly consumption from calculator
+            // ALWAYS use service-based calculation from FuelCalculator
             $hourly = \StructureManager\Helpers\FuelCalculator::getFuelRequirement(
-                $structure->type_id, 
+                $structureTypeId, 
                 $structureId,
                 'hourly'
             );
@@ -308,11 +307,12 @@ class StructureManagerController extends Controller
                 'weekly' => round($hourly * 24 * 7),
                 'monthly' => round($hourly * 24 * 30),
                 'quarterly' => round($hourly * 24 * 90),
-                'method' => 'estimated',
-                'note' => 'Based on active services.',
+                'method' => 'service_based',
+                'note' => 'Based on current active services',
             ];
+            
         } catch (\Exception $e) {
-            \Log::error("Structure Manager: Error calculating fallback consumption for structure {$structureId}: " . $e->getMessage());
+            \Log::error("Structure Manager: Error calculating consumption for structure {$structureId}: " . $e->getMessage());
             
             return [
                 'hourly' => 0,
@@ -326,6 +326,10 @@ class StructureManagerController extends Controller
         }
     }
     
+    /**
+     * Get fuel analysis for a structure (for detail page)
+     * Returns historical tracking data for trends, refuels, and anomalies
+     */
     public function getFuelAnalysis($id)
     {
         $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($id, 30);
