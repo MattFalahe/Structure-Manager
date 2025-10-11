@@ -128,6 +128,13 @@
         color: #fff !important;
     }
     
+    /* Metenox badges */
+    .badge-metenox {
+        background-color: rgba(156, 39, 176, 0.2) !important;
+        color: #ce93d8 !important;
+        border: 1px solid rgba(156, 39, 176, 0.3);
+    }
+    
     /* Metenox dual fuel display */
     .metenox-dual-fuel {
         background: rgba(156, 39, 176, 0.1);
@@ -152,6 +159,38 @@
         border-radius: 0.25rem;
         font-size: 0.75rem;
         font-weight: bold;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    
+    /* Prominent limiting factor indicator */
+    .limiting-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(220, 53, 69, 0.15);
+        border: 2px solid rgba(220, 53, 69, 0.4);
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.25rem;
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin-left: 0.5rem;
+    }
+    
+    .limiting-indicator i {
+        animation: pulse 2s infinite;
+    }
+    
+    .limiting-fuel {
+        color: #ff6b6b;
+    }
+    
+    .limiting-gas {
+        color: #ffd43b;
     }
 </style>
 @endpush
@@ -324,6 +363,9 @@ $(document).ready(function() {
                 let expiresAt = moment(alert.fuel_expires);
                 let timeUntilEmpty = expiresAt.fromNow();
                 
+                // Check if Metenox
+                let isMetenox = alert.structure_type === 'Metenox Moon Drill' && alert.metenox_data;
+                
                 html += `
                     <div class="alert-card ${statusClass} card">
                         <div class="card-body">
@@ -338,16 +380,33 @@ $(document).ready(function() {
                                                 <a href="{{ url('structure-manager/structure') }}/${alert.structure_id}">
                                                     ${alert.structure_name}
                                                 </a>
+                `;
+                
+                // Add prominent limiting factor indicator for Metenox ONLY
+                if (isMetenox) {
+                    let limitingFactor = alert.metenox_data.limiting_factor;
+                    let limitingIcon = limitingFactor === 'fuel_blocks' ? 'fa-battery-quarter' : 'fa-wind';
+                    let limitingText = limitingFactor === 'fuel_blocks' ? 'Fuel Blocks Limiting' : 'Magmatic Gas Limiting';
+                    let limitingClass = limitingFactor === 'fuel_blocks' ? 'limiting-fuel' : 'limiting-gas';
+                    
+                    html += `
+                                                <span class="limiting-indicator ${limitingClass}">
+                                                    <i class="fas ${limitingIcon}"></i>
+                                                    ${limitingText}
+                                                </span>
+                    `;
+                }
+                
+                html += `
                                             </h5>
                                             <p class="mb-2">
                                                 <span class="badge badge-secondary">${alert.structure_type}</span>
                                                 <span class="badge badge-info ml-1"><i class="fas fa-map-marker-alt"></i> ${alert.system_name}</span>
                 `;
                 
-                // Add Metenox indicator if applicable
-                if (alert.structure_type === 'Metenox Moon Drill' && alert.metenox_data) {
-                    let limitingText = alert.metenox_data.limiting_factor === 'fuel_blocks' ? 'Fuel Limiting' : 'Gas Limiting';
-                    html += `<span class="badge badge-warning ml-1"><i class="fas fa-exclamation-triangle"></i> ${limitingText}</span>`;
+                // Add Metenox badge
+                if (isMetenox) {
+                    html += `<span class="badge badge-metenox ml-1"><i class="fas fa-moon"></i> Metenox</span>`;
                 }
                 
                 html += `
@@ -362,32 +421,36 @@ $(document).ready(function() {
                                     </div>
                 `;
                 
-                // Show Metenox dual fuel status
-                if (alert.structure_type === 'Metenox Moon Drill' && alert.metenox_data) {
+                // Show Metenox dual fuel status - ONLY for Metenox
+                if (isMetenox) {
                     let md = alert.metenox_data;
-                    let fuelBlocksClass = md.limiting_factor === 'fuel_blocks' ? 'fuel-critical' : 'fuel-normal';
-                    let gasClass = md.limiting_factor === 'magmatic_gas' ? 'fuel-critical' : 'fuel-normal';
+                    let fuelBlocksClass = md.limiting_factor === 'fuel_blocks' ? 'fuel-critical' : '';
+                    let gasClass = md.limiting_factor === 'magmatic_gas' ? 'fuel-critical' : '';
                     
                     html += `
                         <div class="metenox-dual-fuel">
-                            <strong><i class="fas fa-exclamation-triangle"></i> Dual Fuel System</strong>
+                            <strong><i class="fas fa-exclamation-triangle text-warning"></i> Dual Fuel System Status</strong>
                             <hr style="margin: 0.5rem 0; border-color: rgba(255,255,255,0.2);">
                             <div class="metenox-resource">
                                 <span>
-                                    <i class="fas fa-battery-three-quarters"></i> <strong>Fuel Blocks:</strong>
+                                    <i class="fas fa-fire text-primary"></i> <strong>Fuel Blocks:</strong>
                                     <span class="${fuelBlocksClass}">${md.fuel_blocks_days.toFixed(1)} days</span>
-                                    (${md.fuel_blocks_quantity.toLocaleString()} blocks)
+                                    <small class="text-muted">(${md.fuel_blocks_quantity.toLocaleString()} blocks)</small>
                                 </span>
-                                ${md.limiting_factor === 'fuel_blocks' ? '<span class="limiting-factor-badge">LIMITING</span>' : ''}
+                                ${md.limiting_factor === 'fuel_blocks' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : ''}
                             </div>
                             <div class="metenox-resource">
                                 <span>
-                                    <i class="fas fa-wind"></i> <strong>Magmatic Gas:</strong>
+                                    <i class="fas fa-wind text-warning"></i> <strong>Magmatic Gas:</strong>
                                     <span class="${gasClass}">${md.magmatic_gas_days.toFixed(1)} days</span>
-                                    (${md.magmatic_gas_quantity.toLocaleString()} units)
+                                    <small class="text-muted">(${md.magmatic_gas_quantity.toLocaleString()} units)</small>
                                 </span>
-                                ${md.limiting_factor === 'magmatic_gas' ? '<span class="limiting-factor-badge">LIMITING</span>' : ''}
+                                ${md.limiting_factor === 'magmatic_gas' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : ''}
                             </div>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Structure will stop when ${md.limiting_factor === 'fuel_blocks' ? 'fuel blocks' : 'magmatic gas'} runs out
+                            </small>
                         </div>
                     `;
                 }
@@ -409,13 +472,13 @@ $(document).ready(function() {
                                         <div class="stat-badge">
                                             <i class="fas fa-cubes text-info"></i>
                                             <strong>30-Day Need:</strong><br>
-                                            <span>${(alert.blocks_needed * 4.3).toFixed(0).toLocaleString()} blocks</span><br>
-                                            <small>(${(alert.blocks_needed * 4.3 * 5).toFixed(0).toLocaleString()} m³)</small>
+                                            <span>${(alert.blocks_needed * 4.3).toFixed(0)} blocks</span><br>
+                                            <small>(${(alert.blocks_needed * 4.3 * 5).toFixed(0)} m³)</small>
                                         </div>
                 `;
                 
-                // Add magmatic gas requirements for Metenox
-                if (alert.structure_type === 'Metenox Moon Drill') {
+                // Add magmatic gas requirements for Metenox ONLY
+                if (isMetenox) {
                     html += `
                                         <div class="stat-badge">
                                             <i class="fas fa-wind text-warning"></i>
