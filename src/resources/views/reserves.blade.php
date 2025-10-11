@@ -197,12 +197,13 @@
 })();
 
 $(document).ready(function() {
+    // FIXED: Correct type ID for Magmatic Gas is 81143, not 16273!
     const fuelTypeNames = {
         4051: 'Nitrogen Fuel Block',
         4246: 'Hydrogen Fuel Block',
         4247: 'Helium Fuel Block',
         4312: 'Oxygen Fuel Block',
-        16273: 'Magmatic Gas'  // NEW: Add gas
+        81143: 'Magmatic Gas'  // ✅ FIXED: Was 16273, now correct!
     };
     
     const fuelTypeIcons = {
@@ -210,7 +211,7 @@ $(document).ready(function() {
         4246: '<i class="fas fa-fire text-info fuel-type-icon"></i>',
         4247: '<i class="fas fa-fire text-success fuel-type-icon"></i>',
         4312: '<i class="fas fa-fire text-danger fuel-type-icon"></i>',
-        16273: '<i class="fas fa-wind text-warning fuel-type-icon"></i>'  // NEW: Gas icon
+        81143: '<i class="fas fa-wind text-warning fuel-type-icon"></i>'  // ✅ FIXED: Was 16273
     };
     
     // Base route URLs
@@ -263,7 +264,8 @@ $(document).ready(function() {
                         systemData.structures.forEach(s => {
                             if (s.type === 'Metenox Moon Drill' && s.reserves) {
                                 s.reserves.forEach(r => {
-                                    if (r.fuel_type_id === 16273) {
+                                    // ✅ FIXED: Was checking r.fuel_type_id === 16273
+                                    if (r.fuel_type_id === 81143) {
                                         totalGas += r.quantity;
                                     }
                                 });
@@ -285,9 +287,9 @@ $(document).ready(function() {
                         const isMetenox = structure.type === 'Metenox Moon Drill';
                         const cardClass = isMetenox ? 'metenox-structure' : '';
                         
-                        // Separate fuel blocks and gas
-                        const fuelReserves = structure.reserves.filter(r => r.fuel_type_id !== 16273);
-                        const gasReserves = structure.reserves.filter(r => r.fuel_type_id === 16273);
+                        // ✅ FIXED: Separate fuel blocks and gas using correct type ID
+                        const fuelReserves = structure.reserves.filter(r => r.fuel_type_id !== 81143);
+                        const gasReserves = structure.reserves.filter(r => r.fuel_type_id === 81143);
                         
                         // Calculate totals
                         const totalFuelBlocks = fuelReserves.reduce((sum, r) => sum + r.quantity, 0);
@@ -309,8 +311,9 @@ $(document).ready(function() {
                                     </div>
                         `;
                         
-                        // Show totals
-                        if (isMetenox) {
+                        // Show totals - for ANY structure that has gas reserves!
+                        if (totalGas > 0) {
+                            // This structure has gas - show dual totals even if not Metenox
                             html += `
                                 <div class="reserve-totals">
                                     <div class="row">
@@ -328,6 +331,7 @@ $(document).ready(function() {
                                 </div>
                             `;
                         } else {
+                            // No gas - just show fuel blocks
                             html += `
                                 <div class="mb-2">
                                     <strong>Total Reserves:</strong> 
@@ -351,7 +355,8 @@ $(document).ready(function() {
                             `;
                             
                             for (const reserve of structure.reserves) {
-                                const isGas = reserve.fuel_type_id === 16273;
+                                // ✅ FIXED: Was checking === 16273
+                                const isGas = reserve.fuel_type_id === 81143;
                                 const rowClass = isGas ? 'gas-row' : '';
                                 const icon = fuelTypeIcons[reserve.fuel_type_id] || '';
                                 
@@ -426,7 +431,8 @@ $(document).ready(function() {
                 for (const event of data) {
                     const timestamp = new Date(event.timestamp);
                     const detailUrl = structureDetailBaseUrl + event.structure_id;
-                    const isGas = event.fuel_type_id === 16273;
+                    // ✅ FIXED: Was checking === 16273
+                    const isGas = event.fuel_type_id === 81143;
                     const icon = fuelTypeIcons[event.fuel_type_id] || '';
                     
                     html += `
