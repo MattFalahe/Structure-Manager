@@ -21,59 +21,74 @@
         background: rgba(255, 193, 7, 0.1) !important;
     }
     
-    /* Force info-box backgrounds to show */
+    /* Force info-box backgrounds to show - Universal theme support */
     .info-box.bg-danger {
         background: #dc3545 !important;
         color: #fff !important;
+        border: 2px solid #b71c1c !important;
+        box-shadow: 0 3px 10px rgba(220, 53, 69, 0.3);
     }
     
     .info-box.bg-warning {
-        background: #ffc107 !important;
+        background: #ff9800 !important;
         color: #000 !important;
+        border: 2px solid #e65100 !important;
+        box-shadow: 0 3px 10px rgba(255, 152, 0, 0.3);
     }
     
     .info-box.bg-info {
-        background: #17a2b8 !important;
+        background: #2196f3 !important;
         color: #fff !important;
+        border: 2px solid #0d47a1 !important;
+        box-shadow: 0 3px 10px rgba(33, 150, 243, 0.3);
     }
     
     .info-box-icon i {
-        color: rgba(255, 255, 255, 0.3) !important;
+        color: rgba(255, 255, 255, 0.5) !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
     
     .info-box.bg-danger .info-box-icon i {
-        color: rgba(255, 255, 255, 0.4) !important;
+        color: rgba(255, 255, 255, 0.6) !important;
     }
     
     .info-box.bg-warning .info-box-icon i {
-        color: #6c757d !important;
-        opacity: 0.6 !important;
+        color: rgba(0, 0, 0, 0.4) !important;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
     }
     
     .info-box.bg-info .info-box-icon i {
-        color: rgba(255, 255, 255, 0.4) !important;
+        color: rgba(255, 255, 255, 0.6) !important;
     }
     
     .info-box-content {
         color: inherit !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    
+    .info-box.bg-warning .info-box-content {
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
     }
     
     .info-box-text,
     .info-box-number {
         color: inherit !important;
+        font-weight: bold;
     }
     
-    /* Better contrast for dark themes */
+    /* Better contrast for dark themes - Universal colors */
     .fuel-critical { 
-        color: #ff6b6b !important;
+        color: #ff5252 !important;
         font-weight: bold;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }
     
     .fuel-warning { 
-        color: #ffd43b !important;
+        color: #ffb300 !important;
         font-weight: bold;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }
     
     .structure-icon {
@@ -107,90 +122,136 @@
         margin-bottom: 1rem;
     }
     
-    /* Badge styling */
+    /* Badge styling - High contrast for all themes */
     .badge-danger {
         background-color: #dc3545 !important;
         color: #fff !important;
+        font-weight: bold;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     
     .badge-warning {
-        background-color: #ffc107 !important;
+        background-color: #ff9800 !important;
         color: #000 !important;
+        font-weight: bold;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
     }
     
     .badge-info {
-        background-color: #17a2b8 !important;
+        background-color: #2196f3 !important;
         color: #fff !important;
+        font-weight: bold;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     
     .badge-secondary {
         background-color: #6c757d !important;
         color: #fff !important;
+        font-weight: bold;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .badge-success {
+        background-color: #4caf50 !important;
+        color: #fff !important;
+        font-weight: bold;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     
     /* Metenox badges */
     .badge-metenox {
-        background-color: rgba(156, 39, 176, 0.2) !important;
-        color: #ce93d8 !important;
-        border: 1px solid rgba(156, 39, 176, 0.3);
+        background-color: #9c27b0 !important;
+        color: #ffffff !important;
+        font-weight: bold;
     }
     
-    /* Metenox dual fuel display */
+    /* Metenox dual fuel display - Universal theme support */
     .metenox-dual-fuel {
-        background: rgba(156, 39, 176, 0.1);
-        border: 1px solid rgba(156, 39, 176, 0.3);
-        border-radius: 0.25rem;
-        padding: 0.75rem;
-        margin-top: 0.5rem;
+        background: transparent;
+        border: 2px solid #9c27b0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 0.75rem;
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.2);
     }
     
     .metenox-resource {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.25rem 0;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+        background: rgba(0, 0, 0, 0.05);
     }
     
+    /* Limiting factor badge - High contrast for all themes */
     .limiting-factor-badge {
-        background-color: rgba(220, 53, 69, 0.2);
-        color: #ff6b6b;
-        border: 1px solid rgba(220, 53, 69, 0.3);
-        padding: 0.15rem 0.5rem;
+        background-color: #dc3545;
+        color: #ffffff;
+        border: 2px solid #ffffff;
+        padding: 0.25rem 0.6rem;
         border-radius: 0.25rem;
         font-size: 0.75rem;
         font-weight: bold;
         animation: pulse 2s infinite;
+        box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     
     @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.6; }
+        0%, 100% { 
+            opacity: 1;
+            transform: scale(1);
+        }
+        50% { 
+            opacity: 0.85;
+            transform: scale(1.05);
+        }
     }
     
-    /* Prominent limiting factor indicator */
+    /* Prominent limiting factor indicator - Universal contrast */
     .limiting-indicator {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
-        background: rgba(220, 53, 69, 0.15);
-        border: 2px solid rgba(220, 53, 69, 0.4);
-        padding: 0.4rem 0.8rem;
-        border-radius: 0.25rem;
+        background: #ff9800;
+        border: 2px solid #e65100;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
         font-weight: bold;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         margin-left: 0.5rem;
+        color: #000000;
+        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
     }
     
     .limiting-indicator i {
-        animation: pulse 2s infinite;
+        animation: pulse-rotate 2s infinite;
+        font-size: 1.1rem;
+    }
+    
+    @keyframes pulse-rotate {
+        0%, 100% { 
+            transform: rotate(0deg) scale(1);
+        }
+        25% { 
+            transform: rotate(-10deg) scale(1.1);
+        }
+        75% { 
+            transform: rotate(10deg) scale(1.1);
+        }
     }
     
     .limiting-fuel {
-        color: #ff6b6b;
+        background: #ff5722;
+        border-color: #d32f2f;
     }
     
     .limiting-gas {
-        color: #ffd43b;
+        background: #ffb300;
+        border-color: #f57c00;
     }
 </style>
 @endpush
@@ -429,28 +490,34 @@ $(document).ready(function() {
                     
                     html += `
                         <div class="metenox-dual-fuel">
-                            <strong><i class="fas fa-exclamation-triangle text-warning"></i> Dual Fuel System Status</strong>
-                            <hr style="margin: 0.5rem 0; border-color: rgba(255,255,255,0.2);">
+                            <strong style="color: #9c27b0; font-size: 1.05rem;">
+                                <i class="fas fa-exclamation-triangle"></i> Dual Fuel System Status
+                            </strong>
+                            <hr style="margin: 0.75rem 0; border: 0; border-top: 2px solid #9c27b0; opacity: 0.5;">
                             <div class="metenox-resource">
                                 <span>
-                                    <i class="fas fa-fire text-primary"></i> <strong>Fuel Blocks:</strong>
-                                    <span class="${fuelBlocksClass}">${md.fuel_blocks_days.toFixed(1)} days</span>
-                                    <small class="text-muted">(${md.fuel_blocks_quantity.toLocaleString()} blocks)</small>
+                                    <i class="fas fa-fire" style="color: #2196f3;"></i> 
+                                    <strong>Fuel Blocks:</strong>
+                                    <span class="${fuelBlocksClass}" style="font-size: 1.1rem;">${md.fuel_blocks_days.toFixed(1)} days</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${md.fuel_blocks_quantity.toLocaleString()} blocks)</span>
                                 </span>
-                                ${md.limiting_factor === 'fuel_blocks' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : ''}
+                                ${md.limiting_factor === 'fuel_blocks' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : '<span class="badge badge-success" style="background: #4caf50 !important;">OK</span>'}
                             </div>
                             <div class="metenox-resource">
                                 <span>
-                                    <i class="fas fa-wind text-warning"></i> <strong>Magmatic Gas:</strong>
-                                    <span class="${gasClass}">${md.magmatic_gas_days.toFixed(1)} days</span>
-                                    <small class="text-muted">(${md.magmatic_gas_quantity.toLocaleString()} units)</small>
+                                    <i class="fas fa-wind" style="color: #ff9800;"></i> 
+                                    <strong>Magmatic Gas:</strong>
+                                    <span class="${gasClass}" style="font-size: 1.1rem;">${md.magmatic_gas_days.toFixed(1)} days</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${md.magmatic_gas_quantity.toLocaleString()} units)</span>
                                 </span>
-                                ${md.limiting_factor === 'magmatic_gas' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : ''}
+                                ${md.limiting_factor === 'magmatic_gas' ? '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : '<span class="badge badge-success" style="background: #4caf50 !important;">OK</span>'}
                             </div>
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle"></i> 
-                                Structure will stop when ${md.limiting_factor === 'fuel_blocks' ? 'fuel blocks' : 'magmatic gas'} runs out
-                            </small>
+                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(156, 39, 176, 0.3); opacity: 0.85;">
+                                <small>
+                                    <i class="fas fa-info-circle" style="color: #2196f3;"></i> 
+                                    Structure will stop when <strong style="color: #ff5722;">${md.limiting_factor === 'fuel_blocks' ? 'fuel blocks' : 'magmatic gas'}</strong> runs out
+                                </small>
+                            </div>
                         </div>
                     `;
                 }
