@@ -14,24 +14,34 @@ class CreateTestMetenoxCommand extends Command
      * @var string
      */
     protected $signature = 'structure-manager:create-test-metenox 
-                            {--cleanup : Remove test Metenox instead of creating}';
+                            {--cleanup : Remove test structures instead of creating}';
     
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Create a fake Metenox Moon Drill for testing dual fuel tracking';
+    protected $description = 'Create test Metenox Moon Drill + Astrahus for dual fuel tracking';
     
     /**
-     * Test structure ID - high number to avoid conflicts
+     * Test Metenox structure ID - high number to avoid conflicts
      */
-    const TEST_STRUCTURE_ID = 9999999999;
+    const TEST_METENOX_ID = 9999999999;
+    
+    /**
+     * Test Astrahus structure ID
+     */
+    const TEST_ASTRAHUS_ID = 9999999998;
     
     /**
      * Metenox Moon Drill type ID
      */
     const METENOX_TYPE_ID = 81826;
+    
+    /**
+     * Astrahus type ID
+     */
+    const ASTRAHUS_TYPE_ID = 35832;
     
     /**
      * Magmatic Gas type ID
@@ -49,7 +59,8 @@ class CreateTestMetenoxCommand extends Command
             return $this->cleanup();
         }
         
-        $this->info('Creating test Metenox Moon Drill...');
+        $this->info('Creating test structures for Metenox dual fuel testing...');
+        $this->newLine();
         
         // Get a valid corporation and system from existing structures
         $existingStructure = DB::table('corporation_structures')->first();
@@ -64,34 +75,35 @@ class CreateTestMetenoxCommand extends Command
         
         $this->line("Using corporation ID: {$corpId}");
         $this->line("Using system ID: {$systemId}");
+        $this->newLine();
         
-        // Step 1: Create structure
-        $this->createStructure($corpId, $systemId);
+        // ===== Create Metenox Moon Drill =====
+        $this->info('📍 Creating Metenox Moon Drill...');
+        $this->createMetenoxStructure($corpId, $systemId);
+        $this->createMetenoxName($systemId);
+        $this->createMetenoxFuelBay($corpId);
+        $this->createMetenoxService();
+        $this->createMetenoxFuelHistory($corpId);
         
-        // Step 2: Create structure name
-        $this->createStructureName($systemId);
+        $this->newLine();
         
-        // Step 3: Add fuel bay contents
-        $this->createFuelBayContents($corpId);
-        
-        // Step 4: Add reserves
-        $this->createReserves($corpId);
-        
-        // Step 5: Create fuel history
-        $this->createFuelHistory($corpId);
-        
-        // Step 6: Create service
-        $this->createService();
+        // ===== Create Astrahus (for reserves) =====
+        $this->info('🏰 Creating Astrahus (Reserve Storage)...');
+        $this->createAstrahusStructure($corpId, $systemId);
+        $this->createAstrahusName($systemId);
+        $this->createAstrahusReserves($corpId);
+        $this->createAstrahusService();
         
         // Verify
         $this->newLine();
-        $this->info('✓ Test Metenox structure created successfully!');
+        $this->info('✓ Test structures created successfully!');
         $this->newLine();
         $this->verifyCreation();
         
         $this->newLine();
-        $this->info('View your test Metenox at:');
-        $this->line('  ' . url('structure-manager/structure/' . self::TEST_STRUCTURE_ID));
+        $this->info('View your test structures at:');
+        $this->line('  Metenox: ' . url('structure-manager/structure/' . self::TEST_METENOX_ID));
+        $this->line('  Astrahus: ' . url('structure-manager/structure/' . self::TEST_ASTRAHUS_ID));
         $this->newLine();
         $this->comment('When done testing, cleanup with:');
         $this->line('  php artisan structure-manager:create-test-metenox --cleanup');
@@ -100,14 +112,14 @@ class CreateTestMetenoxCommand extends Command
     }
     
     /**
-     * Create the structure record
+     * Create the Metenox structure record
      */
-    private function createStructure($corpId, $systemId)
+    private function createMetenoxStructure($corpId, $systemId)
     {
-        $this->line('Creating structure record...');
+        $this->line('  Creating structure record...');
         
         DB::table('corporation_structures')->updateOrInsert(
-            ['structure_id' => self::TEST_STRUCTURE_ID],
+            ['structure_id' => self::TEST_METENOX_ID],
             [
                 'corporation_id' => $corpId,
                 'system_id' => $systemId,
@@ -127,14 +139,14 @@ class CreateTestMetenoxCommand extends Command
     }
     
     /**
-     * Create the structure name
+     * Create the Metenox structure name
      */
-    private function createStructureName($systemId)
+    private function createMetenoxName($systemId)
     {
-        $this->line('Creating structure name...');
+        $this->line('  Creating structure name...');
         
         DB::table('universe_structures')->updateOrInsert(
-            ['structure_id' => self::TEST_STRUCTURE_ID],
+            ['structure_id' => self::TEST_METENOX_ID],
             [
                 'name' => 'TEST - My Metenox Moon Drill',
                 'solar_system_id' => $systemId,
@@ -149,19 +161,19 @@ class CreateTestMetenoxCommand extends Command
     }
     
     /**
-     * Create fuel bay contents
+     * Create Metenox fuel bay contents
      */
-    private function createFuelBayContents($corpId)
+    private function createMetenoxFuelBay($corpId)
     {
-        $this->line('Adding fuel blocks to fuel bay (1860 blocks = 15.5 days)...');
+        $this->line('  Adding fuel blocks to fuel bay (1860 blocks = 15.5 days)...');
         
         DB::table('corporation_assets')->updateOrInsert(
             [
                 'corporation_id' => $corpId,
-                'item_id' => self::TEST_STRUCTURE_ID + 1,
+                'item_id' => self::TEST_METENOX_ID + 1,
             ],
             [
-                'location_id' => self::TEST_STRUCTURE_ID,
+                'location_id' => self::TEST_METENOX_ID,
                 'location_type' => 'structure',
                 'type_id' => 4312, // Oxygen Fuel Block
                 'quantity' => 1860, // 15.5 days worth
@@ -172,15 +184,15 @@ class CreateTestMetenoxCommand extends Command
             ]
         );
         
-        $this->line('Adding magmatic gas to fuel bay (59040 units = 12.3 days) [LIMITING]...');
+        $this->line('  Adding magmatic gas to fuel bay (59040 units = 12.3 days) [LIMITING]...');
         
         DB::table('corporation_assets')->updateOrInsert(
             [
                 'corporation_id' => $corpId,
-                'item_id' => self::TEST_STRUCTURE_ID + 2,
+                'item_id' => self::TEST_METENOX_ID + 2,
             ],
             [
-                'location_id' => self::TEST_STRUCTURE_ID,
+                'location_id' => self::TEST_METENOX_ID,
                 'location_type' => 'structure',
                 'type_id' => self::MAGMATIC_GAS_TYPE_ID,
                 'quantity' => 59040, // 12.3 days worth - LIMITING FACTOR!
@@ -193,43 +205,19 @@ class CreateTestMetenoxCommand extends Command
     }
     
     /**
-     * Create reserves
+     * Create Metenox service
      */
-    private function createReserves($corpId)
+    private function createMetenoxService()
     {
-        $this->line('Adding fuel block reserves to CorpSAG3 (5000 blocks)...');
+        $this->line('  Creating Automatic Moon Drilling service...');
         
-        DB::table('corporation_assets')->updateOrInsert(
+        DB::table('corporation_structure_services')->updateOrInsert(
             [
-                'corporation_id' => $corpId,
-                'item_id' => self::TEST_STRUCTURE_ID + 3,
+                'structure_id' => self::TEST_METENOX_ID,
+                'name' => 'Automatic Moon Drilling',
             ],
             [
-                'location_id' => self::TEST_STRUCTURE_ID,
-                'location_type' => 'structure',
-                'type_id' => 4312,
-                'quantity' => 5000,
-                'location_flag' => 'CorpSAG3',
-                'is_singleton' => 0,
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ]
-        );
-        
-        $this->line('Adding magmatic gas reserves to CorpSAG4 (144000 units = 30 days)...');
-        
-        DB::table('corporation_assets')->updateOrInsert(
-            [
-                'corporation_id' => $corpId,
-                'item_id' => self::TEST_STRUCTURE_ID + 4,
-            ],
-            [
-                'location_id' => self::TEST_STRUCTURE_ID,
-                'location_type' => 'structure',
-                'type_id' => self::MAGMATIC_GAS_TYPE_ID,
-                'quantity' => 144000, // 30 days worth
-                'location_flag' => 'CorpSAG4',
-                'is_singleton' => 0,
+                'state' => 'online',
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]
@@ -237,14 +225,14 @@ class CreateTestMetenoxCommand extends Command
     }
     
     /**
-     * Create fuel history
+     * Create Metenox fuel history
      */
-    private function createFuelHistory($corpId)
+    private function createMetenoxFuelHistory($corpId)
     {
-        $this->line('Creating initial fuel history snapshot...');
+        $this->line('  Creating initial fuel history snapshot...');
         
         DB::table('structure_fuel_history')->insert([
-            'structure_id' => self::TEST_STRUCTURE_ID,
+            'structure_id' => self::TEST_METENOX_ID,
             'corporation_id' => $corpId,
             'fuel_expires' => Carbon::now()->addDays(14),
             'days_remaining' => 12, // Actual days (limited by gas)
@@ -271,16 +259,128 @@ class CreateTestMetenoxCommand extends Command
     }
     
     /**
-     * Create service
+     * Create the Astrahus structure record
      */
-    private function createService()
+    private function createAstrahusStructure($corpId, $systemId)
     {
-        $this->line('Creating Automatic Moon Drilling service...');
+        $this->line('  Creating structure record...');
+        
+        DB::table('corporation_structures')->updateOrInsert(
+            ['structure_id' => self::TEST_ASTRAHUS_ID],
+            [
+                'corporation_id' => $corpId,
+                'system_id' => $systemId,
+                'type_id' => self::ASTRAHUS_TYPE_ID,
+                'fuel_expires' => Carbon::now()->addDays(30),
+                'state' => 'shield_vulnerable',
+                'state_timer_end' => null,
+                'state_timer_start' => null,
+                'unanchors_at' => null,
+                'reinforce_hour' => 18,
+                'next_reinforce_hour' => null,
+                'next_reinforce_apply' => null,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]
+        );
+    }
+    
+    /**
+     * Create the Astrahus structure name
+     */
+    private function createAstrahusName($systemId)
+    {
+        $this->line('  Creating structure name...');
+        
+        DB::table('universe_structures')->updateOrInsert(
+            ['structure_id' => self::TEST_ASTRAHUS_ID],
+            [
+                'name' => 'TEST - Reserve Storage Astrahus',
+                'solar_system_id' => $systemId,
+                'type_id' => self::ASTRAHUS_TYPE_ID,
+                'x' => 0,
+                'y' => 0,
+                'z' => 0,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]
+        );
+    }
+    
+    /**
+     * Create Astrahus reserves (fuel for the Metenox)
+     */
+    private function createAstrahusReserves($corpId)
+    {
+        $this->line('  Adding fuel block reserves to CorpSAG3 (5000 blocks)...');
+        
+        DB::table('corporation_assets')->updateOrInsert(
+            [
+                'corporation_id' => $corpId,
+                'item_id' => self::TEST_ASTRAHUS_ID + 1,
+            ],
+            [
+                'location_id' => self::TEST_ASTRAHUS_ID,
+                'location_type' => 'structure',
+                'type_id' => 4312, // Oxygen Fuel Block
+                'quantity' => 5000,
+                'location_flag' => 'CorpSAG3',
+                'is_singleton' => 0,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]
+        );
+        
+        $this->line('  Adding magmatic gas reserves to CorpSAG4 (144000 units = 30 days)...');
+        
+        DB::table('corporation_assets')->updateOrInsert(
+            [
+                'corporation_id' => $corpId,
+                'item_id' => self::TEST_ASTRAHUS_ID + 2,
+            ],
+            [
+                'location_id' => self::TEST_ASTRAHUS_ID,
+                'location_type' => 'structure',
+                'type_id' => self::MAGMATIC_GAS_TYPE_ID,
+                'quantity' => 144000, // 30 days worth
+                'location_flag' => 'CorpSAG4',
+                'is_singleton' => 0,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]
+        );
+        
+        $this->line('  Adding some fuel blocks to Astrahus fuel bay (400 blocks)...');
+        
+        DB::table('corporation_assets')->updateOrInsert(
+            [
+                'corporation_id' => $corpId,
+                'item_id' => self::TEST_ASTRAHUS_ID + 3,
+            ],
+            [
+                'location_id' => self::TEST_ASTRAHUS_ID,
+                'location_type' => 'structure',
+                'type_id' => 4312,
+                'quantity' => 400,
+                'location_flag' => 'StructureFuel',
+                'is_singleton' => 0,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]
+        );
+    }
+    
+    /**
+     * Create Astrahus service
+     */
+    private function createAstrahusService()
+    {
+        $this->line('  Creating Clone Bay service...');
         
         DB::table('corporation_structure_services')->updateOrInsert(
             [
-                'structure_id' => self::TEST_STRUCTURE_ID,
-                'name' => 'Automatic Moon Drilling',
+                'structure_id' => self::TEST_ASTRAHUS_ID,
+                'name' => 'Clone Bay',
             ],
             [
                 'state' => 'online',
@@ -296,27 +396,30 @@ class CreateTestMetenoxCommand extends Command
     private function verifyCreation()
     {
         $this->info('Verification:');
+        $this->newLine();
         
-        // Check structure
-        $structure = DB::table('corporation_structures')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+        // === Metenox ===
+        $this->comment('📍 Metenox Moon Drill:');
+        
+        $metenox = DB::table('corporation_structures')
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->first();
         
-        if ($structure) {
-            $this->line("  ✓ Structure created (ID: " . self::TEST_STRUCTURE_ID . ")");
+        if ($metenox) {
+            $this->line("  ✓ Structure created (ID: " . self::TEST_METENOX_ID . ")");
         } else {
             $this->error("  ✗ Structure not found!");
         }
         
-        // Check assets
+        // Check fuel bay
         $fuelBlocks = DB::table('corporation_assets')
-            ->where('location_id', self::TEST_STRUCTURE_ID)
+            ->where('location_id', self::TEST_METENOX_ID)
             ->where('location_flag', 'StructureFuel')
             ->where('type_id', 4312)
             ->value('quantity');
         
         $gas = DB::table('corporation_assets')
-            ->where('location_id', self::TEST_STRUCTURE_ID)
+            ->where('location_id', self::TEST_METENOX_ID)
             ->where('location_flag', 'StructureFuel')
             ->where('type_id', self::MAGMATIC_GAS_TYPE_ID)
             ->value('quantity');
@@ -324,26 +427,62 @@ class CreateTestMetenoxCommand extends Command
         $this->line("  ✓ Fuel bay: {$fuelBlocks} blocks (15.5 days)");
         $this->line("  ✓ Fuel bay: {$gas} gas (12.3 days) [LIMITING]");
         
-        // Check reserves
-        $reserveBlocks = DB::table('corporation_assets')
-            ->where('location_id', self::TEST_STRUCTURE_ID)
-            ->where('location_flag', 'CorpSAG3')
-            ->sum('quantity');
-        
-        $reserveGas = DB::table('corporation_assets')
-            ->where('location_id', self::TEST_STRUCTURE_ID)
-            ->where('location_flag', 'CorpSAG4')
-            ->sum('quantity');
-        
-        $this->line("  ✓ Reserves: {$reserveBlocks} blocks in CorpSAG3");
-        $this->line("  ✓ Reserves: {$reserveGas} gas in CorpSAG4");
-        
         // Check history
         $historyCount = DB::table('structure_fuel_history')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->count();
         
         $this->line("  ✓ Fuel history: {$historyCount} record(s)");
+        
+        $this->newLine();
+        
+        // === Astrahus ===
+        $this->comment('🏰 Astrahus (Reserve Storage):');
+        
+        $astrahus = DB::table('corporation_structures')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->first();
+        
+        if ($astrahus) {
+            $this->line("  ✓ Structure created (ID: " . self::TEST_ASTRAHUS_ID . ")");
+        } else {
+            $this->error("  ✗ Structure not found!");
+        }
+        
+        // Check reserves
+        $reserveBlocks = DB::table('corporation_assets')
+            ->where('location_id', self::TEST_ASTRAHUS_ID)
+            ->where('location_flag', 'CorpSAG3')
+            ->where('type_id', 4312)
+            ->value('quantity');
+        
+        $reserveGas = DB::table('corporation_assets')
+            ->where('location_id', self::TEST_ASTRAHUS_ID)
+            ->where('location_flag', 'CorpSAG4')
+            ->where('type_id', self::MAGMATIC_GAS_TYPE_ID)
+            ->value('quantity');
+        
+        $this->line("  ✓ Reserves: {$reserveBlocks} blocks in CorpSAG3");
+        $this->line("  ✓ Reserves: {$reserveGas} gas in CorpSAG4 (30 days)");
+        
+        // Check Astrahus fuel bay
+        $astFuel = DB::table('corporation_assets')
+            ->where('location_id', self::TEST_ASTRAHUS_ID)
+            ->where('location_flag', 'StructureFuel')
+            ->where('type_id', 4312)
+            ->value('quantity');
+        
+        $this->line("  ✓ Astrahus fuel bay: {$astFuel} blocks");
+        
+        // Check service
+        $service = DB::table('corporation_structure_services')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->where('name', 'Clone Bay')
+            ->first();
+        
+        if ($service) {
+            $this->line("  ✓ Clone Bay service: {$service->state}");
+        }
     }
     
     /**
@@ -351,40 +490,79 @@ class CreateTestMetenoxCommand extends Command
      */
     private function cleanup()
     {
-        $this->warn('Removing test Metenox structure...');
+        $this->warn('Removing test structures...');
+        $this->newLine();
+        
+        // === Cleanup Metenox ===
+        $this->comment('📍 Cleaning up Metenox Moon Drill...');
         
         DB::table('corporation_structure_services')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->delete();
         $this->line('  ✓ Deleted services');
         
         DB::table('structure_fuel_history')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->delete();
         $this->line('  ✓ Deleted fuel history');
         
         DB::table('structure_fuel_reserves')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->delete();
         $this->line('  ✓ Deleted fuel reserves');
         
         DB::table('corporation_assets')
-            ->where('location_id', self::TEST_STRUCTURE_ID)
+            ->where('location_id', self::TEST_METENOX_ID)
             ->delete();
         $this->line('  ✓ Deleted assets');
         
         DB::table('universe_structures')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->delete();
         $this->line('  ✓ Deleted structure name');
         
         DB::table('corporation_structures')
-            ->where('structure_id', self::TEST_STRUCTURE_ID)
+            ->where('structure_id', self::TEST_METENOX_ID)
             ->delete();
         $this->line('  ✓ Deleted structure');
         
         $this->newLine();
-        $this->info('✓ Test data cleaned up successfully!');
+        
+        // === Cleanup Astrahus ===
+        $this->comment('🏰 Cleaning up Astrahus...');
+        
+        DB::table('corporation_structure_services')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->delete();
+        $this->line('  ✓ Deleted services');
+        
+        DB::table('structure_fuel_history')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->delete();
+        $this->line('  ✓ Deleted fuel history');
+        
+        DB::table('structure_fuel_reserves')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->delete();
+        $this->line('  ✓ Deleted fuel reserves');
+        
+        DB::table('corporation_assets')
+            ->where('location_id', self::TEST_ASTRAHUS_ID)
+            ->delete();
+        $this->line('  ✓ Deleted assets');
+        
+        DB::table('universe_structures')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->delete();
+        $this->line('  ✓ Deleted structure name');
+        
+        DB::table('corporation_structures')
+            ->where('structure_id', self::TEST_ASTRAHUS_ID)
+            ->delete();
+        $this->line('  ✓ Deleted structure');
+        
+        $this->newLine();
+        $this->info('✓ All test data cleaned up successfully!');
         
         return 0;
     }
