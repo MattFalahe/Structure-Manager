@@ -325,16 +325,16 @@ class TrackFuelConsumption implements ShouldQueue
         // Determine which fuel types to track
         $fuelTypes = self::FUEL_BLOCK_TYPES;
         
-        // FIXED: Add magmatic gas tracking for Metenox
-        if ($isMetenox) {
-            $fuelTypes[] = self::MAGMATIC_GAS_TYPE_ID;
-        }
+        // FIXED: Always track magmatic gas in ALL structures
+        // Gas reserves are stored in regular structures (Astrahus, Fortizar, etc.)
+        // because Metenox structures don't have corp hangars!
+        $fuelTypes[] = self::MAGMATIC_GAS_TYPE_ID;
         
         // METHOD 1: Direct - Fuel in structure's CorpSAG
         $directReserves = DB::table('corporation_assets')
             ->where('location_id', $structureId)
             ->where('location_flag', 'LIKE', 'CorpSAG%')
-            ->whereIn('type_id', $fuelTypes)  // Now includes gas for Metenox
+            ->whereIn('type_id', $fuelTypes)  
             ->get();
         
         // METHOD 2: Nested - Fuel in Office containers inside the structure
