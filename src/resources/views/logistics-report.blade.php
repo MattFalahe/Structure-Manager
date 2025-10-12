@@ -62,7 +62,7 @@
     }
     
     .gas-requirement {
-        color: #690a91;
+        color: #c04ed4;
         font-style: italic;
         font-size: 0.85rem;
     }
