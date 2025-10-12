@@ -2,7 +2,7 @@
 
 return [
     'name' => 'Structure Manager',
-    'version' => '1.0.5',
+    'version' => '1.0.6',
     'author' => 'Matt Falahe',
     'description' => 'Monitor and track corporation structure fuel levels and consumption',
     

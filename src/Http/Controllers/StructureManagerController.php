@@ -142,6 +142,18 @@ class StructureManagerController extends Controller
                 $structure->weekly_consumption = $consumption['weekly'];
                 $structure->monthly_consumption = $consumption['monthly'];
                 
+                // Add Metenox data if applicable
+                if ($structure->type_id == 81826) { // Metenox type ID
+                    $metenoxCalc = \StructureManager\Helpers\FuelCalculator::calculateFromActiveServices($structure->structure_id);
+                    if (isset($metenoxCalc['magmatic_gas']) && isset($metenoxCalc['fuel_blocks'])) {
+                        $structure->metenox_data = [
+                            'fuel_blocks_days' => $metenoxCalc['fuel_blocks']['days_remaining'] ?? 0,
+                            'magmatic_gas_days' => $metenoxCalc['magmatic_gas']['days_remaining'] ?? 0,
+                            'limiting_factor' => $metenoxCalc['limiting_factor'] ?? 'unknown'
+                        ];
+                    }
+                }
+                
                 // Estimate fuel blocks remaining based on consumption
                 if ($structure->hours_remaining && $consumption['daily'] > 0) {
                     $structure->estimated_blocks = round(($structure->hours_remaining / 24) * $consumption['daily']);
@@ -195,6 +207,14 @@ class StructureManagerController extends Controller
         
         // Get service-based consumption for display
         $consumption = $this->calculateConsumption($id, $structure->type_id);
+        
+        // For Metenox, ensure we have the full consumption data
+        if ($structure->type_id == 81826) { // Metenox type ID
+            $consumptionData = \StructureManager\Helpers\FuelCalculator::calculateFromActiveServices($id);
+            if ($consumptionData['method'] === 'metenox_drill') {
+                $consumption = $consumptionData;
+            }
+        }
         
         // Get historical analysis for trends/anomalies (optional - for detail page only)
         $historicalAnalysis = null;

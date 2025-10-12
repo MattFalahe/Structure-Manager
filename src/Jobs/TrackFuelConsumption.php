@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use StructureManager\Models\StructureFuelHistory;
 use StructureManager\Models\StructureFuelReserves;
+use StructureManager\Helpers\FuelCalculator;
 use Carbon\Carbon;
 
 class TrackFuelConsumption implements ShouldQueue
@@ -20,6 +21,16 @@ class TrackFuelConsumption implements ShouldQueue
      * Fuel block type IDs from EVE
      */
     const FUEL_BLOCK_TYPES = [4051, 4246, 4247, 4312];
+    
+    /**
+     * Magmatic Gas type ID
+     */
+    const MAGMATIC_GAS_TYPE_ID = 81143;
+    
+    /**
+     * Metenox Moon Drill type ID
+     */
+    const METENOX_TYPE_ID = 81826;
 
     /**
      * Execute the job.
@@ -37,27 +48,42 @@ class TrackFuelConsumption implements ShouldQueue
         $fuelBaySuccess = 0;
         $fallbackMethod = 0;
         $reservesTracked = 0;
+        $metenoxTracked = 0;
         
         foreach ($structures as $structure) {
-            $result = $this->trackStructureFuel($structure);
-            if ($result['tracked']) {
-                $tracked++;
-                if ($result['method'] === 'fuel_bay') {
-                    $fuelBaySuccess++;
+            // Check if this is a Metenox Moon Drill
+            $isMetenox = $structure->type_id == self::METENOX_TYPE_ID;
+            
+            if ($isMetenox) {
+                $result = $this->trackMetenoxFuel($structure);
+                if ($result['tracked']) {
+                    $metenoxTracked++;
+                    $tracked++;
                 } else {
-                    $fallbackMethod++;
+                    $skipped++;
                 }
             } else {
-                $skipped++;
+                $result = $this->trackStructureFuel($structure);
+                if ($result['tracked']) {
+                    $tracked++;
+                    if ($result['method'] === 'fuel_bay') {
+                        $fuelBaySuccess++;
+                    } else {
+                        $fallbackMethod++;
+                    }
+                } else {
+                    $skipped++;
+                }
             }
             
-            // Track reserves separately
-            if ($this->trackStructureReserves($structure->structure_id, $structure->corporation_id)) {
+            // FIXED: Track reserves for ALL structures (including Metenox)
+            // Metenox needs tracking for BOTH fuel blocks AND magmatic gas reserves
+            if ($this->trackStructureReserves($structure->structure_id, $structure->corporation_id, $isMetenox)) {
                 $reservesTracked++;
             }
         }
         
-        Log::info("TrackFuelConsumption: Completed. Tracked: $tracked (Fuel Bay: $fuelBaySuccess, Fallback: $fallbackMethod), Reserves: $reservesTracked, Skipped: $skipped");
+        Log::info("TrackFuelConsumption: Completed. Tracked: $tracked (Fuel Bay: $fuelBaySuccess, Fallback: $fallbackMethod, Metenox: $metenoxTracked), Reserves: $reservesTracked, Skipped: $skipped");
         
         // Clean old history (keep 6 months)
         $deleted = StructureFuelHistory::where('created_at', '<', Carbon::now()->subMonths(6))->delete();
@@ -73,7 +99,97 @@ class TrackFuelConsumption implements ShouldQueue
     }
     
     /**
-     * Track fuel BAY ONLY for consumption analysis
+     * Track fuel for Metenox Moon Drill
+     * Tracks BOTH fuel blocks AND magmatic gas
+     */
+    private function trackMetenoxFuel($structure)
+    {
+        // Get fuel blocks
+        $fuelBlocks = DB::table('corporation_assets')
+            ->where('location_id', $structure->structure_id)
+            ->where('location_flag', 'StructureFuel')
+            ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
+            ->sum('quantity');
+        
+        // Get magmatic gas
+        $magmaticGas = DB::table('corporation_assets')
+            ->where('location_id', $structure->structure_id)
+            ->where('location_flag', 'StructureFuel')
+            ->where('type_id', self::MAGMATIC_GAS_TYPE_ID)
+            ->sum('quantity');
+        
+        // Get last record
+        $lastRecord = StructureFuelHistory::where('structure_id', $structure->structure_id)
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        $shouldCreateRecord = false;
+        $trackingMethod = 'metenox_fuel_bay';
+        
+        // Determine if we should create a record
+        if (!$lastRecord) {
+            $shouldCreateRecord = true;
+            Log::info("Metenox {$structure->structure_id}: First snapshot");
+        } elseif ($lastRecord->created_at->diffInHours(now()) >= 1) {
+            $shouldCreateRecord = true;
+        }
+        
+        if ($shouldCreateRecord) {
+            // Calculate days remaining for each resource
+            $fuelDaysRemaining = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;
+            $gasDaysRemaining = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
+            $actualDaysRemaining = min($fuelDaysRemaining, $gasDaysRemaining);
+            
+            // Determine limiting factor
+            $limitingFactor = 'none';
+            if ($actualDaysRemaining > 0) {
+                $limitingFactor = $fuelDaysRemaining < $gasDaysRemaining ? 'fuel_blocks' : 'magmatic_gas';
+            }
+            
+            $metadata = [
+                'tracking_method' => $trackingMethod,
+                'fuel_blocks' => $fuelBlocks,
+                'magmatic_gas' => $magmaticGas,
+                'fuel_days_remaining' => round($fuelDaysRemaining, 2),
+                'gas_days_remaining' => round($gasDaysRemaining, 2),
+                'actual_days_remaining' => round($actualDaysRemaining, 2),
+                'limiting_factor' => $limitingFactor,
+                'fuel_bay_available' => true,
+                'is_metenox' => true,
+            ];
+            
+            $record = StructureFuelHistory::create([
+                'structure_id' => $structure->structure_id,
+                'corporation_id' => $structure->corporation_id,
+                'fuel_expires' => $structure->fuel_expires,
+                'days_remaining' => round($actualDaysRemaining),
+                'fuel_blocks_used' => null,
+                'daily_consumption' => null,
+                'consumption_rate' => null,
+                'tracking_type' => $trackingMethod,
+                'metadata' => json_encode($metadata),
+                'magmatic_gas_quantity' => $magmaticGas,
+                'magmatic_gas_days' => round($gasDaysRemaining, 1),
+            ]);
+            
+            // Log warning if gas is running low
+            if ($limitingFactor === 'magmatic_gas' && $gasDaysRemaining < 7) {
+                Log::warning("Metenox {$structure->structure_id}: CRITICAL - Magmatic gas will run out in " . round($gasDaysRemaining, 1) . " days!");
+            }
+            
+            Log::info("Metenox {$structure->structure_id}: Snapshot #{$record->id} " .
+                     "(fuel: {$fuelBlocks} blocks = " . round($fuelDaysRemaining, 1) . "d, " .
+                     "gas: {$magmaticGas} = " . round($gasDaysRemaining, 1) . "d, " .
+                     "limiting: {$limitingFactor})");
+            
+            return ['tracked' => true, 'method' => $trackingMethod];
+        }
+        
+        return ['tracked' => false, 'method' => null];
+    }
+    
+    /**
+     * Track fuel BAY ONLY for consumption analysis (Upwell structures)
      */
     private function trackStructureFuel($structure)
     {
@@ -172,7 +288,7 @@ class TrackFuelConsumption implements ShouldQueue
                 'fuel_blocks' => $fuelBayData['quantity'],
                 'fuel_bay_available' => $fuelBayData['available'],
                 'fuel_type_id' => $fuelBayData['fuel_type_id'],
-                // NOTE: Reserves are tracked separately now
+                'is_metenox' => false,
             ];
             
             $record = StructureFuelHistory::create([
@@ -185,6 +301,8 @@ class TrackFuelConsumption implements ShouldQueue
                 'consumption_rate' => $dailyConsumption,
                 'tracking_type' => $trackingMethod,
                 'metadata' => json_encode($metadata),
+                'magmatic_gas_quantity' => null,
+                'magmatic_gas_days' => null,
             ]);
             
             Log::info("Structure {$structure->structure_id}: Created fuel bay snapshot #{$record->id} " .
@@ -200,14 +318,23 @@ class TrackFuelConsumption implements ShouldQueue
     /**
      * Track RESERVES SEPARATELY (CorpSAG hangars)
      * Now handles nested Office containers inside structures
+     * UPDATED: Now tracks magmatic gas for Metenox structures
      */
-    private function trackStructureReserves($structureId, $corporationId)
+    private function trackStructureReserves($structureId, $corporationId, $isMetenox = false)
     {
+        // Determine which fuel types to track
+        $fuelTypes = self::FUEL_BLOCK_TYPES;
+        
+        // FIXED: Always track magmatic gas in ALL structures
+        // Gas reserves are stored in regular structures (Astrahus, Fortizar, etc.)
+        // because Metenox structures don't have corp hangars!
+        $fuelTypes[] = self::MAGMATIC_GAS_TYPE_ID;
+        
         // METHOD 1: Direct - Fuel in structure's CorpSAG
         $directReserves = DB::table('corporation_assets')
             ->where('location_id', $structureId)
             ->where('location_flag', 'LIKE', 'CorpSAG%')
-            ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
+            ->whereIn('type_id', $fuelTypes)  
             ->get();
         
         // METHOD 2: Nested - Fuel in Office containers inside the structure
@@ -217,7 +344,7 @@ class TrackFuelConsumption implements ShouldQueue
             ->where('office.location_id', $structureId)
             ->where('office_type.typeName', 'Office')
             ->where('fuel.location_flag', 'LIKE', 'CorpSAG%')
-            ->whereIn('fuel.type_id', self::FUEL_BLOCK_TYPES)
+            ->whereIn('fuel.type_id', $fuelTypes)  // Now includes gas for Metenox
             ->select(
                 'fuel.item_id',
                 'fuel.type_id',
@@ -234,7 +361,14 @@ class TrackFuelConsumption implements ShouldQueue
             return false;
         }
         
-        Log::debug("Structure {$structureId}: Found {$reserves->count()} reserve stacks (Direct: {$directReserves->count()}, Nested: {$nestedReserves->count()})");
+        $gasCount = $reserves->where('type_id', self::MAGMATIC_GAS_TYPE_ID)->count();
+        $fuelCount = $reserves->count() - $gasCount;
+        
+        if ($isMetenox && $gasCount > 0) {
+            Log::debug("Metenox {$structureId}: Found {$reserves->count()} reserve stacks ({$fuelCount} fuel blocks, {$gasCount} magmatic gas) (Direct: {$directReserves->count()}, Nested: {$nestedReserves->count()})");
+        } else {
+            Log::debug("Structure {$structureId}: Found {$reserves->count()} reserve stacks (Direct: {$directReserves->count()}, Nested: {$nestedReserves->count()})");
+        }
         
         $tracked = false;
         
@@ -250,10 +384,12 @@ class TrackFuelConsumption implements ShouldQueue
             $quantityChange = null;
             $isRefuelEvent = false;
             
+            $resourceType = $reserve->type_id == self::MAGMATIC_GAS_TYPE_ID ? 'magmatic gas' : 'fuel blocks';
+            
             if (!$lastReserve) {
                 // First time tracking this reserve
                 $shouldTrack = true;
-                Log::info("Structure {$structureId}: First time tracking {$reserve->quantity} blocks in {$reserve->location_flag}");
+                Log::info("Structure {$structureId}: First time tracking {$reserve->quantity} {$resourceType} in {$reserve->location_flag}");
             } elseif ($lastReserve->reserve_quantity != $reserve->quantity) {
                 // Quantity changed
                 $shouldTrack = true;
@@ -262,9 +398,9 @@ class TrackFuelConsumption implements ShouldQueue
                 // Negative change = fuel moved to bay (refuel event)
                 if ($quantityChange < 0) {
                     $isRefuelEvent = true;
-                    Log::info("Structure {$structureId}: Reserve fuel moved - {$quantityChange} blocks from {$reserve->location_flag}");
+                    Log::info("Structure {$structureId}: Reserve {$resourceType} moved - {$quantityChange} from {$reserve->location_flag}");
                 } else {
-                    Log::info("Structure {$structureId}: Reserve fuel added - +{$quantityChange} blocks to {$reserve->location_flag}");
+                    Log::info("Structure {$structureId}: Reserve {$resourceType} added - +{$quantityChange} to {$reserve->location_flag}");
                 }
             } elseif ($lastReserve->created_at->diffInHours(now()) >= 24) {
                 // Create daily snapshot even if no change
@@ -286,6 +422,8 @@ class TrackFuelConsumption implements ShouldQueue
                         'item_id' => $reserve->item_id,
                         'location_id' => $reserve->location_id,
                         'tracking_method' => isset($reserve->location_id) && $reserve->location_id != $structureId ? 'nested_office' : 'direct',
+                        'is_metenox' => $isMetenox,
+                        'resource_type' => $resourceType,
                     ]),
                 ]);
                 

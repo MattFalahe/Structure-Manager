@@ -66,9 +66,33 @@ php artisan migrate
 php artisan structure-manager:setup
 ```
 
-## What's New in v1.0.5
+## What's New in v1.0.6
 
-### 🎨 Enhanced Structure Detail Page
+## 🌕 New Features — *Metenox Moon Drill Support*
+
+This update introduces **full dual-fuel support** for the new **Metenox Moon Drills**, expanding the plugin’s capabilities to track both **Fuel Blocks** and **Magmatic Gas** simultaneously.
+
+### 🔧 Key Additions
+- **Dual Fuel System Tracking** — Complete support for Metenox Moon Drills requiring both *Fuel Blocks (120/day)* and *Magmatic Gas (4,800/day)*  
+- **Limiting Factor Detection** — Automatically determines which resource will deplete first  
+- **Magmatic Gas Reserve Tracking** — Tracks magmatic gas stored in corporation hangars across all structures  
+- **Enhanced Critical Alerts** — New **purple "LIMITING" badges** highlight which resource needs immediate attention  
+- **Dual Fuel Projections** — Separate projections for fuel blocks and magmatic gas on detail pages  
+- **Improved Logistics Planning** — Gas requirements are now included in hauling plans and logistics reports  
+- **Visual Indicators** — Purple badges and icons throughout the interface for gas-related information  
+
+---
+
+## 🧩 Enhancements
+- Updated structure detail views with dual-fuel display and limiting factor visibility  
+- Improved dark theme compatibility for new components  
+- Expanded analytics to include magmatic gas consumption data  
+
+---
+
+## Previous Updates
+
+### v1.0.5 - Enhanced Structure Detail Page
 
 **Comprehensive Fuel Dashboard**
 - **Detailed consumption breakdown cards** showing hourly, daily, weekly, monthly, and quarterly rates
@@ -87,47 +111,6 @@ php artisan structure-manager:setup
 - Real-time consumption updates when services change
 - Better mobile responsiveness
 - Improved data presentation and readability
-
----
-
-## Previous Updates
-
-### v1.0.4 - Critical Bug Fix: Service-to-Module Calculation
-
-**Fixed fuel consumption calculation for multi-service modules**
-- Previously, the plugin calculated fuel consumption per service instead of per module
-- This caused structures with modules that provide multiple services to show **incorrect fuel consumption rates**
-
-**Example Issue (Now Fixed):**
-- **Standup Research Lab I** provides 3 services:
-  - Blueprint Copying
-  - Material Efficiency Research  
-  - Time Efficiency Research
-- **OLD BUG**: Calculated as 3 separate modules = 27 blocks/hour (incorrect!)
-- **NOW FIXED**: Correctly calculated as 1 module = 9 blocks/hour ✓
-
-**Impact:**
-- Raitaru with Research Lab + Invention Lab:
-  - Before: ~36 blocks/hour (incorrect)
-  - After: **18 blocks/hour** (correct) ✓
-- Azbel with Manufacturing Plant + Capital Shipyard:
-  - Before: ~18 blocks/hour (incorrect)  
-  - After: **27 blocks/hour** (correct) ✓
-
-**Technical Changes:**
-- Added `SERVICE_TO_MODULE_MAP` constant mapping services to their source modules
-- Implemented proper module grouping to count each unique module only once
-- Updated `calculateFromActiveServices()` to group services by module before calculating fuel
-- Service names now use exact case-sensitive matching from EVE API
-
-### v1.0.3
-- Fixed migration issues for cleaner installation process
-
-### v1.0.2 - Moon Drill Fixes & UI Improvements
-- **Fixed Moon Drill fuel consumption**: Now correctly uses 120 blocks/day (5/hour) on ALL refineries
-- **Corrected fuel reduction bonuses**: Only apply to Reprocessing and Reaction service modules
-- **Dark theme optimization**: Better contrast and color schemes
-- **Performance enhancements**: Optimized fuel bay tracking and nested Office detection
 
 📖 **[View full changelog on GitHub Wiki →](https://github.com/MattFalahe/Structure-Manager/wiki/Changelog)**
 
@@ -299,7 +282,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 ## Credits
 
 **Author**: Matt Falahe  
-**Version**: 1.0.5  
+**Version**: 1.0.6  
 **SeAT Compatibility**: 5.x
 
 Built for the EVE Online community. Special thanks to the SeAT development team and all contributors.
