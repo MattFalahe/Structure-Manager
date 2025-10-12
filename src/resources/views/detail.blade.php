@@ -230,6 +230,19 @@
 
 @php
     $isMetenox = $structure->type_id == 81826;
+    
+    // Calculate hours and days remaining for all structures
+    $hoursRemaining = 0;
+    $daysRemaining = 0;
+    $remainingHours = 0;
+    
+    if($structure->fuel_expires) {
+        $fuelExpires = \Carbon\Carbon::parse($structure->fuel_expires);
+        $now = now();
+        $hoursRemaining = $fuelExpires->diffInHours($now);
+        $daysRemaining = floor($hoursRemaining / 24);
+        $remainingHours = $hoursRemaining % 24;
+    }
 @endphp
 
 @if($isMetenox)
@@ -301,130 +314,86 @@
         @endif
     </div>
     
-    {{-- Metenox Fuel Consumption Statistics - Dual Boxes --}}
+    {{-- Metenox Fuel Projections - Similar to Normal Structures --}}
     @if(isset($consumption) && $consumption['method'] === 'metenox_drill')
         <div class="row">
-            {{-- Fuel Blocks Consumption Box --}}
+            {{-- Fuel Blocks Projections --}}
             <div class="col-md-6">
                 <div class="metenox-fuel-box">
                     <h4>
-                        <i class="fas fa-fire"></i>
-                        Fuel Blocks Consumption
+                        <i class="fas fa-battery-three-quarters"></i>
+                        Fuel Blocks Projections
                     </h4>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-cubes"></i> Est. Blocks:
-                        </span>
-                        <span class="value text-info-bright">
-                            ~{{ number_format($fuelData['current_quantity']) }}
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-box"></i> Volume:
-                        </span>
-                        <span class="value text-info-bright">
-                            ~{{ number_format($fuelData['current_quantity'] * 5) }} m³
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-calendar-times"></i> Runs Out:
-                        </span>
-                        <span class="value {{ $fuelData['days_remaining'] < 7 ? 'text-danger-bright' : 'text-success-bright' }}">
-                            {{ \Carbon\Carbon::now()->addDays($fuelData['days_remaining'])->format('Y-m-d H:i') }}
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-clock"></i> Days Left:
-                        </span>
-                        <span class="value {{ $fuelData['days_remaining'] < 7 ? 'text-danger-bright' : ($fuelData['days_remaining'] < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
-                            {{ floor($fuelData['days_remaining']) }}d {{ floor(($fuelData['days_remaining'] - floor($fuelData['days_remaining'])) * 24) }}h
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-tachometer-alt"></i> Hourly Rate:
-                        </span>
-                        <span class="value text-info-bright">
-                            {{ number_format($consumption['hourly'], 2) }} blocks/hr
-                        </span>
-                    </div>
-                    
-                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(33, 150, 243, 0.3);">
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle"></i> 
-                            Fixed rate: 5 blocks/hour (120/day)
-                        </small>
-                    </div>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Est. Blocks
+                            <span class="badge badge-info badge-pill">~{{ number_format($fuelData['current_quantity']) }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Volume
+                            <span class="badge badge-info badge-pill">~{{ number_format($fuelData['current_quantity'] * 5) }} m³</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Runs Out
+                            <span class="badge {{ $fuelData['days_remaining'] < 7 ? 'badge-danger' : ($fuelData['days_remaining'] < 14 ? 'badge-warning' : 'badge-success') }}">
+                                {{ \Carbon\Carbon::now()->addDays($fuelData['days_remaining'])->format('Y-m-d H:i') }}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Days Left
+                            @php
+                                $fuelDays = floor($fuelData['days_remaining']);
+                                $fuelHours = floor(($fuelData['days_remaining'] - $fuelDays) * 24);
+                            @endphp
+                            <span class="badge {{ $fuelData['days_remaining'] < 7 ? 'badge-danger' : ($fuelData['days_remaining'] < 14 ? 'badge-warning' : 'badge-success') }}">
+                                {{ $fuelDays }}d {{ $fuelHours }}h
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Hourly Rate
+                            <span class="badge badge-info badge-pill">5.00 blocks/hr</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
             
-            {{-- Magmatic Gas Consumption Box --}}
+            {{-- Magmatic Gas Projections --}}
             <div class="col-md-6">
                 <div class="metenox-gas-box">
                     <h4>
                         <i class="fas fa-wind"></i>
-                        Magmatic Gas Consumption
+                        Magmatic Gas Projections
                     </h4>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-wind"></i> Est. Gas:
-                        </span>
-                        <span class="value text-warning-bright">
-                            ~{{ number_format($gasData['current_quantity']) }} units
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-calendar-day"></i> Daily Need:
-                        </span>
-                        <span class="value text-warning-bright">
-                            {{ number_format($gasData['daily']) }} units/day
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-calendar-times"></i> Runs Out:
-                        </span>
-                        <span class="value {{ $gasData['days_remaining'] < 7 ? 'text-danger-bright' : 'text-success-bright' }}">
-                            {{ \Carbon\Carbon::now()->addDays($gasData['days_remaining'])->format('Y-m-d H:i') }}
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-clock"></i> Days Left:
-                        </span>
-                        <span class="value {{ $gasData['days_remaining'] < 7 ? 'text-danger-bright' : ($gasData['days_remaining'] < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
-                            {{ floor($gasData['days_remaining']) }}d {{ floor(($gasData['days_remaining'] - floor($gasData['days_remaining'])) * 24) }}h
-                        </span>
-                    </div>
-                    
-                    <div class="consumption-stat">
-                        <span class="label">
-                            <i class="fas fa-tachometer-alt"></i> Hourly Rate:
-                        </span>
-                        <span class="value text-warning-bright">
-                            {{ number_format($gasData['hourly']) }} units/hr
-                        </span>
-                    </div>
-                    
-                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 152, 0, 0.3);">
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle"></i> 
-                            Fixed rate: 200 units/hour (4,800/day)
-                        </small>
-                    </div>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Est. Gas
+                            <span class="badge badge-warning badge-pill">~{{ number_format($gasData['current_quantity']) }} units</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Volume
+                            <span class="badge badge-warning badge-pill">~{{ number_format($gasData['current_quantity'] * 0.01) }} m³</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Runs Out
+                            <span class="badge {{ $gasData['days_remaining'] < 7 ? 'badge-danger' : ($gasData['days_remaining'] < 14 ? 'badge-warning' : 'badge-success') }}">
+                                {{ \Carbon\Carbon::now()->addDays($gasData['days_remaining'])->format('Y-m-d H:i') }}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Days Left
+                            @php
+                                $gasDays = floor($gasData['days_remaining']);
+                                $gasHours = floor(($gasData['days_remaining'] - $gasDays) * 24);
+                            @endphp
+                            <span class="badge {{ $gasData['days_remaining'] < 7 ? 'badge-danger' : ($gasData['days_remaining'] < 14 ? 'badge-warning' : 'badge-success') }}">
+                                {{ $gasDays }}d {{ $gasHours }}h
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Hourly Rate
+                            <span class="badge badge-warning badge-pill">200.00 units/hr</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -437,10 +406,10 @@
         <div class="col-md-3">
             <div class="stat-box">
                 <h4>Fuel Expires</h4>
-                <div class="value {{ $structure->hours_remaining < 168 ? 'text-danger-bright' : ($structure->hours_remaining < 336 ? 'text-warning-bright' : 'text-success-bright') }}">
-                    {{ $structure->days_remaining }} days
+                <div class="value {{ $hoursRemaining < 168 ? 'text-danger-bright' : ($hoursRemaining < 336 ? 'text-warning-bright' : 'text-success-bright') }}">
+                    {{ $daysRemaining }} days
                 </div>
-                <div class="label">{{ $structure->remaining_hours }} hours</div>
+                <div class="label">{{ $remainingHours }} hours</div>
             </div>
         </div>
         
@@ -448,9 +417,9 @@
             <div class="stat-box">
                 <h4>Weekly Requirement</h4>
                 <div class="value text-info-bright">
-                    {{ number_format($structure->weekly_consumption) }}
+                    {{ number_format($consumption['weekly'] ?? 0) }}
                 </div>
-                <div class="label">blocks ({{ number_format($structure->weekly_consumption * 5) }} m³)</div>
+                <div class="label">blocks ({{ number_format(($consumption['weekly'] ?? 0) * 5) }} m³)</div>
             </div>
         </div>
         
@@ -458,9 +427,9 @@
             <div class="stat-box">
                 <h4>30-Day Need</h4>
                 <div class="value text-info-bright">
-                    {{ number_format($structure->monthly_consumption) }}
+                    {{ number_format($consumption['monthly'] ?? 0) }}
                 </div>
-                <div class="label">blocks ({{ number_format($structure->monthly_consumption * 5) }} m³)</div>
+                <div class="label">blocks ({{ number_format(($consumption['monthly'] ?? 0) * 5) }} m³)</div>
             </div>
         </div>
         
@@ -517,22 +486,25 @@
                 <ul class="list-group">
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         Est. Blocks
-                        <span class="badge badge-info badge-pill">~{{ number_format($structure->estimated_blocks ?? 0) }}</span>
+                        @php
+                            $estimatedBlocks = $consumption['daily'] > 0 ? $daysRemaining * $consumption['daily'] : 0;
+                        @endphp
+                        <span class="badge badge-info badge-pill">~{{ number_format($estimatedBlocks) }}</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         Volume
-                        <span class="badge badge-info badge-pill">~{{ number_format(($structure->estimated_blocks ?? 0) * 5) }} m³</span>
+                        <span class="badge badge-info badge-pill">~{{ number_format($estimatedBlocks * 5) }} m³</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         Runs Out
-                        <span class="badge {{ $structure->hours_remaining < 168 ? 'badge-danger' : ($structure->hours_remaining < 336 ? 'badge-warning' : 'badge-success') }}">
-                            {{ \Carbon\Carbon::parse($structure->fuel_expires)->format('Y-m-d H:i') }}
+                        <span class="badge {{ $hoursRemaining < 168 ? 'badge-danger' : ($hoursRemaining < 336 ? 'badge-warning' : 'badge-success') }}">
+                            {{ $structure->fuel_expires ? \Carbon\Carbon::parse($structure->fuel_expires)->format('Y-m-d H:i') : 'N/A' }}
                         </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         Days Left
-                        <span class="badge {{ $structure->hours_remaining < 168 ? 'badge-danger' : ($structure->hours_remaining < 336 ? 'badge-warning' : 'badge-success') }}">
-                            {{ $structure->days_remaining }}d {{ $structure->remaining_hours }}h
+                        <span class="badge {{ $hoursRemaining < 168 ? 'badge-danger' : ($hoursRemaining < 336 ? 'badge-warning' : 'badge-success') }}">
+                            {{ $daysRemaining }}d {{ $remainingHours }}h
                         </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
