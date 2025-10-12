@@ -380,20 +380,15 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        {{-- METENOX FUEL PROJECTIONS --}}
-        @if($fuelBlocks && $magmaticGas)
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-chart-line"></i> Fuel Projections</h3>
-            </div>
-            <div class="card-body">
+                @if($fuelBlocks && $magmaticGas)
+                <hr>
+                
+                <h5><i class="fas fa-chart-line"></i> Fuel Projections</h5>
                 <div class="row">
                     {{-- Fuel Blocks Projections --}}
                     <div class="col-md-6">
-                        <h5 class="mb-3"><i class="fas fa-fire text-info-bright"></i> Fuel Blocks</h5>
+                        <h6 class="mb-3"><i class="fas fa-fire text-info-bright"></i> Fuel Blocks</h6>
                         <dl class="row">
                             <dt class="col-sm-6">Est. Blocks:</dt>
                             <dd class="col-sm-6">~{{ number_format($fuelBlocks['current_quantity']) }}</dd>
@@ -419,7 +414,7 @@
                     
                     {{-- Magmatic Gas Projections --}}
                     <div class="col-md-6">
-                        <h5 class="mb-3"><i class="fas fa-wind text-warning-bright"></i> Magmatic Gas</h5>
+                        <h6 class="mb-3"><i class="fas fa-wind text-warning-bright"></i> Magmatic Gas</h6>
                         <dl class="row">
                             <dt class="col-sm-6">Est. Gas:</dt>
                             <dd class="col-sm-6">~{{ number_format($magmaticGas['current_quantity']) }} units</dd>
@@ -443,9 +438,9 @@
                         </dl>
                     </div>
                 </div>
+                @endif
             </div>
         </div>
-        @endif
         @else
         {{-- Standard Upwell Structure Fuel Display --}}
         <div class="card">
