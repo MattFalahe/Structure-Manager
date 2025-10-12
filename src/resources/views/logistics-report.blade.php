@@ -52,8 +52,8 @@
     }
     
     .metenox-badge {
-        background-color: rgba(156, 39, 176, 0.2);
-        color: #5a0f7d;
+        background-color: rgba(193, 114, 207, 0.2);
+        color: #c04ed4;
         border: 1px solid rgba(156, 39, 176, 0.3);
         padding: 0.15rem 0.4rem;
         border-radius: 0.25rem;
