@@ -54,7 +54,7 @@
     .stat-number {
         font-size: 1.5rem;
         font-weight: bold;
-        color: #51cf66;
+        color: #3c994b;
     }
     
     .stat-label {
