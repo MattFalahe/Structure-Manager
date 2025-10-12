@@ -220,7 +220,7 @@
         font-weight: bold;
         font-size: 0.95rem;
         margin-left: 0.5rem;
-        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);
     }
     
     .limiting-indicator i {
@@ -249,10 +249,25 @@
     }
     
     .limiting-gas {
-        background: #ff9800 !important;
-        border: 2px solid #e65100 !important;
-        color: #000000 !important;
-        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+        background: #9c27b0 !important;
+        border: 2px solid #6a0080 !important;
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* NEW: Unknown/None limiting factor styles */
+    .limiting-unknown {
+        background: #6c757d !important;
+        border: 2px solid #495057 !important;
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .limiting-none {
+        background: #dc3545 !important;
+        border: 2px solid #b71c1c !important;
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
 
     /* Limiting Factor stat badge - special styling */
@@ -267,8 +282,18 @@
     }
     
     .stat-badge.limiting-gas {
-        background: rgba(255, 152, 0, 0.15) !important;
-        border-color: #ff9800 !important;
+        background: rgba(156, 39, 176, 0.15) !important;
+        border-color: #9c27b0 !important;
+    }
+    
+    .stat-badge.limiting-unknown {
+        background: rgba(108, 117, 125, 0.15) !important;
+        border-color: #6c757d !important;
+    }
+    
+    .stat-badge.limiting-none {
+        background: rgba(220, 53, 69, 0.15) !important;
+        border-color: #dc3545 !important;
     }
 </style>
 @endpush
@@ -480,12 +505,30 @@ function initializeCriticalAlerts() {
                                                 </a>
                 `;
                 
-                // Add PROMINENT limiting factor badge for Metenox
-                if (isMetenox && alert.metenox_data.limiting_factor !== 'unknown') {
-                    let limitingFactor = alert.metenox_data.limiting_factor;
-                    let limitingIcon = limitingFactor === 'fuel_blocks' ? 'fa-fire' : 'fa-wind';
-                    let limitingText = limitingFactor === 'fuel_blocks' ? 'FUEL BLOCKS LIMITING' : 'MAGMATIC GAS LIMITING';
-                    let limitingClass = limitingFactor === 'fuel_blocks' ? 'limiting-fuel' : 'limiting-gas';
+                // Add PROMINENT limiting factor badge for Metenox - ALWAYS show
+                if (isMetenox) {
+                    let limitingFactor = 'unknown';
+                    let limitingIcon = 'fa-question';
+                    let limitingText = 'AWAITING FUEL DATA';
+                    let limitingClass = 'limiting-unknown';
+                    
+                    if (alert.metenox_data && alert.metenox_data.limiting_factor) {
+                        limitingFactor = alert.metenox_data.limiting_factor;
+                        
+                        if (limitingFactor === 'fuel_blocks') {
+                            limitingIcon = 'fa-fire';
+                            limitingText = 'FUEL BLOCKS LIMITING';
+                            limitingClass = 'limiting-fuel';
+                        } else if (limitingFactor === 'magmatic_gas') {
+                            limitingIcon = 'fa-wind';
+                            limitingText = 'MAGMATIC GAS LIMITING';
+                            limitingClass = 'limiting-gas';
+                        } else if (limitingFactor === 'none') {
+                            limitingIcon = 'fa-exclamation-triangle';
+                            limitingText = 'NO FUEL DETECTED';
+                            limitingClass = 'limiting-none';
+                        }
+                    }
                     
                     html += `
                                                 <span class="limiting-indicator ${limitingClass}">
@@ -519,11 +562,38 @@ function initializeCriticalAlerts() {
                                     </div>
                 `;
                 
-                // Show Metenox dual fuel status with CLEAR limiting factor
-                if (isMetenox && alert.metenox_data.limiting_factor !== 'unknown') {
-                    let md = alert.metenox_data;
-                    let fuelBlocksClass = md.limiting_factor === 'fuel_blocks' ? 'fuel-critical' : '';
-                    let gasClass = md.limiting_factor === 'magmatic_gas' ? 'fuel-critical' : '';
+                // Show Metenox dual fuel status - ALWAYS show for Metenox, even if no data
+                if (isMetenox) {
+                    let md = alert.metenox_data || {};
+                    
+                    // Provide defaults if data is missing
+                    let fuelBlocksQty = md.fuel_blocks_quantity || 0;
+                    let gasQty = md.magmatic_gas_quantity || 0;
+                    let fuelDays = md.fuel_blocks_days || 0;
+                    let gasDays = md.magmatic_gas_days || 0;
+                    let limitingFactor = md.limiting_factor || 'unknown';
+                    
+                    let fuelBlocksClass = limitingFactor === 'fuel_blocks' ? 'fuel-critical' : '';
+                    let gasClass = limitingFactor === 'magmatic_gas' ? 'fuel-critical' : '';
+                    
+                    // Determine status badges
+                    let fuelStatus = '';
+                    let gasStatus = '';
+                    
+                    if (limitingFactor === 'unknown') {
+                        fuelStatus = '<span class="badge badge-secondary" style="background: #6c757d !important; color: #fff !important; font-weight: bold;">Unknown</span>';
+                        gasStatus = '<span class="badge badge-secondary" style="background: #6c757d !important; color: #fff !important; font-weight: bold;">Unknown</span>';
+                    } else if (limitingFactor === 'none') {
+                        fuelStatus = '<span class="badge badge-danger" style="background: #dc3545 !important; color: #fff !important; font-weight: bold;">EMPTY</span>';
+                        gasStatus = '<span class="badge badge-danger" style="background: #dc3545 !important; color: #fff !important; font-weight: bold;">EMPTY</span>';
+                    } else {
+                        fuelStatus = limitingFactor === 'fuel_blocks' ? 
+                            '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
+                            '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>';
+                        gasStatus = limitingFactor === 'magmatic_gas' ? 
+                            '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
+                            '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>';
+                    }
                     
                     html += `
                         <div class="metenox-dual-fuel">
@@ -535,28 +605,29 @@ function initializeCriticalAlerts() {
                                 <span>
                                     <i class="fas fa-fire" style="color: #2196f3;"></i> 
                                     <strong>Fuel Blocks:</strong>
-                                    <span class="${fuelBlocksClass}" style="font-size: 1.1rem;">${md.fuel_blocks_days.toFixed(1)} days</span>
-                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${md.fuel_blocks_quantity.toLocaleString()} blocks)</span>
+                                    <span class="${fuelBlocksClass}" style="font-size: 1.1rem;">${fuelDays > 0 ? fuelDays.toFixed(1) + ' days' : (limitingFactor === 'unknown' ? '?' : '0 days')}</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${fuelBlocksQty.toLocaleString()} blocks)</span>
                                 </span>
-                                ${md.limiting_factor === 'fuel_blocks' ? 
-                                    '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
-                                    '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>'}
+                                ${fuelStatus}
                             </div>
                             <div class="metenox-resource">
                                 <span>
-                                    <i class="fas fa-wind" style="color: #ff9800;"></i> 
+                                    <i class="fas fa-wind" style="color: #9c27b0;"></i> 
                                     <strong>Magmatic Gas:</strong>
-                                    <span class="${gasClass}" style="font-size: 1.1rem;">${md.magmatic_gas_days.toFixed(1)} days</span>
-                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${md.magmatic_gas_quantity.toLocaleString()} units)</span>
+                                    <span class="${gasClass}" style="font-size: 1.1rem;">${gasDays > 0 ? gasDays.toFixed(1) + ' days' : (limitingFactor === 'unknown' ? '?' : '0 days')}</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${gasQty.toLocaleString()} units)</span>
                                 </span>
-                                ${md.limiting_factor === 'magmatic_gas' ? 
-                                    '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
-                                    '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>'}
+                                ${gasStatus}
                             </div>
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(156, 39, 176, 0.3); opacity: 0.85;">
                                 <small>
-                                    <i class="fas fa-info-circle" style="color: #2196f3;"></i> 
-                                    Structure will stop when <strong style="color: #ff5722;">${md.limiting_factor === 'fuel_blocks' ? 'fuel blocks' : 'magmatic gas'}</strong> runs out
+                                    ${limitingFactor === 'unknown' ? 
+                                        '<i class="fas fa-info-circle" style="color: #6c757d;"></i> Fuel data not yet available - check structure details' : 
+                                        (limitingFactor === 'none' ? 
+                                            '<i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> <strong style="color: #ff5722;">Structure has no fuel!</strong> Refuel immediately!' :
+                                            '<i class="fas fa-info-circle" style="color: #2196f3;"></i> Structure will stop when <strong style="color: #ff5722;">' + (limitingFactor === 'fuel_blocks' ? 'fuel blocks' : 'magmatic gas') + '</strong> runs out'
+                                        )
+                                    }
                                 </small>
                             </div>
                         </div>
@@ -573,21 +644,57 @@ function initializeCriticalAlerts() {
                         </div>
                 `;
                 
-                // Add Limiting Factor box for Metenox ONLY - right after Fuel Expires
-                if (isMetenox && alert.metenox_data.limiting_factor !== 'unknown') {
-                    let md = alert.metenox_data;
-                    let limitingIcon = md.limiting_factor === 'fuel_blocks' ? 'fa-fire' : 'fa-wind';
-                    let limitingText = md.limiting_factor === 'fuel_blocks' ? 'Fuel Blocks' : 'Magmatic Gas';
-                    let limitingColor = md.limiting_factor === 'fuel_blocks' ? 'info' : 'warning';
-                    let limitingBg = md.limiting_factor === 'fuel_blocks' ? 'rgba(33, 150, 243, 0.1)' : 'rgba(255, 152, 0, 0.1)';
-                    let limitingBorder = md.limiting_factor === 'fuel_blocks' ? '2px solid rgba(33, 150, 243, 0.3)' : '2px solid rgba(255, 152, 0, 0.3)';
+                // Add Limiting Factor box for Metenox - ALWAYS show, even if unknown
+                if (isMetenox) {
+                    let limitingFactor = 'unknown';
+                    let limitingIcon = 'fa-question';
+                    let limitingText = 'Awaiting Data';
+                    let limitingColor = 'secondary';
+                    let limitingBg = 'rgba(108, 117, 125, 0.1)';
+                    let limitingBorder = '2px solid rgba(108, 117, 125, 0.3)';
+                    let limitingDays = '?';
+                    let limitingClass = 'limiting-unknown';
+                    
+                    if (alert.metenox_data && alert.metenox_data.limiting_factor) {
+                        limitingFactor = alert.metenox_data.limiting_factor;
+                        
+                        if (limitingFactor === 'fuel_blocks') {
+                            limitingIcon = 'fa-fire';
+                            limitingText = 'Fuel Blocks';
+                            limitingColor = 'info';
+                            limitingBg = 'rgba(33, 150, 243, 0.1)';
+                            limitingBorder = '2px solid rgba(33, 150, 243, 0.3)';
+                            limitingDays = alert.metenox_data.fuel_blocks_days ? alert.metenox_data.fuel_blocks_days.toFixed(1) : '?';
+                            limitingClass = 'limiting-fuel';
+                        } else if (limitingFactor === 'magmatic_gas') {
+                            limitingIcon = 'fa-wind';
+                            limitingText = 'Magmatic Gas';
+                            limitingColor = 'purple';
+                            limitingBg = 'rgba(156, 39, 176, 0.1)';
+                            limitingBorder = '2px solid rgba(156, 39, 176, 0.3)';
+                            limitingDays = alert.metenox_data.magmatic_gas_days ? alert.metenox_data.magmatic_gas_days.toFixed(1) : '?';
+                            limitingClass = 'limiting-gas';
+                        } else if (limitingFactor === 'none') {
+                            limitingIcon = 'fa-times-circle';
+                            limitingText = 'No Fuel';
+                            limitingColor = 'danger';
+                            limitingBg = 'rgba(220, 53, 69, 0.1)';
+                            limitingBorder = '2px solid rgba(220, 53, 69, 0.3)';
+                            limitingDays = '0';
+                            limitingClass = 'limiting-none';
+                        }
+                    }
+                    
+                    let textColor = limitingFactor === 'fuel_blocks' ? '#2196f3' : 
+                                   (limitingFactor === 'magmatic_gas' ? '#9c27b0' : 
+                                   (limitingFactor === 'none' ? '#dc3545' : '#6c757d'));
                     
                     html += `
-                        <div class="stat-badge" style="background: ${limitingBg} !important; border: ${limitingBorder} !important;">
+                        <div class="stat-badge ${limitingClass}" style="background: ${limitingBg} !important; border: ${limitingBorder} !important;">
                             <i class="fas ${limitingIcon} text-${limitingColor}"></i>
-                            <strong style="color: ${md.limiting_factor === 'fuel_blocks' ? '#2196f3' : '#ff9800'};">⚠️ Limiting Factor:</strong><br>
-                            <span style="font-size: 1.1rem; font-weight: bold; color: ${md.limiting_factor === 'fuel_blocks' ? '#2196f3' : '#ff9800'};">${limitingText}</span><br>
-                            <small>Runs out first at ${md.limiting_factor === 'fuel_blocks' ? md.fuel_blocks_days.toFixed(1) : md.magmatic_gas_days.toFixed(1)} days</small>
+                            <strong style="color: ${textColor};">⚠️ Limiting Factor:</strong><br>
+                            <span style="font-size: 1.1rem; font-weight: bold; color: ${textColor};">${limitingText}</span><br>
+                            <small>${limitingDays !== '?' ? 'Runs out first at ' + limitingDays + ' days' : 'Check structure for details'}</small>
                         </div>
                     `;
                 }
