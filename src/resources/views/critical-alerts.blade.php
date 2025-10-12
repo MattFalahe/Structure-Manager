@@ -249,8 +249,8 @@
     }
     
     .limiting-gas {
-        background: #9c27b0 !important;
-        border: 2px solid #6a0080 !important;
+        background: #ff9800 !important;
+        border: 2px solid #e65100 !important;
         color: #ffffff !important;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
@@ -282,8 +282,8 @@
     }
     
     .stat-badge.limiting-gas {
-        background: rgba(156, 39, 176, 0.15) !important;
-        border-color: #9c27b0 !important;
+        background: rgba(255, 152, 0, 0.15) !important;
+        border-color: #ff9800 !important;
     }
     
     .stat-badge.limiting-unknown {
@@ -612,7 +612,7 @@ function initializeCriticalAlerts() {
                             </div>
                             <div class="metenox-resource">
                                 <span>
-                                    <i class="fas fa-wind" style="color: #9c27b0;"></i> 
+                                    <i class="fas fa-wind" style="color: #ff9800;"></i> 
                                     <strong>Magmatic Gas:</strong>
                                     <span class="${gasClass}" style="font-size: 1.1rem;">${gasDays > 0 ? gasDays.toFixed(1) + ' days' : (limitingFactor === 'unknown' ? '?' : '0 days')}</span>
                                     <span style="opacity: 0.7; margin-left: 0.5rem;">(${gasQty.toLocaleString()} units)</span>
@@ -634,7 +634,7 @@ function initializeCriticalAlerts() {
                     `;
                 }
                 
-               html += `
+                html += `
                     <div class="alert-stats">
                         <div class="stat-badge">
                             <i class="far fa-clock text-${statusColor}"></i>
@@ -650,7 +650,7 @@ function initializeCriticalAlerts() {
                     let limitingIcon = 'fa-question';
                     let limitingText = 'Awaiting Data';
                     let limitingColor = 'secondary';
-                    let limitingBg = 'rgba(108, 117, 125, 0.1)';
+                    let limitingBg = 'rgba(108, 117, 125, 0.15)';
                     let limitingBorder = '2px solid rgba(108, 117, 125, 0.3)';
                     let limitingDays = '?';
                     let limitingClass = 'limiting-unknown';
@@ -662,23 +662,23 @@ function initializeCriticalAlerts() {
                             limitingIcon = 'fa-fire';
                             limitingText = 'Fuel Blocks';
                             limitingColor = 'info';
-                            limitingBg = 'rgba(33, 150, 243, 0.1)';
+                            limitingBg = 'rgba(33, 150, 243, 0.15)';
                             limitingBorder = '2px solid rgba(33, 150, 243, 0.3)';
                             limitingDays = alert.metenox_data.fuel_blocks_days ? alert.metenox_data.fuel_blocks_days.toFixed(1) : '?';
                             limitingClass = 'limiting-fuel';
                         } else if (limitingFactor === 'magmatic_gas') {
                             limitingIcon = 'fa-wind';
                             limitingText = 'Magmatic Gas';
-                            limitingColor = 'purple';
-                            limitingBg = 'rgba(156, 39, 176, 0.1)';
-                            limitingBorder = '2px solid rgba(156, 39, 176, 0.3)';
+                            limitingColor = 'warning';
+                            limitingBg = 'rgba(255, 152, 0, 0.15)';
+                            limitingBorder = '2px solid rgba(255, 152, 0, 0.3)';
                             limitingDays = alert.metenox_data.magmatic_gas_days ? alert.metenox_data.magmatic_gas_days.toFixed(1) : '?';
                             limitingClass = 'limiting-gas';
                         } else if (limitingFactor === 'none') {
                             limitingIcon = 'fa-times-circle';
                             limitingText = 'No Fuel';
                             limitingColor = 'danger';
-                            limitingBg = 'rgba(220, 53, 69, 0.1)';
+                            limitingBg = 'rgba(220, 53, 69, 0.15)';
                             limitingBorder = '2px solid rgba(220, 53, 69, 0.3)';
                             limitingDays = '0';
                             limitingClass = 'limiting-none';
@@ -686,11 +686,11 @@ function initializeCriticalAlerts() {
                     }
                     
                     let textColor = limitingFactor === 'fuel_blocks' ? '#2196f3' : 
-                                   (limitingFactor === 'magmatic_gas' ? '#9c27b0' : 
+                                   (limitingFactor === 'magmatic_gas' ? '#ff9800' : 
                                    (limitingFactor === 'none' ? '#dc3545' : '#6c757d'));
                     
                     html += `
-                        <div class="stat-badge ${limitingClass}" style="background: ${limitingBg} !important; border: ${limitingBorder} !important;">
+                        <div class="stat-badge limiting-factor ${limitingClass}" style="background: ${limitingBg} !important; border: ${limitingBorder} !important;">
                             <i class="fas ${limitingIcon} text-${limitingColor}"></i>
                             <strong style="color: ${textColor};">⚠️ Limiting Factor:</strong><br>
                             <span style="font-size: 1.1rem; font-weight: bold; color: ${textColor};">${limitingText}</span><br>
