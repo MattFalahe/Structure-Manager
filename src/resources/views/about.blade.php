@@ -154,22 +154,24 @@
         </div>
 
         <div class="about-section">
-            <h4><i class="fas fa-rocket"></i> What's New in v1.0.5</h4>
+            <h4><i class="fas fa-rocket"></i> What's New in v1.0.6</h4>
             
             <div class="changelog-section">
-                <h5><i class="fas fa-paint-brush"></i> Enhanced Structure Detail Page</h5>
+                <h5><i class="fas fa-moon" style="color: #9c27b0;"></i> Metenox Moon Drill Support</h5>
                 <ul class="changelog-list">
-                    <li><strong>Comprehensive fuel consumption dashboard</strong> - Added detailed breakdown cards showing hourly, daily, weekly, monthly, and quarterly consumption rates</li>
-                    <li><strong>Improved fuel projections</strong> - Now displays estimated blocks remaining, volume in m³, precise time until empty, and hourly consumption rate</li>
-                    <li><strong>Historical analysis integration</strong> - Shows fuel bay snapshot tracking data, refuel event detection, and consumption anomaly alerts</li>
-                    <li><strong>Enhanced dark theme support</strong> - Better contrast and readability across all dark themes with improved color palette</li>
-                    <li><strong>Service status indicators</strong> - Clear visual display of online vs offline services with fuel consumption notes</li>
-                    <li><strong>Improved chart visualization</strong> - Dark-themed fuel history chart with gradients and better tooltip formatting</li>
+                    <li><strong>Dual fuel system tracking</strong> - Complete support for Metenox Moon Drills that require both fuel blocks (120/day) and magmatic gas (4,800/day)</li>
+                    <li><strong>Limiting factor detection</strong> - Automatically identifies which resource (fuel blocks or magmatic gas) will run out first</li>
+                    <li><strong>Magmatic gas reserves tracking</strong> - Monitor staged magmatic gas in corporation hangars across all structures</li>
+                    <li><strong>Enhanced critical alerts</strong> - Purple "LIMITING" badges highlight which Metenox resource needs immediate attention</li>
+                    <li><strong>Dual fuel projections</strong> - Separate consumption statistics and projections for both fuel blocks and magmatic gas on detail pages</li>
+                    <li><strong>Improved logistics planning</strong> - Gas requirements calculated alongside traditional fuel blocks for complete hauling plans</li>
+                    <li><strong>Visual indicators</strong> - Purple badges and icons throughout the interface for gas-related information</li>
                 </ul>
             </div>
             
             <div class="changelog-section">
                 <h5><i class="fas fa-history"></i> Recent Updates</h5>
+                <p><strong>v1.0.5</strong> - Enhanced structure detail page with comprehensive fuel consumption dashboard and improved dark theme support</p>
                 <p><strong>v1.0.4</strong> - Critical bug fix: Module-based fuel calculation (Research Lab now correctly counts as 1 module, not 3 services)</p>
                 <p><strong>v1.0.3</strong> - Fixed migration issues for cleaner installation</p>
             </div>
@@ -197,6 +199,8 @@
                 <li><strong>Multi-Corporation Support</strong> - Filter and view structures by corporation</li>
                 <li><strong>Export Capabilities</strong> - Export logistics data to CSV for planning</li>
                 <li><strong>Dual Tracking Method</strong> - Primary fuel bay monitoring with days-remaining fallback</li>
+                <li class="new-feature"><strong>Metenox Moon Drill Support</strong> - Full dual-fuel tracking for fuel blocks and magmatic gas</li>
+                <li class="new-feature"><strong>Magmatic Gas Tracking</strong> - Monitor gas reserves staged in corporation hangars</li>
             </ul>
         </div>
 
@@ -207,27 +211,31 @@
             <p>
                 View all your structures with their current fuel levels. Use filters to see only critical structures 
                 or filter by corporation. Click on any structure name to see detailed information, fuel history, 
-                and consumption analytics.
+                and consumption analytics. Metenox Moon Drills display both fuel block and magmatic gas status with 
+                limiting factor indicators.
             </p>
 
             <h5 class="mt-3"><i class="fas fa-warehouse"></i> Fuel Reserves</h5>
             <p>
-                Monitor staged fuel blocks across all your structures. See reserves organized by system and structure, 
-                track which hangar divisions contain fuel, and view recent refuel events. Custom division names make 
-                it easy to identify where your fuel is stored.
+                Monitor staged fuel blocks and magmatic gas across all your structures. See reserves organized by system 
+                and structure, track which hangar divisions contain fuel, and view recent refuel events. Custom division 
+                names make it easy to identify where your fuel is stored. Purple badges indicate magmatic gas reserves 
+                for Metenox operations.
             </p>
 
             <h5 class="mt-3"><i class="fas fa-truck"></i> Logistics Report</h5>
             <p>
                 Generate comprehensive fuel requirements reports organized by system. See 30, 60, and 90-day fuel 
-                needs, calculate hauler trips required, and export data for your logistics team. Perfect for planning 
+                needs, calculate hauler trips required, and export data for your logistics team. Metenox structures 
+                automatically include both fuel block and magmatic gas requirements. Perfect for planning 
                 large-scale fuel operations.
             </p>
 
             <h5 class="mt-3"><i class="fas fa-exclamation-triangle"></i> Critical Alerts</h5>
             <p>
                 Quick overview of structures requiring immediate attention. Shows structures with less than 14 days 
-                of fuel remaining, with urgent indicators for structures below 7 days. Includes fuel requirements 
+                of fuel remaining, with urgent indicators for structures below 7 days. Metenox Moon Drills display 
+                dual-fuel status boxes with purple badges highlighting limiting factors. Includes fuel requirements 
                 to help prioritize refueling operations.
             </p>
         </div>
@@ -237,8 +245,9 @@
             <p>
                 Structure Manager automatically tracks fuel consumption every hour and analyzes patterns every 30 minutes. 
                 The system monitors both fuel bay levels (what's actively being consumed) and reserves (staged fuel in 
-                CorpSAG hangars). Historical data is retained for 6 months for fuel bay tracking and 3 months for 
-                reserve movements, providing comprehensive consumption analytics.
+                CorpSAG hangars). For Metenox Moon Drills, the plugin tracks both fuel blocks and magmatic gas simultaneously. 
+                Historical data is retained for 6 months for fuel bay tracking and 3 months for reserve movements, providing 
+                comprehensive consumption analytics.
             </p>
             
             <div class="alert alert-info">
@@ -258,6 +267,7 @@
                 <li><strong>Only online service modules</strong> consume fuel blocks</li>
                 <li><strong>One module = one fuel cost</strong> - Even if a module provides multiple services (e.g., Research Lab provides 3 services but counts as 1 module)</li>
                 <li><strong>Moon Drills</strong> always use 120 blocks/day (5 blocks/hour) - NO bonuses</li>
+                <li><strong>Metenox Moon Drills</strong> require dual fuel: 120 fuel blocks/day PLUS 4,800 magmatic gas/day - NO bonuses apply</li>
                 <li><strong>Reprocessing & Reactions</strong> get fuel reduction bonuses:
                     <ul style="list-style: disc; margin-left: 2rem;">
                         <li>Athanor: -20% reduction (96 blocks/day)</li>
@@ -273,7 +283,7 @@
         <div class="about-section">
             <h4><i class="fas fa-code-branch"></i> Version</h4>
             <div class="text-center">
-                <span class="badge badge-primary badge-custom">v1.0.5</span>
+                <span class="badge badge-primary badge-custom">v1.0.6</span>
                 <span class="badge badge-success badge-custom">Stable</span>
             </div>
             <p class="mt-3 text-center">
