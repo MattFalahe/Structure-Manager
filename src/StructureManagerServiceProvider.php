@@ -8,6 +8,7 @@ use StructureManager\Console\Commands\CleanupHistoryCommand;
 use StructureManager\Console\Commands\AnalyzeConsumptionCommand;
 use StructureManager\Console\Commands\SetupPermissionsCommand;
 use StructureManager\Console\Commands\CreateTestMetenoxCommand;
+use StructureManager\Database\Seeders\ScheduleSeeder;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
 {
@@ -36,9 +37,6 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
 
         // Add publications
         $this->add_publications();
-        
-        // Add database seeders
-        $this->add_database_seeders();
     }
 
     /**
@@ -62,9 +60,9 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
      */
     private function add_database_seeders()
     {
-        $this->publishes([
-            __DIR__ . '/Database/seeders/' => database_path('seeders/'),
-        ], ['seeders', 'seat']);
+        $this->registerDatabaseSeeders([
+            ScheduleSeeder::class
+        ]);
     }
 
     public function register()
@@ -77,6 +75,9 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
         
         // Register config
         $this->mergeConfigFrom(__DIR__.'/Config/structure-manager.config.php', 'structure-manager');
+
+        // Add database seeders
+        $this->add_database_seeders();
     }
 
     public function getName(): string
