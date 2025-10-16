@@ -360,22 +360,6 @@
 @endsection
 
 @push('javascript')
-{{-- Fix SeAT's mixed content issue first --}}
-<script>
-(function() {
-    // Wait for jQuery to be available
-    if (typeof $ !== 'undefined' && $.ajax) {
-        var originalAjax = $.ajax;
-        $.ajax = function(settings) {
-            if (settings && settings.url && typeof settings.url === 'string' && settings.url.startsWith('http://')) {
-                settings.url = settings.url.replace('http://', 'https://');
-            }
-            return originalAjax.call(this, settings);
-        };
-    }
-})();
-</script>
-
 <script src="{{ asset('vendor/structure-manager/js/moment.min.js') }}"></script>
 
 <script>

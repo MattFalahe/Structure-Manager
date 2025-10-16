@@ -23,7 +23,8 @@
     },
     "autoload": {
         "psr-4": {
-            "StructureManager\\": "src/"
+            "StructureManager\\": "src/",
+            "StructureManager\\Database\\Seeders\\": "src/Database/seeders"
         }
     },
     "autoload-dev": {

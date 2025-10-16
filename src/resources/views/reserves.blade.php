@@ -183,18 +183,6 @@
 
 @push('javascript')
 <script>
-// Fix SeAT's mixed content issue - must be FIRST
-(function() {
-    if (typeof $ !== 'undefined' && $.ajax) {
-        var originalAjax = $.ajax;
-        $.ajax = function(settings) {
-            if (settings && settings.url && typeof settings.url === 'string' && settings.url.startsWith('http://')) {
-                settings.url = settings.url.replace('http://', 'https://');
-            }
-            return originalAjax.call(this, settings);
-        };
-    }
-})();
 
 $(document).ready(function() {
     // FIXED: Correct type ID for Magmatic Gas is 81143, not 16273!

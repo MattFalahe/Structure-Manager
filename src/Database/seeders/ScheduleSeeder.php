@@ -2,65 +2,47 @@
 
 namespace StructureManager\Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use Seat\Services\Models\Schedule;
+use Seat\Services\Seeding\AbstractScheduleSeeder;
 
-class ScheduleSeeder extends Seeder
+class ScheduleSeeder extends AbstractScheduleSeeder
 {
-    /**
-     * List of schedules to seed
-     *
-     * @var array
-     */
-    protected $schedules = [
-        [
-            'command'           => 'structure-manager:track-fuel',
-            'expression'        => '15 * * * *', // Run every hour at :15 past
-            'allow_overlap'     => false,
-            'allow_maintenance' => false,
-            'ping_before'       => null,
-            'ping_after'        => null,
-        ],
-        [
-            'command'           => 'structure-manager:cleanup-history',
-            'expression'        => '0 3 * * *', // Run daily at 3 AM
-            'allow_overlap'     => false,
-            'allow_maintenance' => false,
-            'ping_before'       => null,
-            'ping_after'        => null,
-        ],
-        [
-            'command'           => 'structure-manager:analyze-consumption',
-            'expression'        => '30 * * * *', // Run every hour at :30 past
-            'allow_overlap'     => false,
-            'allow_maintenance' => false,
-            'ping_before'       => null,
-            'ping_after'        => null,
-        ],
-    ];
+    public function getSchedules(): array
+    {
+        return [
+            [
+                'command' => 'structure-manager:track-fuel',
+                'expression' => '15 * * * *', // Run every hour at :15 past
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+            [
+                'command' => 'structure-manager:cleanup-history',
+                'expression' => '0 3 * * *', // Run daily at 3 AM
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+            [
+                'command' => 'structure-manager:analyze-consumption',
+                'expression' => '30 * * * *', // Run every hour at :30 past
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+        ];
+    }
 
     /**
-     * Run the database seeds.
+     * Returns a list of commands to remove from the schedule.
      *
-     * @return void
+     * @return array
      */
-    public function run()
+    public function getDeprecatedSchedules(): array
     {
-        foreach ($this->schedules as $schedule) {
-            $existing = Schedule::where('command', $schedule['command'])->first();
-            
-            if (!$existing) {
-                Schedule::create($schedule);
-                $this->command->info('Seeded schedule for: ' . $schedule['command']);
-            } else {
-                // Update existing schedule if expression changed
-                if ($existing->expression !== $schedule['expression']) {
-                    $existing->update(['expression' => $schedule['expression']]);
-                    $this->command->info('Updated schedule for: ' . $schedule['command'] . ' to ' . $schedule['expression']);
-                } else {
-                    $this->command->info('Schedule already exists for: ' . $schedule['command']);
-                }
-            }
-        }
+        return [];
     }
 }
