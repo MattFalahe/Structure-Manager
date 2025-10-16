@@ -87,9 +87,7 @@ Special thanks to **@recursivetree** for identifying issues, refining setup flow
 
 ---
 
-## What's New in v1.0.6  
-
-## 🌕 New Features — *Metenox Moon Drill Support*
+## v1.0.6 — 🌕 *Metenox Moon Drill Support*
 
 This update introduces **full dual-fuel support** for the new **Metenox Moon Drills**, expanding the plugin’s capabilities to track both **Fuel Blocks** and **Magmatic Gas** simultaneously.
 
@@ -281,7 +279,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 ## Credits
 
 **Author**: Matt Falahe  
-**Version**: 1.0.6  
+**Version**: 1.0.7  
 **SeAT Compatibility**: 5.x
 
 Built for the EVE Online community. Special thanks to the SeAT development team and all contributors.
