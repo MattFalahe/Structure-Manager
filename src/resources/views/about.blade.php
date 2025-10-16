@@ -154,7 +154,25 @@
         </div>
 
         <div class="about-section">
-            <h4><i class="fas fa-rocket"></i> What's New in v1.0.6</h4>
+            <h4><i class="fas fa-rocket"></i> What's New in v1.0.7</h4>
+            
+            <div class="changelog-section">
+                <h5><i class="fas fa-puzzle-piece" style="color: #2196f3;"></i> Maintenance & Fixes — Refinements and Stability Improvements</h5>
+                <ul class="changelog-list">
+                    <li><strong>Simplified schedule seeder</strong> - Now uses SeAT’s built-in service class instead of a custom implementation</li>
+                    <li><strong>Removed unnecessary setup command</strong> - <code>structure-manager:setup</code> is no longer needed; registration is handled automatically</li>
+                    <li><strong>Improved HTTPS handling</strong> - Fixed an issue where the plugin would force HTTPS and break local (HTTP) development environments</li>
+                </ul>
+            </div>
+        
+            <div class="changelog-section">
+                <h5><i class="fas fa-hands-helping" style="color: #4caf50;"></i> Contribution</h5>
+                <p>Special thanks to <strong>@recursivetree</strong> for identifying issues, refining setup flow, and improving plugin compatibility.</p>
+            </div>
+        
+            <hr class="my-4">
+        
+            <h4><i class="fas fa-lightbulb"></i> Recent Feature Update — v1.0.6</h4>
             
             <div class="changelog-section">
                 <h5><i class="fas fa-moon" style="color: #9c27b0;"></i> Metenox Moon Drill Support</h5>
@@ -283,7 +301,7 @@
         <div class="about-section">
             <h4><i class="fas fa-code-branch"></i> Version</h4>
             <div class="text-center">
-                <span class="badge badge-primary badge-custom">v1.0.6</span>
+                <span class="badge badge-primary badge-custom">v1.0.7</span>
                 <span class="badge badge-success badge-custom">Stable</span>
             </div>
             <p class="mt-3 text-center">
