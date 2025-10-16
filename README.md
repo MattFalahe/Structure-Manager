@@ -63,10 +63,31 @@ After installation, run:
 
 ```bash
 php artisan migrate
-php artisan structure-manager:setup
 ```
+## What's New in v1.0.7  
 
-## What's New in v1.0.6
+## 🧩 Maintenance & Fixes — *Refinements and Stability Improvements*  
+
+This update focuses on **cleaning up internal logic**, **removing redundant setup steps**, and **improving compatibility** with development environments.  
+It doesn’t introduce new user-facing features, but it makes the plugin leaner, simpler, and easier to maintain.  
+
+### 🔧 Key Improvements  
+- **Simplified Schedule Seeder** — Now uses SeAT’s built-in service class instead of a custom implementation  
+- **Removed Unnecessary Setup Command** — `structure-manager:setup` is no longer needed; registration is handled automatically  
+- **Improved HTTPS Handling** — Fixed an issue where the plugin would force HTTPS and break local (HTTP) development environments  
+
+---
+
+## 🤝 Contribution  
+Special thanks to **@recursivetree** for identifying issues, refining setup flow, and improving plugin compatibility.  
+
+---
+
+## Previous Updates  
+
+---
+
+## What's New in v1.0.6  
 
 ## 🌕 New Features — *Metenox Moon Drill Support*
 
@@ -89,28 +110,6 @@ This update introduces **full dual-fuel support** for the new **Metenox Moon Dri
 - Expanded analytics to include magmatic gas consumption data  
 
 ---
-
-## Previous Updates
-
-### v1.0.5 - Enhanced Structure Detail Page
-
-**Comprehensive Fuel Dashboard**
-- **Detailed consumption breakdown cards** showing hourly, daily, weekly, monthly, and quarterly rates
-- **Improved fuel projections** with estimated blocks remaining, volume in m³, and precise time calculations
-- **Historical analysis integration** displaying fuel bay snapshot data and refuel event detection
-- **Consumption anomaly alerts** to identify potential service changes
-
-**Visual Improvements**
-- **Enhanced dark theme support** with better contrast and improved color palette
-- **Service status indicators** with clear online/offline visual display
-- **Modern chart visualization** with dark-themed gradients and improved tooltips
-- **Better event tracking** in fuel history table with change indicators and event badges
-
-**User Experience**
-- Clearer explanation of service-based calculations
-- Real-time consumption updates when services change
-- Better mobile responsiveness
-- Improved data presentation and readability
 
 📖 **[View full changelog on GitHub Wiki →](https://github.com/MattFalahe/Structure-Manager/wiki/Changelog)**
 
