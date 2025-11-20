@@ -122,45 +122,16 @@
         margin-bottom: 1rem;
     }
     
-    /* Badge styling - High contrast for all themes */
-    .badge-danger {
-        background-color: #dc3545 !important;
-        color: #fff !important;
-        font-weight: bold;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-    
-    .badge-warning {
-        background-color: #ff9800 !important;
-        color: #000 !important;
-        font-weight: bold;
-        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
-    }
-    
-    .badge-info {
-        background-color: #2196f3 !important;
-        color: #fff !important;
-        font-weight: bold;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-    
-    .badge-secondary {
-        background-color: #6c757d !important;
-        color: #fff !important;
-        font-weight: bold;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-    
-    .badge-success {
-        background-color: #4caf50 !important;
-        color: #000 !important;
-        font-weight: bold;
-        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
-    }
-    
     /* Metenox badges */
     .badge-metenox {
         background-color: #9c27b0 !important;
+        color: #ffffff !important;
+        font-weight: bold;
+    }
+    
+    /* POS badges */
+    .badge-pos {
+        background-color: #e91e63 !important;
         color: #ffffff !important;
         font-weight: bold;
     }
@@ -173,6 +144,26 @@
         padding: 1rem;
         margin-top: 0.75rem;
         box-shadow: 0 2px 8px rgba(156, 39, 176, 0.2);
+    }
+    
+    /* POS dual fuel display - Universal theme support */
+    .pos-dual-fuel {
+        background: transparent;
+        border: 2px solid #e91e63;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 0.75rem;
+        box-shadow: 0 2px 8px rgba(233, 30, 99, 0.2);
+    }
+    
+    .pos-resource {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+        background: rgba(0, 0, 0, 0.05);
     }
     
     .metenox-resource {
@@ -299,6 +290,8 @@
 @endpush
 
 @section('content')
+<div class="structure-manager-wrapper">
+
 <div class="row">
     <div class="col-md-12">
         <div class="card">
@@ -357,6 +350,8 @@
         </div>
     </div>
 </div>
+
+</div><!-- /.structure-manager-wrapper -->
 @endsection
 
 @push('javascript')
@@ -443,16 +438,34 @@ function initializeCriticalAlerts() {
                 let statusColor = alert.status === 'critical' ? 'danger' : 'warning';
                 let daysClass = alert.status === 'critical' ? 'fuel-critical' : 'fuel-warning';
                 
+                // Check if Metenox
+                let isMetenox = alert.structure_type === 'Metenox Moon Drill' && alert.metenox_data;
+                
+                // Check if POS
+                let isPOS = alert.structure_category === 'pos' && alert.pos_data;
+                
                 // Format time display
                 let timeDisplay = '';
-                if (alert.days_remaining !== undefined && alert.remaining_hours !== undefined) {
+                if (isPOS && alert.pos_data && alert.pos_data.actual_days_remaining !== undefined) {
+                    // For POS: Use the correct calculation from starbase_fuel_history
+                    let totalHours = alert.pos_data.actual_days_remaining * 24;
+                    let days = Math.floor(totalHours / 24);
+                    let hours = Math.floor(totalHours % 24);  // Round DOWN - POS hasn't consumed the next hour yet!
+                    timeDisplay = days + 'd ' + hours + 'h';
+                } else if (alert.days_remaining !== undefined && alert.remaining_hours !== undefined) {
+                    // For Upwell structures: Use the generic calculation
                     timeDisplay = alert.days_remaining + 'd ' + alert.remaining_hours + 'h';
                 } else {
                     timeDisplay = alert.days_remaining + ' Days';
                 }
                 
-                // Calculate hours remaining
-                let hoursLeft = alert.hours_remaining || (alert.days_remaining * 24);
+                // Calculate hours remaining (use correct source for POS)
+                let hoursLeft;
+                if (isPOS && alert.pos_data && alert.pos_data.actual_days_remaining !== undefined) {
+                    hoursLeft = alert.pos_data.actual_days_remaining * 24;
+                } else {
+                    hoursLeft = alert.hours_remaining || (alert.days_remaining * 24);
+                }
                 
                 // Calculate urgency message
                 let urgencyMsg = '';
@@ -470,9 +483,6 @@ function initializeCriticalAlerts() {
                 let expiresAt = moment(alert.fuel_expires);
                 let timeUntilEmpty = expiresAt.fromNow();
                 
-                // Check if Metenox
-                let isMetenox = alert.structure_type === 'Metenox Moon Drill' && alert.metenox_data;
-                
                 html += `
                     <div class="alert-card ${statusClass} card">
                         <div class="card-body">
@@ -484,7 +494,15 @@ function initializeCriticalAlerts() {
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
                                             <h5 class="mb-1">
-                                                <a href="{{ url('structure-manager/structure') }}/${alert.structure_id}">
+                `;
+                
+                // Use correct URL based on structure type
+                let detailUrl = isPOS ? 
+                    "{{ url('structure-manager/pos') }}/" + alert.structure_id :
+                    "{{ url('structure-manager/structure') }}/" + alert.structure_id;
+                
+                html += `
+                                                <a href="${detailUrl}">
                                                     ${alert.structure_name}
                                                 </a>
                 `;
@@ -522,6 +540,32 @@ function initializeCriticalAlerts() {
                     `;
                 }
                 
+                // Add PROMINENT limiting factor badge for POS
+                if (isPOS) {
+                    let pd = alert.pos_data || {};
+                    let limitingFactor = pd.limiting_factor || 'fuel';
+                    let limitingIcon = 'fa-fire';
+                    let limitingText = 'FUEL BLOCKS LIMITING';
+                    let limitingClass = 'limiting-fuel';
+                    
+                    if (limitingFactor === 'charters') {
+                        limitingIcon = 'fa-scroll';
+                        limitingText = 'CHARTERS LIMITING';
+                        limitingClass = 'limiting-gas'; // Reuse gas styling
+                    } else if (limitingFactor === 'none') {
+                        limitingIcon = 'fa-exclamation-triangle';
+                        limitingText = 'NO FUEL DETECTED';
+                        limitingClass = 'limiting-none';
+                    }
+                    
+                    html += `
+                                                <span class="limiting-indicator ${limitingClass}">
+                                                    <i class="fas ${limitingIcon}"></i>
+                                                    ${limitingText}
+                                                </span>
+                    `;
+                }
+                
                 html += `
                                             </h5>
                                             <p class="mb-2">
@@ -532,6 +576,11 @@ function initializeCriticalAlerts() {
                 // Add Metenox badge
                 if (isMetenox) {
                     html += `<span class="badge badge-metenox ml-1"><i class="fas fa-moon"></i> Metenox</span>`;
+                }
+                
+                // Add POS badge
+                if (isPOS) {
+                    html += `<span class="badge badge-pos ml-1"><i class="fas fa-tower-broadcast"></i> POS</span>`;
                 }
                 
                 html += `
@@ -618,6 +667,113 @@ function initializeCriticalAlerts() {
                     `;
                 }
                 
+                // Show POS fuel status - Fuel blocks, Charters (if needed), Strontium
+                if (isPOS) {
+                    let pd = alert.pos_data || {};
+                    
+                    let fuelBlocksQty = pd.fuel_blocks_quantity || 0;
+                    let charterQty = pd.charter_quantity || 0;
+                    let strontiumQty = pd.strontium_quantity || 0;
+                    let requiresCharters = pd.requires_charters || false;
+                    let limitingFactor = pd.limiting_factor || 'fuel';
+                    let spaceType = pd.space_type || 'Unknown';
+                    
+                    // Use the CORRECT POS data from starbase_fuel_history (actual_days_remaining)
+                    // This matches the POS tab display and is the correct calculation
+                    let totalDaysRemaining = pd.actual_days_remaining || 0;
+                    let totalHours = totalDaysRemaining * 24;
+                    let fuelDays = Math.floor(totalHours / 24);
+                    let fuelHours = Math.floor(totalHours % 24);  // Round DOWN - POS hasn't consumed the next hour yet!
+                    
+                    // For charters (if any)
+                    let charterDays = Math.floor((pd.charter_days_remaining || 0));
+                    let charterHours = Math.floor(((pd.charter_days_remaining || 0) % 1) * 24);  // Round DOWN
+                    let strontiumHours = pd.strontium_hours_available || 0;
+                    
+                    // Format time displays - show only hours if < 1 day for clarity
+                    let fuelTimeDisplay = fuelDays == 0 ? fuelHours + 'h' : fuelDays + 'd ' + fuelHours + 'h';
+                    let charterTimeDisplay = requiresCharters ? 
+                        (charterDays == 0 ? charterHours + 'h' : charterDays + 'd ' + charterHours + 'h') : '';
+                    
+                    let fuelClass = limitingFactor === 'fuel' ? 'fuel-critical' : '';
+                    let charterClass = limitingFactor === 'charters' ? 'fuel-critical' : '';
+                    
+                    // Determine status badges
+                    let fuelStatus = limitingFactor === 'fuel' ? 
+                        '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
+                        '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>';
+                    
+                    let charterStatus = limitingFactor === 'charters' ? 
+                        '<span class="limiting-factor-badge"><i class="fas fa-exclamation-circle"></i> LIMITING</span>' : 
+                        '<span class="badge badge-success" style="background: #4caf50 !important; color: #000 !important; font-weight: bold;">OK</span>';
+                    
+                    html += `
+                        <div class="pos-dual-fuel">
+                            <strong style="color: #e91e63; font-size: 1.05rem;">
+                                <i class="fas fa-tower-broadcast"></i> POS Fuel System Status (${spaceType})
+                            </strong>
+                            <hr style="margin: 0.75rem 0; border: 0; border-top: 2px solid #e91e63; opacity: 0.5;">
+                            
+                            <div class="pos-resource">
+                                <span>
+                                    <i class="fas fa-fire" style="color: #2196f3;"></i> 
+                                    <strong>Fuel Blocks:</strong>
+                                    <span class="${fuelClass}" style="font-size: 1.1rem;">${fuelTimeDisplay}</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${fuelBlocksQty.toLocaleString()} blocks)</span>
+                                </span>
+                                ${fuelStatus}
+                            </div>
+                    `;
+                    
+                    // Show charters only if required (High-Sec)
+                    if (requiresCharters) {
+                        html += `
+                            <div class="pos-resource">
+                                <span>
+                                    <i class="fas fa-scroll" style="color: #ff9800;"></i> 
+                                    <strong>Starbase Charters:</strong>
+                                    <span class="${charterClass}" style="font-size: 1.1rem;">${charterTimeDisplay}</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${charterQty.toLocaleString()} charters)</span>
+                                </span>
+                                ${charterStatus}
+                            </div>
+                        `;
+                    }
+                    
+                    // Show strontium if available
+                    if (strontiumQty > 0 || strontiumHours > 0) {
+                        let strontiumStatus = strontiumHours < 6 ? 
+                            '<span class="badge badge-warning" style="background: #ff9800 !important; color: #000 !important; font-weight: bold;">LOW</span>' :
+                            '<span class="badge badge-info" style="background: #2196f3 !important; color: #fff !important; font-weight: bold;">OK</span>';
+                        
+                        html += `
+                            <div class="pos-resource">
+                                <span>
+                                    <i class="fas fa-shield-alt" style="color: #9c27b0;"></i> 
+                                    <strong>Strontium (Reinforcement):</strong>
+                                    <span style="font-size: 1.1rem;">${strontiumHours > 0 ? strontiumHours.toFixed(1) + ' hours' : '0 hours'}</span>
+                                    <span style="opacity: 0.7; margin-left: 0.5rem;">(${strontiumQty.toLocaleString()} units)</span>
+                                </span>
+                                ${strontiumStatus}
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
+                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(233, 30, 99, 0.3); opacity: 0.85;">
+                                <small>
+                                    <i class="fas fa-info-circle" style="color: #2196f3;"></i> 
+                                    POS will go offline when <strong style="color: #ff5722;">${limitingFactor === 'charters' ? 'starbase charters' : 'fuel blocks'}</strong> run out
+                                    ${requiresCharters ? ' <span class="badge badge-warning" style="font-size: 0.7rem; margin-left: 0.25rem;">High-Sec: Needs Charters</span>' : ''}
+                                </small>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // ========================================
+                // ALERT STATS SECTION (appears for ALL structures)
+                // ========================================
                 html += `
                     <div class="alert-stats">
                         <div class="stat-badge">
@@ -628,7 +784,7 @@ function initializeCriticalAlerts() {
                         </div>
                 `;
                 
-                // Add Limiting Factor box for Metenox - ALWAYS show, even if unknown
+                // Add Limiting Factor for Metenox ONLY (before weekly/monthly stats)
                 if (isMetenox) {
                     let limitingFactor = 'unknown';
                     let limitingIcon = 'fa-question';
@@ -683,7 +839,33 @@ function initializeCriticalAlerts() {
                     `;
                 }
                 
-                html += `
+                // Weekly and Monthly requirement badges - DIFFERENT for POS vs Upwell
+                if (alert.structure_category === 'pos' && alert.fuel_requirements) {
+                    // POS: Use static pre-calculated values from backend
+                    const weeklyBlocks = alert.fuel_requirements.fuel_per_week;
+                    const monthlyBlocks = alert.fuel_requirements.fuel_per_month;
+                    const weeklyVolume = alert.fuel_requirements.volume_per_week;
+                    const monthlyVolume = alert.fuel_requirements.volume_per_month;
+                    const factionType = alert.fuel_requirements.faction_type;
+                    
+                    html += `
+                        <div class="stat-badge">
+                            <i class="fas fa-gas-pump text-primary"></i>
+                            <strong>Weekly Requirement:</strong><br>
+                            <span>${weeklyBlocks.toLocaleString()} blocks</span><br>
+                            <small>(${weeklyVolume.toLocaleString()} m³)</small>
+                            ${factionType !== 'T1' ? '<br><span class="badge badge-info" style="font-size: 0.7rem;">' + factionType + ' Tower Bonus</span>' : ''}
+                        </div>
+                        <div class="stat-badge">
+                            <i class="fas fa-cubes text-info"></i>
+                            <strong>30-Day Need:</strong><br>
+                            <span>${monthlyBlocks.toLocaleString()} blocks</span><br>
+                            <small>(${monthlyVolume.toLocaleString()} m³)</small>
+                        </div>
+                    `;
+                } else {
+                    // Upwell structures: Use blocks_needed (already calculated weekly)
+                    html += `
                         <div class="stat-badge">
                             <i class="fas fa-gas-pump text-primary"></i>
                             <strong>Weekly Requirement:</strong><br>
@@ -696,7 +878,8 @@ function initializeCriticalAlerts() {
                             <span>${(alert.blocks_needed * 4.3).toFixed(0)} blocks</span><br>
                             <small>(${(alert.blocks_needed * 4.3 * 5).toFixed(0)} m³)</small>
                         </div>
-                `;
+                    `;
+                }
                 
                 // Add magmatic gas requirements for Metenox
                 if (isMetenox) {
@@ -710,20 +893,21 @@ function initializeCriticalAlerts() {
                     `;
                 }
                 
+                // Close alert-stats section
                 html += `
                     </div>
                     
                     <div class="mt-2">
                         ${urgencyMsg}
                     </div>
-                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                `;
-                            });
-                            
-                            $('#alerts-container').html(html);
+                                </div>
+                            `;
+                        });
+                        
+                        $('#alerts-container').html(html);
             
         }).fail(function(xhr, status, error) {
             console.error('AJAX Error:', {xhr: xhr, status: status, error: error});

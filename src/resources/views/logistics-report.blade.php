@@ -70,6 +70,8 @@
 @endpush
 
 @section('content')
+<div class="structure-manager-wrapper">
+
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">Fuel Requirements Report - {{ \Carbon\Carbon::now()->format('Y-m-d H:i') }} EVE</h3>
@@ -129,6 +131,8 @@
         </div>
     </div>
 </div>
+
+</div><!-- /.structure-manager-wrapper -->
 @endsection
 
 @push('javascript')

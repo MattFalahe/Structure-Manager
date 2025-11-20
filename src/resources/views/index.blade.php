@@ -108,53 +108,12 @@
         visibility: visible;
         opacity: 1;
     }
-    
-    /* Service badges - matching consumption column style */
-    .badge-info {
-        background-color: rgba(23, 162, 184, 0.15) !important;
-        color: #5dade2 !important;
-        border: 1px solid rgba(23, 162, 184, 0.3) !important;
-        font-weight: 500 !important;
-    }
-    
-    .badge-secondary {
-        background-color: rgba(108, 117, 125, 0.15) !important;
-        color: #a0a0a0 !important;
-        border: 1px solid rgba(108, 117, 125, 0.3) !important;
-        font-weight: 500 !important;
-    }
-    
-    .badge-primary {
-        background-color: rgba(0, 123, 255, 0.15) !important;
-        color: #5dade2 !important;
-        border: 1px solid rgba(0, 123, 255, 0.3) !important;
-        font-weight: 500 !important;
-    }
-    
-    .badge-success {
-        background-color: rgba(40, 167, 69, 0.15) !important;
-        color: #51cf66 !important;
-        border: 1px solid rgba(40, 167, 69, 0.3) !important;
-        font-weight: 500 !important;
-    }
-    
-    .badge-warning {
-        background-color: rgba(255, 193, 7, 0.15) !important;
-        color: #ffd43b !important;
-        border: 1px solid rgba(255, 193, 7, 0.3) !important;
-        font-weight: 500 !important;
-    }
-    
-    .badge-danger {
-        background-color: rgba(220, 53, 69, 0.15) !important;
-        color: #ff6b6b !important;
-        border: 1px solid rgba(220, 53, 69, 0.3) !important;
-        font-weight: 500 !important;
-    }
 </style>
 @endpush
 
 @section('content')
+<div class="structure-manager-wrapper">
+
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">Structure Fuel Management</h3>
@@ -239,6 +198,8 @@
         </div>
     </div>
 </div>
+
+</div><!-- /.structure-manager-wrapper -->
 @endsection
 
 @push('javascript')

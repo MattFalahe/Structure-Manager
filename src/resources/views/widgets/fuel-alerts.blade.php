@@ -1,3 +1,5 @@
+<div class="structure-manager-wrapper">
+
 <div class="card card-danger" id="fuel-alerts-widget">
     <div class="card-header">
         <h3 class="card-title">
@@ -40,6 +42,8 @@
         </button>
     </div>
 </div>
+
+</div><!-- /.structure-manager-wrapper -->
 
 <style>
     /* Metenox indicator in widget */

@@ -7,6 +7,9 @@ use StructureManager\Console\Commands\TrackFuelCommand;
 use StructureManager\Console\Commands\CleanupHistoryCommand;
 use StructureManager\Console\Commands\AnalyzeConsumptionCommand;
 use StructureManager\Console\Commands\CreateTestMetenoxCommand;
+use StructureManager\Console\Commands\TrackPosesFuelCommand;
+use StructureManager\Console\Commands\AnalyzePosConsumptionCommand;
+use StructureManager\Console\Commands\NotifyPosFuelCommand;
 use StructureManager\Database\Seeders\ScheduleSeeder;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
@@ -30,6 +33,9 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 CleanupHistoryCommand::class,
                 AnalyzeConsumptionCommand::class,
                 CreateTestMetenoxCommand::class,
+                TrackPosesFuelCommand::class,
+                AnalyzePosConsumptionCommand::class,
+                NotifyPosFuelCommand::class,
             ]);
         }
 

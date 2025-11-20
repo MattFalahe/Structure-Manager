@@ -14,7 +14,7 @@ class FuelAlertController extends Controller
      */
     const METENOX_TYPE_ID = 81826;
     
-    /**
+    /** 
      * Magmatic Gas type ID
      */
     const MAGMATIC_GAS_TYPE_ID = 81143;
@@ -55,24 +55,29 @@ class FuelAlertController extends Controller
     
     /**
      * Get critical fuel alerts for dashboard widget
+     * Now includes both Upwell structures AND POS
      */
     public function getCriticalAlerts()
     {
         try {
-            $query = DB::table('corporation_structures as cs')
+            // Get user's accessible corporation IDs
+            $userCorps = $this->getUserCorporations();
+            
+            // ========================================
+            // PART 1: Fetch Upwell Structures
+            // ========================================
+            $upwellQuery = DB::table('corporation_structures as cs')
                 ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
                 ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
                 ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
                 ->whereNotNull('cs.fuel_expires')
                 ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 336'); // < 14 days
             
-            // Filter by user's corporations
-            $userCorps = $this->getUserCorporations();
             if ($userCorps !== null) {
-                $query->whereIn('cs.corporation_id', $userCorps);
+                $upwellQuery->whereIn('cs.corporation_id', $userCorps);
             }
             
-            $structures = $query->select(
+            $structures = $upwellQuery->select(
                     'cs.structure_id',
                     'us.name as structure_name',
                     'it.typeName as structure_type',
@@ -81,13 +86,13 @@ class FuelAlertController extends Controller
                     'cs.fuel_expires',
                     DB::raw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) as hours_remaining'),
                     DB::raw('FLOOR(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) / 24) as days_remaining'),
-                    DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires), 24) as remaining_hours')
+                    DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires), 24) as remaining_hours'),
+                    DB::raw("'upwell' as structure_category")
                 )
                 ->orderBy('hours_remaining', 'asc')
-                ->limit(10)
                 ->get();
             
-            // Calculate fuel blocks needed and add Metenox data
+            // Calculate fuel blocks needed and add Metenox data for Upwell structures
             foreach ($structures as $structure) {
                 try {
                     $structure->blocks_needed = FuelCalculator::getFuelRequirement(
@@ -150,7 +155,6 @@ class FuelAlertController extends Controller
                         ];
                     } catch (\Exception $e) {
                         \Log::warning("Failed to fetch Metenox data for structure {$structure->structure_id}: " . $e->getMessage());
-                        // Set default metenox_data on error
                         $structure->metenox_data = [
                             'fuel_blocks_quantity' => 0,
                             'magmatic_gas_quantity' => 0,
@@ -163,7 +167,95 @@ class FuelAlertController extends Controller
                 }
             }
             
-            return response()->json($structures);
+            // ========================================
+            // PART 2: Fetch POS (Player Owned Starbases)
+            // ========================================
+            // Get latest fuel history for each POS with low fuel
+            $posSubquery = DB::table('starbase_fuel_history as sfh1')
+                ->select('sfh1.starbase_id', DB::raw('MAX(sfh1.created_at) as latest_created_at'))
+                ->groupBy('sfh1.starbase_id');
+            
+            $posQuery = DB::table('starbase_fuel_history as sfh')
+                ->joinSub($posSubquery, 'latest', function ($join) {
+                    $join->on('sfh.starbase_id', '=', 'latest.starbase_id')
+                         ->on('sfh.created_at', '=', 'latest.latest_created_at');
+                })
+                ->join('invTypes as it', 'sfh.tower_type_id', '=', 'it.typeID')
+                ->whereNotNull('sfh.actual_days_remaining')
+                ->where('sfh.actual_days_remaining', '<', 14); // < 14 days
+            
+            if ($userCorps !== null) {
+                $posQuery->whereIn('sfh.corporation_id', $userCorps);
+            }
+            
+            $poses = $posQuery->select(
+                    'sfh.starbase_id as structure_id',
+                    'sfh.starbase_name as structure_name',
+                    'it.typeName as structure_type',
+                    'sfh.tower_type_id as type_id',
+                    'sfh.metadata',
+                    'sfh.space_type',
+                    'sfh.estimated_fuel_expiry as fuel_expires',
+                    'sfh.actual_days_remaining',
+                    'sfh.fuel_blocks_quantity',
+                    'sfh.fuel_days_remaining',
+                    'sfh.charter_quantity',
+                    'sfh.charter_days_remaining',
+                    'sfh.requires_charters',
+                    'sfh.limiting_factor',
+                    'sfh.strontium_quantity',
+                    'sfh.strontium_hours_available',
+                    DB::raw('TIMESTAMPDIFF(HOUR, NOW(), sfh.estimated_fuel_expiry) as hours_remaining'),
+                    DB::raw('FLOOR(TIMESTAMPDIFF(HOUR, NOW(), sfh.estimated_fuel_expiry) / 24) as days_remaining'),
+                    DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), sfh.estimated_fuel_expiry), 24) as remaining_hours'),
+                    DB::raw("'pos' as structure_category")
+                )
+                ->orderBy('hours_remaining', 'asc')
+                ->get();
+            
+            // Process POS data
+            foreach ($poses as $pos) {
+                // Decode metadata JSON
+                $metadata = is_string($pos->metadata) ? json_decode($pos->metadata, true) : $pos->metadata;
+                $pos->system_name = $metadata['system_name'] ?? 'Unknown System';
+                
+                // Determine status
+                $pos->status = $pos->hours_remaining < 168 ? 'critical' : 'warning';
+                
+                // Get static fuel requirements using POSFuelCalculator
+                // This handles ALL tower types including faction/officer with correct modifiers
+                $fuelRequirements = \StructureManager\Helpers\PosFuelCalculator::getStaticFuelRequirements($pos->type_id);
+                
+                // Use the static weekly calculation
+                $pos->blocks_needed = $fuelRequirements['fuel_per_week'];
+                
+                // Also store the full fuel requirements for frontend use
+                $pos->fuel_requirements = $fuelRequirements;
+                
+                // Add POS-specific data structure (similar to metenox_data)
+                $pos->pos_data = [
+                    'fuel_blocks_quantity' => $pos->fuel_blocks_quantity ?? 0,
+                    'charter_quantity' => $pos->charter_quantity ?? 0,
+                    'strontium_quantity' => $pos->strontium_quantity ?? 0,
+                    'fuel_days_remaining' => round($pos->fuel_days_remaining ?? 0, 1),
+                    'charter_days_remaining' => round($pos->charter_days_remaining ?? 0, 1),
+                    'strontium_hours_available' => round($pos->strontium_hours_available ?? 0, 1),
+                    'requires_charters' => (bool)($pos->requires_charters ?? false),
+                    'limiting_factor' => $pos->limiting_factor ?? 'fuel',
+                    'space_type' => $pos->space_type ?? 'Unknown',
+                    'actual_days_remaining' => round($pos->actual_days_remaining ?? 0, 1)
+                ];
+            }
+            
+            // ========================================
+            // PART 3: Merge and Sort All Structures
+            // ========================================
+            $allStructures = $structures->concat($poses)
+                ->sortBy('hours_remaining')
+                ->take(15) // Show top 15 most critical (mix of Upwell and POS)
+                ->values();
+            
+            return response()->json($allStructures);
             
         } catch (\Exception $e) {
             \Log::error('Structure Manager - Error in getCriticalAlerts: ' . $e->getMessage());
