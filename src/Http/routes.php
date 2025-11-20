@@ -71,10 +71,10 @@ Route::group([
         'middleware' => 'can:structure-manager.view',
     ]);
 
-    // About page - View
-    Route::get('/about', [
-        'as' => 'structure-manager.about',
-        'uses' => 'StructureManagerController@about',
+    // Help & Documentation - View
+    Route::get('/help', [
+        'as' => 'structure-manager.help',
+        'uses' => 'StructureManagerController@help',
         'middleware' => 'can:structure-manager.view',
     ]);
 
@@ -104,6 +104,70 @@ Route::group([
         'as' => 'structure-manager.structure-reserves',
         'uses' => 'FuelReserveController@getStructureReserveHistory',
         'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // ============================================
+    // POS (Player Owned Starbase) Management
+    // ============================================
+    
+    // POS List View
+    Route::get('/pos', [
+        'as' => 'structure-manager.pos.index',
+        'uses' => 'PosManagerController@index',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // POS Data - JSON
+    Route::get('/pos/data', [
+        'as' => 'structure-manager.pos.data',
+        'uses' => 'PosManagerController@getPosesData',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // POS Detail View
+    Route::get('/pos/{id}', [
+        'as' => 'structure-manager.pos.detail',
+        'uses' => 'PosManagerController@show',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // POS Critical Alerts - JSON
+    Route::get('/pos/alerts/critical', [
+        'as' => 'structure-manager.pos.alerts',
+        'uses' => 'PosManagerController@getCriticalAlerts',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+    
+    // ============================================
+    // Settings
+    // ============================================
+    
+    // Settings Page
+    Route::get('/settings', [
+        'as' => 'structure-manager.settings',
+        'uses' => 'SettingsController@index',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Update Settings
+    Route::post('/settings', [
+        'as' => 'structure-manager.settings.update',
+        'uses' => 'SettingsController@update',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Test Webhook
+    Route::post('/settings/test-webhook', [
+        'as' => 'structure-manager.settings.test-webhook',
+        'uses' => 'SettingsController@testWebhook',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Reset Settings
+    Route::get('/settings/reset', [
+        'as' => 'structure-manager.settings.reset',
+        'uses' => 'SettingsController@reset',
+        'middleware' => 'can:structure-manager.admin',
     ]);
     
 });

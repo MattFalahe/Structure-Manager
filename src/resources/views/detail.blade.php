@@ -22,20 +22,6 @@
         background: rgba(0, 0, 0, 0.3);
     }
     
-    /* Better badge contrast */
-    .badge-success {
-        background-color: #28a745 !important;
-    }
-    
-    .badge-danger {
-        background-color: #dc3545 !important;
-    }
-    
-    .badge-warning {
-        background-color: #ffc107 !important;
-        color: #000000 !important;
-    }
-    
     /* Stat boxes */
     .stat-box {
         background: rgba(0, 0, 0, 0.2);
@@ -119,6 +105,8 @@
 @endpush
 
 @section('content')
+<div class="structure-manager-wrapper">
+
 <div class="row">
     <div class="col-md-6">
         <div class="card">
@@ -754,6 +742,8 @@
         @endif
     </div>
 </div>
+
+</div><!-- /.structure-manager-wrapper -->
 @endsection
 
 @push('javascript')

@@ -78,13 +78,6 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.15);
     }
     
-    /* Better badge contrast */
-    .badge-success { background-color: #51cf66; color: #000; }
-    .badge-warning { background-color: #ffd43b; color: #000; }
-    .badge-danger { background-color: #ff6b6b; color: #fff; }
-    .badge-info { background-color: #4dabf7; color: #000; }
-    .badge-secondary { background-color: #868e96; color: #fff; }
-    
     /* Security status badges */
     .sec-high { background-color: #51cf66; color: #000; }
     .sec-low { background-color: #ffd43b; color: #000; }
@@ -124,6 +117,8 @@
 @endpush
 
 @section('full')
+<div class="structure-manager-wrapper">
+
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">Fuel Reserves by System</h3>
@@ -179,6 +174,8 @@
         </div>
     </div>
 </div>
+
+</div><!-- /.structure-manager-wrapper -->
 @endsection
 
 @push('javascript')

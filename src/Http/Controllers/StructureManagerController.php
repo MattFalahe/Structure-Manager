@@ -356,8 +356,13 @@ class StructureManagerController extends Controller
         return response()->json($analysis);
     }
 
-    public function about()
+    /**
+     * Display the help and documentation page
+     *
+     * @return \Illuminate\View\View
+     */
+    public function help()
     {
-        return view('structure-manager::about');
+        return view('structure-manager::help.index');
     }
 }

@@ -10,10 +10,17 @@ return [
         'permission'    => 'structure-manager.view',
         'entries'       => [
             [
-                'name'  => 'Fuel Status',
+                'name'  => 'Upwell Structures',
                 'label' => 'structure-manager::menu.fuel_status',
                 'icon'  => 'fas fa-gas-pump',
                 'route' => 'structure-manager.index',
+                'permission' => 'structure-manager.view',
+            ],
+            [
+                'name'  => 'Control Towers (POS)',
+                'label' => 'structure-manager::menu.control_towers',
+                'icon'  => 'fas fa-broadcast-tower',
+                'route' => 'structure-manager.pos.index',
                 'permission' => 'structure-manager.view',
             ],
             [
@@ -38,10 +45,17 @@ return [
                 'permission' => 'structure-manager.view',
             ],
             [
-                'name'  => 'About',
-                'label' => 'structure-manager::menu.about',
-                'icon'  => 'fas fa-info-circle',
-                'route' => 'structure-manager.about',
+                'name'  => 'Settings',
+                'label' => 'structure-manager::menu.settings',
+                'icon'  => 'fas fa-cog',
+                'route' => 'structure-manager.settings',
+                'permission' => 'structure-manager.admin',
+            ],
+            [
+                'name'  => 'Help & Documentation',
+                'label' => 'structure-manager::menu.help',
+                'icon'  => 'fas fa-question-circle',
+                'route' => 'structure-manager.help',
                 'permission' => 'structure-manager.view',
             ],
         ]
