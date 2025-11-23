@@ -88,6 +88,43 @@
         font-size: 0.875rem;
         color: #a0a0a0;
     }
+    
+    /* POS State badges */
+    .state-online { 
+        background-color: rgba(40, 167, 69, 0.2);
+        color: #51cf66;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .state-reinforced { 
+        background-color: rgba(255, 193, 7, 0.2);
+        color: #ffd43b;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        animation: pulse-state 2s infinite;
+    }
+
+    .state-offline { 
+        background-color: rgba(108, 117, 125, 0.2);
+        color: #a0a0a0;
+        border: 1px solid rgba(108, 117, 125, 0.3);
+    }
+
+    .state-onlining {
+        background-color: rgba(23, 162, 184, 0.2);
+        color: #17a2b8;
+        border: 1px solid rgba(23, 162, 184, 0.3);
+    }
+
+    .state-unanchored {
+        background-color: rgba(220, 53, 69, 0.2);
+        color: #ff6b6b;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+
+    @keyframes pulse-state {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
 </style>
 @endpush
 
@@ -125,6 +162,7 @@
                             <th>Tower Type</th>
                             <th>System</th>
                             <th>Space Type</th>
+                            <th>State</th>
                             <th>Fuel Status</th>
                             <th>Strontium</th>
                             <th>Charters</th>
@@ -190,6 +228,39 @@ $(document).ready(function() {
                     var badgeClass = data === 'High-Sec' ? 'space-highsec' : 
                                     (data === 'Low-Sec' ? 'space-lowsec' : 'space-nullsec');
                     return '<span class="status-badge ' + badgeClass + '">' + data + '</span>';
+                }
+            },
+            { 
+                data: 'state',
+                render: function(data, type, row) {
+                    // Handle null/undefined state (POS not synced yet)
+                    if (data === null || data === undefined) {
+                        return '<span class="badge badge-secondary" title="POS state not yet synced from ESI">' +
+                               '<i class="fas fa-question"></i> Unknown' +
+                               '</span><br><small class="text-muted">Awaiting ESI sync</small>';
+                    }
+                    
+                    // Map state integer to name and styling
+                    var stateMap = {
+                        0: { name: 'Unanchored', class: 'state-unanchored', icon: 'fa-times-circle' },
+                        1: { name: 'Offline', class: 'state-offline', icon: 'fa-power-off' },
+                        2: { name: 'Onlining', class: 'state-onlining', icon: 'fa-spinner' },
+                        3: { name: 'Reinforced', class: 'state-reinforced', icon: 'fa-shield-alt' },
+                        4: { name: 'Online', class: 'state-online', icon: 'fa-check-circle' }
+                    };
+                    
+                    var state = stateMap[data] || { name: 'Unknown', class: 'badge-secondary', icon: 'fa-question' };
+                    
+                    var html = '<span class="status-badge ' + state.class + '" title="State ' + data + '">' +
+                               '<i class="fas ' + state.icon + '"></i> ' + state.name +
+                               '</span>';
+                    
+                    // Add warning for reinforced POSes
+                    if (data === 3) {
+                        html += '<br><small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Under Attack</small>';
+                    }
+                    
+                    return html;
                 }
             },
             { 
@@ -261,7 +332,7 @@ $(document).ready(function() {
                 }
             }
         ],
-        order: [[4, 'asc']], // Sort by fuel status (critical first)
+        order: [[5, 'asc']], // Sort by fuel status (critical first)
         pageLength: 25,
         language: {
             emptyTable: "No POSes found. Ensure ESI sync is running and corporation has POSes deployed."

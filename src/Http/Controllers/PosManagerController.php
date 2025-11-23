@@ -107,6 +107,11 @@ class PosManagerController extends Controller
             
             // Enrich with fuel data from latest history
             $enrichedPoses = $poses->map(function($pos) {
+                // Convert state from string to integer
+                // SeAT stores state as string (e.g., "online", "offline")
+                // State values: 0=unanchored, 1=offline, 2=onlining, 3=reinforced, 4=online
+                $pos->state = $this->convertStateToInteger($pos->state);
+                
                 // Get latest fuel history
                 $history = StarbaseFuelHistory::where('starbase_id', $pos->starbase_id)
                     ->orderBy('created_at', 'desc')
@@ -342,42 +347,46 @@ class PosManagerController extends Controller
     {
         $userCorpIds = $this->getUserCorporations();
         
-        // Get POSes with critical fuel (< 7 days)
+        // FIXED: Get POSes with critical fuel (< 7 days) - ONLY ONLINE (state = 4) and REINFORCED (state = 3)
+        // Query the state from starbase_fuel_history which stores it as integer, not from corporation_starbases which stores it as string
         $criticalFuel = StarbaseFuelHistory::whereIn('id', function($query) {
                 $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
+            ->whereIn('starbase_fuel_history.state', [3, 4]) // FIXED: Use state from history table (integers)
             ->where('actual_days_remaining', '<', 7)
             ->when($userCorpIds !== null, function($query) use ($userCorpIds) {
-                return $query->whereIn('corporation_id', $userCorpIds);
+                return $query->whereIn('starbase_fuel_history.corporation_id', $userCorpIds);
             })
             ->orderBy('actual_days_remaining', 'asc')
             ->get();
         
-        // Get POSes with critical strontium (< 6 hours)
+        // FIXED: Get POSes with critical strontium (< 6 hours) - ONLY ONLINE (state = 4) and REINFORCED (state = 3)
         $criticalStrontium = StarbaseFuelHistory::whereIn('id', function($query) {
                 $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
+            ->whereIn('starbase_fuel_history.state', [3, 4]) // FIXED: Use state from history table (integers)
             ->where('strontium_hours_available', '<', 6)
             ->when($userCorpIds !== null, function($query) use ($userCorpIds) {
-                return $query->whereIn('corporation_id', $userCorpIds);
+                return $query->whereIn('starbase_fuel_history.corporation_id', $userCorpIds);
             })
             ->orderBy('strontium_hours_available', 'asc')
             ->get();
         
-        // Get POSes with low charters (< 7 days, high-sec only)
+        // FIXED: Get POSes with low charters (< 7 days, high-sec only) - ONLY ONLINE (state = 4) and REINFORCED (state = 3)
         $criticalCharters = StarbaseFuelHistory::whereIn('id', function($query) {
                 $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
+            ->whereIn('starbase_fuel_history.state', [3, 4]) // FIXED: Use state from history table (integers)
             ->where('requires_charters', true)
             ->where('charter_days_remaining', '<', 7)
             ->when($userCorpIds !== null, function($query) use ($userCorpIds) {
-                return $query->whereIn('corporation_id', $userCorpIds);
+                return $query->whereIn('starbase_fuel_history.corporation_id', $userCorpIds);
             })
             ->orderBy('charter_days_remaining', 'asc')
             ->get();
@@ -387,5 +396,44 @@ class PosManagerController extends Controller
             'critical_strontium' => $criticalStrontium,
             'critical_charters' => $criticalCharters,
         ]);
+    }
+
+    
+    /**
+     * Convert state string to integer
+     * 
+     * SeAT stores state as string in corporation_starbases (e.g., "online", "offline")
+     * but we need integer for proper display and queries
+     * 
+     * @param mixed $state State value (string or integer)
+     * @return int|null State as integer
+     */
+    private function convertStateToInteger($state)
+    {
+        // If already an integer, return it
+        if (is_int($state)) {
+            return $state;
+        }
+        
+        // If null, return null
+        if ($state === null) {
+            return null;
+        }
+        
+        // Convert string to lowercase for comparison
+        $stateString = strtolower(trim($state));
+        
+        // Map string states to integers
+        $stateMap = [
+            'unanchored' => 0,
+            'offline' => 1,
+            'onlining' => 2,
+            'reinforced' => 3,
+            'online' => 4,
+            'unanchoring' => 5,
+        ];
+        
+        // Return mapped value or null if unknown
+        return $stateMap[$stateString] ?? null;
     }
 }

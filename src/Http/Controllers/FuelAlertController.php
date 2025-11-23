@@ -171,6 +171,7 @@ class FuelAlertController extends Controller
             // PART 2: Fetch POS (Player Owned Starbases)
             // ========================================
             // Get latest fuel history for each POS with low fuel
+            // IMPORTANT: Only include ONLINE (state = 4) and REINFORCED (state = 3) POSes
             $posSubquery = DB::table('starbase_fuel_history as sfh1')
                 ->select('sfh1.starbase_id', DB::raw('MAX(sfh1.created_at) as latest_created_at'))
                 ->groupBy('sfh1.starbase_id');
@@ -180,9 +181,11 @@ class FuelAlertController extends Controller
                     $join->on('sfh.starbase_id', '=', 'latest.starbase_id')
                          ->on('sfh.created_at', '=', 'latest.latest_created_at');
                 })
+                ->join('corporation_starbases as cs', 'sfh.starbase_id', '=', 'cs.starbase_id')
                 ->join('invTypes as it', 'sfh.tower_type_id', '=', 'it.typeID')
                 ->whereNotNull('sfh.actual_days_remaining')
-                ->where('sfh.actual_days_remaining', '<', 14); // < 14 days
+                ->where('sfh.actual_days_remaining', '<', 14) // < 14 days
+                ->whereIn('sfh.state', [3, 4]); // FIXED: Only ONLINE and REINFORCED POSes (using integer state from history)
             
             if ($userCorps !== null) {
                 $posQuery->whereIn('sfh.corporation_id', $userCorps);
