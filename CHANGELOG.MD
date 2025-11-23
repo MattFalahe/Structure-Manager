@@ -5,7 +5,37 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
-## 🆕 Version 1.0.8 — *November 2025*
+## 🆕 Version 1.0.9 — *November 2025*
+
+### 🐛 Bug Fixes
+
+**Fixed POS State Recognition and Critical Alerts Filtering**
+
+**Issue:** POSes were not appearing correctly in critical alerts and notifications regardless of their state.
+
+**What's Fixed:**
+
+- **Fixed POS state recognition** - Plugin now correctly identifies POS states (unanchored, offline, onlining, reinforced, online, unanchoring)
+
+- **Critical alerts page filtering** - Critical alerts page will now only show POSes that are **online** or **reinforced** and actively consuming fuel. POSes in other states (offline, unanchored, etc.) are excluded from alerts as they do not consume fuel.
+
+- **Notification filtering** - Discord/Slack notifications will now only be sent for POSes in **online** or **reinforced** states. Any other state will be ignored.
+
+- **Added POS state badge** - Control tower list now displays a badge showing the current state of each POS for better visibility.
+
+- **Added state validation checks** - Enhanced validation to ensure state recognition is accurate throughout the plugin.
+
+**State Behavior:**
+- **Online (state 4)** - POS is operational and consuming fuel → Alerts enabled
+- **Reinforced (state 3)** - POS is in reinforced mode and consuming fuel → Alerts enabled
+- **Offline (state 1)** - POS is anchored but offline → Alerts disabled (no fuel consumption)
+- **Unanchored (state 0)** - POS is not deployed → Alerts disabled
+- **Onlining (state 2)** - POS is coming online → Alerts disabled
+- **Unanchoring (state 5)** - POS is being unanchored → Alerts disabled
+
+---
+
+## Version 1.0.8 — *November 2025*
 
 ### 🎉 Major Features
 
