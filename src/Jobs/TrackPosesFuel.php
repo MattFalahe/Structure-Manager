@@ -161,6 +161,10 @@ class TrackPosesFuel implements ShouldQueue
                 }
             }
             
+            // Convert state string to integer
+            // SeAT stores state as string in corporation_starbases, but we need integer
+            $stateInteger = $this->convertStateToInteger($pos->state);
+            
             // Preserve notification tracking fields from previous record
             // This ensures interval tracking works correctly across history records
             $notificationTracking = [];
@@ -182,6 +186,7 @@ class TrackPosesFuel implements ShouldQueue
                 'tower_type_id' => $pos->type_id,
                 'starbase_name' => $pos->starbase_name ?? null, // May not exist in all SeAT versions
                 'system_id' => $pos->system_id,
+                'state' => $stateInteger, // POS state as integer (converted from string)
                 
                 // Fuel blocks
                 'fuel_blocks_quantity' => $fuelBlocks,
@@ -212,7 +217,7 @@ class TrackPosesFuel implements ShouldQueue
                     'tower_type' => $pos->tower_type,
                     'system_name' => $pos->system_name,
                     'location_name' => $pos->location_name ?? null, // Moon/location from assets
-                    'state' => $pos->state,
+                    'state' => $pos->state, // Keep original string in metadata for reference
                     'fuel_per_hour' => $rates['fuel_per_hour'],
                     'strontium_per_hour' => $rates['strontium_for_reinforced'],
                     'charters_per_hour' => $rates['charters_per_hour'],
@@ -324,5 +329,43 @@ class TrackPosesFuel implements ShouldQueue
             Log::error("TrackPosesFuel: Error tracking reserves for POS {$starbaseId}: " . $e->getMessage());
             return false;
         }
+    }
+    
+    /**
+     * Convert state string to integer
+     * 
+     * SeAT stores state as string in corporation_starbases (e.g., "online", "offline")
+     * but we need to store it as integer in history for proper querying
+     * 
+     * @param mixed $state State value (string or integer)
+     * @return int|null State as integer
+     */
+    private function convertStateToInteger($state)
+    {
+        // If already an integer, return it
+        if (is_int($state)) {
+            return $state;
+        }
+        
+        // If null, return null
+        if ($state === null) {
+            return null;
+        }
+        
+        // Convert string to lowercase for comparison
+        $stateString = strtolower(trim($state));
+        
+        // Map string states to integers
+        $stateMap = [
+            'unanchored' => 0,
+            'offline' => 1,
+            'onlining' => 2,
+            'reinforced' => 3,
+            'online' => 4,
+            'unanchoring' => 5, // Also exists in ESI
+        ];
+        
+        // Return mapped value or null if unknown
+        return $stateMap[$stateString] ?? null;
     }
 }

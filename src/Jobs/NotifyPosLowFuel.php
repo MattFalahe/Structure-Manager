@@ -92,13 +92,20 @@ class NotifyPosLowFuel implements ShouldQueue
             'strontium_interval' => $strontiumCriticalInterval,
         ]);
 
-        // Get latest history for all POSes (one record per POS - the most recent)
-        $allPoses = StarbaseFuelHistory::select('starbase_id')
+        // FIXED: Get latest history for all ONLINE (state = 4) and REINFORCED (state = 3) POSes
+        // Query the state from starbase_fuel_history which stores it as integer, not from corporation_starbases which stores it as string
+        $allPoses = StarbaseFuelHistory::select('starbase_fuel_history.starbase_id')
+            ->whereIn('id', function($query) {
+                $query->select(\DB::raw('MAX(id)'))
+                    ->from('starbase_fuel_history')
+                    ->groupBy('starbase_id');
+            })
+            ->whereIn('starbase_fuel_history.state', [3, 4]) // Only ONLINE and REINFORCED POSes (from history table, which has integers)
             ->distinct()
             ->get();
 
-        \Log::channel('stack')->info('NotifyPosLowFuel: Found ' . $allPoses->count() . ' POSes to check');
-        error_log('NotifyPosLowFuel: Found ' . $allPoses->count() . ' POSes to check - ERROR_LOG');
+        \Log::channel('stack')->info('NotifyPosLowFuel: Found ' . $allPoses->count() . ' ONLINE/REINFORCED POSes to check');
+        error_log('NotifyPosLowFuel: Found ' . $allPoses->count() . ' ONLINE/REINFORCED POSes to check - ERROR_LOG');
 
         $notificationsSent = 0;
 
@@ -111,8 +118,15 @@ class NotifyPosLowFuel implements ShouldQueue
             if (!$latest) {
                 continue;
             }
+            
+            // Double-check POS is still online or reinforced (extra safety check using history table state)
+            if (!in_array($latest->state, [3, 4])) {
+                \Log::channel('stack')->debug("NotifyPosLowFuel: Skipping POS {$latest->starbase_id} - not online/reinforced (state: {$latest->state})");
+                continue;
+            }
 
             \Log::channel('stack')->debug('NotifyPosLowFuel: Checking POS ' . $latest->starbase_id, [
+                'state' => $latest->state,
                 'fuel_days_remaining' => $latest->fuel_days_remaining,
                 'charter_days_remaining' => $latest->charter_days_remaining,
                 'last_fuel_status' => $latest->last_fuel_notification_status,
@@ -164,118 +178,43 @@ class NotifyPosLowFuel implements ShouldQueue
         
         // No alerts for good status
         if ($currentStatus === 'good') {
-            // Reset final alert flag if back to good
-            if ($history->fuel_final_alert_sent) {
-                $history->fuel_final_alert_sent = false;
-                $history->save();
-            }
-            \Log::channel('stack')->debug("NotifyPosLowFuel: POS {$history->starbase_id} is in good status, no notification");
             return false;
         }
-
+        
         $lastStatus = $history->last_fuel_notification_status;
+        $lastNotificationAt = $history->last_fuel_notification_at;
+        $finalAlertSent = $history->fuel_final_alert_sent ?? false;
         
-        // TRIGGER 1: Status change (always send)
+        // Check for final alert (1 hour remaining)
+        $actualDays = $history->actual_days_remaining ?? $history->fuel_days_remaining;
+        $hoursRemaining = $actualDays * 24;
+        
+        if ($hoursRemaining <= 1 && !$finalAlertSent) {
+            \Log::channel('stack')->info("NotifyPosLowFuel: FINAL ALERT triggered for POS {$history->starbase_id} (< 1 hour remaining)");
+            return true;
+        }
+        
+        // Trigger #1: Status change (good → warning, warning → critical, or good → critical)
         if ($lastStatus !== $currentStatus) {
-            \Log::channel('stack')->info("NotifyPosLowFuel: Status change for POS {$history->starbase_id}: {$lastStatus} → {$currentStatus}");
+            \Log::channel('stack')->info("NotifyPosLowFuel: Status change detected for POS {$history->starbase_id}: {$lastStatus} → {$currentStatus}");
             return true;
         }
-
-        // TRIGGER 2: Final alert (1 hour before offline)
-        $remainingHours = $history->actual_days_remaining * 24;
-        if ($remainingHours <= 1.0 && !$history->fuel_final_alert_sent) {
-            \Log::channel('stack')->info("NotifyPosLowFuel: Final alert for POS {$history->starbase_id} ({$remainingHours}h remaining)");
-            return true;
-        }
-
-        // TRIGGER 3: Critical stage interval (if enabled and in critical status)
-        if ($currentStatus === 'critical' && $criticalInterval > 0) {
-            if ($history->last_fuel_notification_at === null) {
-                \Log::channel('stack')->info("NotifyPosLowFuel: First critical notification for POS {$history->starbase_id}");
-                return true; // First critical notification
-            }
-
-            $hoursSinceLastNotification = Carbon::parse($history->last_fuel_notification_at)->diffInHours(Carbon::now());
-            
-            \Log::channel('stack')->debug("NotifyPosLowFuel: POS {$history->starbase_id} interval check", [
-                'hours_since_last' => $hoursSinceLastNotification,
-                'interval_setting' => $criticalInterval,
-                'should_send' => $hoursSinceLastNotification >= $criticalInterval,
-            ]);
+        
+        // Trigger #2: Critical interval reminders (only in critical stage)
+        if ($currentStatus === 'critical' && $criticalInterval > 0 && $lastNotificationAt) {
+            $hoursSinceLastNotification = Carbon::now()->diffInHours($lastNotificationAt);
             
             if ($hoursSinceLastNotification >= $criticalInterval) {
-                \Log::channel('stack')->info("NotifyPosLowFuel: Interval trigger for POS {$history->starbase_id} ({$hoursSinceLastNotification}h since last)");
+                \Log::channel('stack')->info("NotifyPosLowFuel: Critical interval reached for POS {$history->starbase_id} ({$hoursSinceLastNotification}h since last notification, interval: {$criticalInterval}h)");
                 return true;
             }
         }
-
-        \Log::channel('stack')->debug("NotifyPosLowFuel: No notification needed for POS {$history->starbase_id}");
+        
         return false;
     }
-
+    
     /**
-     * Determine if strontium notification should be sent
-     * 
-     * @param StarbaseFuelHistory $history Latest fuel history record
-     * @param int $criticalHours Critical threshold in hours
-     * @param int $warningHours Warning threshold in hours
-     * @param int $criticalInterval Hours between reminders in critical stage
-     * @return bool
-     */
-    private function shouldSendStrontiumNotification($history, $criticalHours, $warningHours, $criticalInterval)
-    {
-        // Skip if no strontium data
-        if ($history->strontium_quantity === null || $history->strontium_hours_available === null) {
-            return false;
-        }
-
-        // Calculate current status
-        $currentStatus = $this->determineStrontiumStatus($history, $criticalHours, $warningHours);
-        
-        // No alerts for good status
-        if ($currentStatus === 'good') {
-            // Reset final alert flag if back to good
-            if ($history->strontium_final_alert_sent) {
-                $history->strontium_final_alert_sent = false;
-                $history->save();
-            }
-            return false;
-        }
-
-        $lastStatus = $history->last_strontium_notification_status;
-        
-        // TRIGGER 1: Status change (always send)
-        if ($lastStatus !== $currentStatus) {
-            Log::info("NotifyPosLowFuel: Strontium status change for POS {$history->starbase_id}: {$lastStatus} → {$currentStatus}");
-            return true;
-        }
-
-        // TRIGGER 2: Final alert (1 hour before depleted)
-        $remainingHours = $history->strontium_hours_available;
-        if ($remainingHours <= 1.0 && !$history->strontium_final_alert_sent) {
-            Log::info("NotifyPosLowFuel: Strontium final alert for POS {$history->starbase_id} ({$remainingHours}h remaining)");
-            return true;
-        }
-
-        // TRIGGER 3: Critical stage interval (if enabled)
-        if ($currentStatus === 'critical' && $criticalInterval > 0) {
-            if ($history->last_strontium_notification_at === null) {
-                return true;
-            }
-
-            $hoursSinceLastNotification = Carbon::parse($history->last_strontium_notification_at)->diffInHours(Carbon::now());
-            
-            if ($hoursSinceLastNotification >= $criticalInterval) {
-                Log::info("NotifyPosLowFuel: Strontium interval trigger for POS {$history->starbase_id}");
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Determine fuel/charter status based on days remaining
+     * Determine fuel/charter status level
      * 
      * @param StarbaseFuelHistory $history
      * @param int $criticalDays
@@ -285,23 +224,83 @@ class NotifyPosLowFuel implements ShouldQueue
      */
     private function determineFuelStatus($history, $criticalDays, $warningDays, $charterCriticalDays)
     {
-        $fuelDays = $history->fuel_days_remaining ?? 999;
-        $charterDays = $history->charter_days_remaining ?? 999;
+        // Use actual_days_remaining (considers limiting factor) or fall back to fuel_days_remaining
+        $daysRemaining = $history->actual_days_remaining ?? $history->fuel_days_remaining;
         
-        // Use the limiting factor (whichever runs out first)
-        $remainingDays = min($fuelDays, $charterDays);
+        // Check if charters are the limiting factor (high-sec only)
+        if ($history->requires_charters && $history->charter_days_remaining !== null) {
+            $daysRemaining = min($daysRemaining, $history->charter_days_remaining);
+        }
         
-        if ($remainingDays <= $criticalDays) {
+        if ($daysRemaining < $criticalDays) {
             return 'critical';
-        } elseif ($remainingDays <= $warningDays) {
+        } elseif ($daysRemaining < $warningDays) {
             return 'warning';
         }
         
         return 'good';
     }
-
+    
     /**
-     * Determine strontium status based on hours remaining
+     * Determine if strontium notification should be sent
+     * 
+     * @param StarbaseFuelHistory $history Latest fuel history record
+     * @param int $criticalHours Critical threshold in hours
+     * @param int $warningHours Warning threshold in hours
+     * @param int $criticalInterval Hours between reminders in critical stage (0 = disabled)
+     * @return bool
+     */
+    private function shouldSendStrontiumNotification($history, $criticalHours, $warningHours, $criticalInterval)
+    {
+        // Calculate current status
+        $currentStatus = $this->determineStrontiumStatus($history, $criticalHours, $warningHours);
+        
+        \Log::channel('stack')->debug("NotifyPosLowFuel: shouldSendStrontiumNotification for POS {$history->starbase_id}", [
+            'current_status' => $currentStatus,
+            'last_status' => $history->last_strontium_notification_status,
+            'strontium_hours' => $history->strontium_hours_available,
+            'critical_threshold' => $criticalHours,
+            'warning_threshold' => $warningHours,
+        ]);
+        
+        // No alerts for good status
+        if ($currentStatus === 'good') {
+            return false;
+        }
+        
+        $lastStatus = $history->last_strontium_notification_status;
+        $lastNotificationAt = $history->last_strontium_notification_at;
+        $finalAlertSent = $history->strontium_final_alert_sent ?? false;
+        
+        // Check for final alert (30 minutes remaining)
+        $hoursRemaining = $history->strontium_hours_available ?? 0;
+        
+        if ($hoursRemaining <= 0.5 && !$finalAlertSent) {
+            \Log::channel('stack')->info("NotifyPosLowFuel: FINAL STRONTIUM ALERT triggered for POS {$history->starbase_id} (< 30 min remaining)");
+            return true;
+        }
+        
+        // Trigger #1: Status change
+        if ($lastStatus !== $currentStatus) {
+            \Log::channel('stack')->info("NotifyPosLowFuel: Strontium status change detected for POS {$history->starbase_id}: {$lastStatus} → {$currentStatus}");
+            return true;
+        }
+        
+        // Trigger #2: Critical interval reminders (only in critical stage)
+        if ($currentStatus === 'critical' && $criticalInterval > 0 && $lastNotificationAt) {
+            $hoursSinceLastNotification = Carbon::now()->diffInHours($lastNotificationAt);
+            
+            if ($hoursSinceLastNotification >= $criticalInterval) {
+                \Log::channel('stack')->info("NotifyPosLowFuel: Critical strontium interval reached for POS {$history->starbase_id} ({$hoursSinceLastNotification}h since last notification, interval: {$criticalInterval}h)");
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Determine strontium status level
      * 
      * @param StarbaseFuelHistory $history
      * @param int $criticalHours
@@ -310,11 +309,11 @@ class NotifyPosLowFuel implements ShouldQueue
      */
     private function determineStrontiumStatus($history, $criticalHours, $warningHours)
     {
-        $remainingHours = $history->strontium_hours_available ?? 999;
+        $hoursRemaining = $history->strontium_hours_available ?? 0;
         
-        if ($remainingHours <= $criticalHours) {
+        if ($hoursRemaining < $criticalHours) {
             return 'critical';
-        } elseif ($remainingHours <= $warningHours) {
+        } elseif ($hoursRemaining < $warningHours) {
             return 'warning';
         }
         
@@ -322,53 +321,51 @@ class NotifyPosLowFuel implements ShouldQueue
     }
 
     /**
-     * Send fuel/charter notification to Discord
+     * Send fuel/charter notification
      * 
-     * @param StarbaseFuelHistory $history
-     * @param string $webhookUrl
-     * @param int $criticalDays
-     * @param int $warningDays
-     * @param int $charterCriticalDays
-     * @param string $roleMention
+     * @param StarbaseFuelHistory $history Latest fuel history
+     * @param string $webhookUrl Discord webhook URL
+     * @param int $criticalDays Critical threshold
+     * @param int $warningDays Warning threshold
+     * @param int $charterCriticalDays Charter critical threshold
+     * @param string $roleMention Discord role mention
      */
     private function sendFuelNotification($history, $webhookUrl, $criticalDays, $warningDays, $charterCriticalDays, $roleMention)
     {
         $status = $this->determineFuelStatus($history, $criticalDays, $warningDays, $charterCriticalDays);
-        $remainingHours = $history->actual_days_remaining * 24;
-        $isFinalAlert = $remainingHours <= 0.5;
         
-        // Build alert data
+        // Check for final alert (< 1 hour)
+        $actualDays = $history->actual_days_remaining ?? $history->fuel_days_remaining;
+        $hoursRemaining = $actualDays * 24;
+        $isFinalAlert = ($hoursRemaining <= 1);
+
         $alerts = [];
-        
+
         // Fuel blocks alert
-        if ($history->fuel_days_remaining <= $criticalDays || $history->fuel_days_remaining <= $warningDays) {
-            $alerts[] = [
-                'type' => $history->fuel_days_remaining <= $criticalDays ? 'critical' : 'warning',
-                'resource' => 'Fuel Blocks',
-                'current' => number_format($history->fuel_blocks_quantity) . ' blocks',
-                'remaining' => $this->formatDaysHours($history->fuel_days_remaining),
-                'threshold' => $history->fuel_days_remaining <= $criticalDays ? "$criticalDays days" : "$warningDays days",
-                'is_limiting' => $history->limiting_factor == 'fuel',
-            ];
+        $fuelThreshold = ($status === 'critical') ? $criticalDays : $warningDays;
+        $alerts[] = [
+            'resource' => 'Fuel Blocks',
+            'type' => $status,
+            'current' => number_format($history->fuel_blocks_quantity ?? 0) . ' blocks',
+            'remaining' => $this->formatDaysHours($history->fuel_days_remaining ?? 0),
+            'threshold' => $fuelThreshold . ' days',
+            'is_limiting' => ($history->limiting_factor === 'fuel'),
+        ];
+
+        // Charters alert (if applicable)
+        if ($history->requires_charters && $history->charter_days_remaining !== null) {
+            if ($history->charter_days_remaining < $charterCriticalDays) {
+                $alerts[] = [
+                    'resource' => 'Starbase Charters',
+                    'type' => 'critical',
+                    'current' => number_format($history->charter_quantity ?? 0) . ' charters',
+                    'remaining' => $this->formatDaysHours($history->charter_days_remaining),
+                    'threshold' => $charterCriticalDays . ' days',
+                    'is_limiting' => ($history->limiting_factor === 'charters'),
+                ];
+            }
         }
 
-        // Charter alert (if applicable)
-        if ($history->requires_charters && $history->charter_days_remaining <= $charterCriticalDays) {
-            $alerts[] = [
-                'type' => 'critical',
-                'resource' => 'Starbase Charters',
-                'current' => number_format($history->charter_quantity) . ' charters',
-                'remaining' => $this->formatDaysHours($history->charter_days_remaining),
-                'threshold' => "$charterCriticalDays days",
-                'is_limiting' => $history->limiting_factor == 'charters',
-            ];
-        }
-
-        if (empty($alerts)) {
-            return;
-        }
-
-        // Send Discord notification
         $posData = [
             'starbase_id' => $history->starbase_id,
             'name' => $history->starbase_name ?? 'Unnamed POS',
@@ -380,8 +377,8 @@ class NotifyPosLowFuel implements ShouldQueue
             'alert_category' => 'fuel',
         ];
 
-        $title = $isFinalAlert ? 'FINAL ALERT: POS Going Offline Soon!' : 
-                ($status === 'critical' ? 'Critical: Fuel/Charter Low' : 'Warning: Fuel/Charter Low');
+        $title = $isFinalAlert ? 'FINAL ALERT: POS Going Offline!' : 
+                ($status === 'critical' ? 'Critical: Fuel Low' : 'Warning: Fuel Low');
 
         $this->sendDiscordNotification($webhookUrl, [$posData], $status, $roleMention, 'Fuel/Charter', $isFinalAlert, $title);
 
@@ -395,28 +392,34 @@ class NotifyPosLowFuel implements ShouldQueue
     }
 
     /**
-     * Send strontium notification to Discord
+     * Send strontium notification
      * 
-     * @param StarbaseFuelHistory $history
-     * @param string $webhookUrl
-     * @param int $criticalHours
-     * @param int $warningHours
-     * @param string $roleMention
+     * @param StarbaseFuelHistory $history Latest fuel history
+     * @param string $webhookUrl Discord webhook URL
+     * @param int $criticalHours Critical threshold
+     * @param int $warningHours Warning threshold
+     * @param string $roleMention Discord role mention
      */
     private function sendStrontiumNotification($history, $webhookUrl, $criticalHours, $warningHours, $roleMention)
     {
         $status = $this->determineStrontiumStatus($history, $criticalHours, $warningHours);
-        $remainingHours = $history->strontium_hours_available;
-        $isFinalAlert = $remainingHours <= 0.5;
+        
+        // Check for final alert (< 30 minutes)
+        $hoursRemaining = $history->strontium_hours_available ?? 0;
+        $isFinalAlert = ($hoursRemaining <= 0.5);
 
-        $alerts = [[
-            'type' => $status,
-            'resource' => 'Strontium Clathrates',
-            'current' => number_format($history->strontium_quantity) . ' units',
-            'remaining' => number_format($remainingHours, 1) . ' hours',
-            'threshold' => $status === 'critical' ? "$criticalHours hours" : "$warningHours hours",
-            'is_limiting' => false,
-        ]];
+        $strontiumThreshold = ($status === 'critical') ? $criticalHours : $warningHours;
+        
+        $alerts = [
+            [
+                'resource' => 'Strontium Clathrates',
+                'type' => $status,
+                'current' => number_format($history->strontium_quantity ?? 0) . ' units',
+                'remaining' => round($hoursRemaining, 1) . 'h',
+                'threshold' => $strontiumThreshold . ' hours',
+                'is_limiting' => false,
+            ]
+        ];
 
         $posData = [
             'starbase_id' => $history->starbase_id,

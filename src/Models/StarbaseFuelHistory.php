@@ -19,6 +19,7 @@ class StarbaseFuelHistory extends Model
         'tower_type_id',
         'starbase_name',
         'system_id',
+        'state', // POS state: 0=unanchored, 1=offline, 2=onlining, 3=reinforced, 4=online
         // Fuel blocks
         'fuel_blocks_quantity',
         'fuel_days_remaining',
@@ -50,6 +51,7 @@ class StarbaseFuelHistory extends Model
     ];
     
     protected $casts = [
+        'state' => 'integer',
         'fuel_blocks_quantity' => 'integer',
         'fuel_days_remaining' => 'float',
         'fuel_blocks_used' => 'integer',
@@ -166,5 +168,65 @@ class StarbaseFuelHistory extends Model
         } else {
             return 'good';
         }
+    }
+    
+    /**
+     * Get state name from state integer
+     * 
+     * @return string State name
+     */
+    public function getStateName()
+    {
+        $stateMap = [
+            0 => 'Unanchored',
+            1 => 'Offline',
+            2 => 'Onlining',
+            3 => 'Reinforced',
+            4 => 'Online',
+        ];
+        
+        return $stateMap[$this->state] ?? 'Unknown';
+    }
+    
+    /**
+     * Get state badge class for styling
+     * 
+     * @return string CSS class for badge
+     */
+    public function getStateBadgeClass()
+    {
+        $stateClassMap = [
+            0 => 'badge-secondary',  // Unanchored
+            1 => 'badge-danger',     // Offline
+            2 => 'badge-info',       // Onlining
+            3 => 'badge-warning',    // Reinforced
+            4 => 'badge-success',    // Online
+        ];
+        
+        return $stateClassMap[$this->state] ?? 'badge-secondary';
+    }
+    
+    /**
+     * Check if POS is online (state = 4)
+     */
+    public function isOnline()
+    {
+        return $this->state === 4;
+    }
+    
+    /**
+     * Check if POS is reinforced (state = 3)
+     */
+    public function isReinforced()
+    {
+        return $this->state === 3;
+    }
+    
+    /**
+     * Check if POS is offline (state = 1)
+     */
+    public function isOffline()
+    {
+        return $this->state === 1;
     }
 }
