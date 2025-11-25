@@ -156,7 +156,7 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
     
-    // Test Webhook
+    // Test Webhook (legacy route - supports both old single webhook and new specific webhook testing)
     Route::post('/settings/test-webhook', [
         'as' => 'structure-manager.settings.test-webhook',
         'uses' => 'SettingsController@testWebhook',
@@ -167,6 +167,45 @@ Route::group([
     Route::get('/settings/reset', [
         'as' => 'structure-manager.settings.reset',
         'uses' => 'SettingsController@reset',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // ============================================
+    // Webhook Management (NEW)
+    // ============================================
+    
+    // Add Webhook
+    Route::post('/webhook/add', [
+        'as' => 'structure-manager.webhook.add',
+        'uses' => 'SettingsController@addWebhook',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Get Webhook (for editing)
+    Route::get('/webhook/{id}', [
+        'as' => 'structure-manager.webhook.get',
+        'uses' => 'SettingsController@getWebhook',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Update Webhook
+    Route::put('/webhook/{id}', [
+        'as' => 'structure-manager.webhook.update',
+        'uses' => 'SettingsController@updateWebhook',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Delete Webhook
+    Route::delete('/webhook/{id}', [
+        'as' => 'structure-manager.webhook.delete',
+        'uses' => 'SettingsController@deleteWebhook',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+    
+    // Test Specific Webhook
+    Route::post('/webhook/{id}/test', [
+        'as' => 'structure-manager.webhook.test',
+        'uses' => 'SettingsController@testWebhook',
         'middleware' => 'can:structure-manager.admin',
     ]);
     

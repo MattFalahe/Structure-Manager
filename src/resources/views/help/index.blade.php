@@ -924,6 +924,23 @@
                     {!! trans('structure-manager::help.warning_example') !!}
                 </div>
 
+                <h4><i class="fas fa-radiation"></i> {{ trans('structure-manager::help.zero_strontium_title') }}</h4>
+                <p>{{ trans('structure-manager::help.zero_strontium_intro') }}</p>
+                {!! trans('structure-manager::help.zero_strontium_scenarios') !!}
+                {!! trans('structure-manager::help.zero_strontium_notification_behavior') !!}
+                {!! trans('structure-manager::help.zero_strontium_use_cases') !!}
+
+                <h4><i class="fas fa-project-diagram"></i> {{ trans('structure-manager::help.multiple_webhooks_title') }}</h4>
+                <p>{{ trans('structure-manager::help.multiple_webhooks_intro') }}</p>
+                {!! trans('structure-manager::help.multiple_webhooks_features') !!}
+                {!! trans('structure-manager::help.multiple_webhooks_use_cases') !!}
+                <div class="purple-box">
+                    {!! trans('structure-manager::help.multiple_webhooks_configuration') !!}
+                </div>
+                <div class="info-box">
+                    {!! trans('structure-manager::help.multiple_webhooks_example') !!}
+                </div>
+
                 <div class="info-box">
                     <i class="fas fa-info-circle"></i>
                     <strong>{{ trans('structure-manager::help.upwell_notifications_note') }}:</strong>
@@ -940,6 +957,11 @@
                     {{ trans('structure-manager::help.settings_title') }}
                 </h3>
                 <p>{{ trans('structure-manager::help.settings_intro') }}</p>
+
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    {!! trans('structure-manager::help.settings_notification_note') !!}
+                </div>
 
                 <h4>{{ trans('structure-manager::help.webhook_settings') }}</h4>
                 <p>{{ trans('structure-manager::help.webhook_settings_desc') }}</p>
@@ -1032,6 +1054,11 @@
                 </h3>
                 <p>{{ trans('structure-manager::help.commands_intro') }}</p>
 
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    {!! trans('structure-manager::help.commands_notification_note') !!}
+                </div>
+
                 <h4>{{ trans('structure-manager::help.track_fuel_cmd_title') }}</h4>
                 <p>{{ trans('structure-manager::help.track_fuel_cmd_desc') }}</p>
                 <pre><code>php artisan structure-manager:track-fuel</code></pre>
@@ -1039,13 +1066,15 @@
 
                 <h4>{{ trans('structure-manager::help.analyze_fuel_cmd_title') }}</h4>
                 <p>{{ trans('structure-manager::help.analyze_fuel_cmd_desc') }}</p>
-                <pre><code>php artisan structure-manager:analyze-fuel</code></pre>
+                <pre><code>php artisan structure-manager:analyze-consumption</code></pre>
                 <p>{{ trans('structure-manager::help.analyze_fuel_cmd_note') }}</p>
+                {!! trans('structure-manager::help.analyze_fuel_cmd_options') !!}
 
-                <h4>{{ trans('structure-manager::help.track_reserves_cmd_title') }}</h4>
-                <p>{{ trans('structure-manager::help.track_reserves_cmd_desc') }}</p>
-                <pre><code>php artisan structure-manager:track-reserves</code></pre>
-                <p>{{ trans('structure-manager::help.track_reserves_cmd_note') }}</p>
+                <h4>{{ trans('structure-manager::help.cleanup_history_cmd_title') }}</h4>
+                <p>{{ trans('structure-manager::help.cleanup_history_cmd_desc') }}</p>
+                <pre><code>php artisan structure-manager:cleanup-history</code></pre>
+                <p>{{ trans('structure-manager::help.cleanup_history_cmd_note') }}</p>
+                {!! trans('structure-manager::help.cleanup_history_cmd_options') !!}
 
                 <h4>{{ trans('structure-manager::help.pos_track_fuel_title') }}</h4>
                 <p>{{ trans('structure-manager::help.pos_track_fuel_desc') }}</p>
@@ -1057,9 +1086,27 @@
 
                 <h4>{{ trans('structure-manager::help.pos_notify_title') }}</h4>
                 <p>{{ trans('structure-manager::help.pos_notify_desc') }}</p>
-                <pre><code>php artisan structure-manager:notify-pos-fuel</code></pre>
+                <pre><code>{{ trans('structure-manager::help.pos_notify_cmd') }}</code></pre>
 
-                <h4>{{ trans('structure-manager::help.create_test_metenox_cmd_title') }}</h4>
+                <h4><i class="fas fa-flask"></i> {{ trans('structure-manager::help.simulate_consumption_title') }}</h4>
+                <p>{{ trans('structure-manager::help.simulate_consumption_desc') }}</p>
+                <pre><code>{{ trans('structure-manager::help.simulate_consumption_cmd') }}</code></pre>
+                {!! trans('structure-manager::help.simulate_consumption_options') !!}
+
+                <h4><i class="fas fa-flask"></i> {{ trans('structure-manager::help.create_test_poses_title') }}</h4>
+                <p>{{ trans('structure-manager::help.create_test_poses_desc') }}</p>
+                <pre><code>{{ trans('structure-manager::help.create_test_poses_cmd') }}</code></pre>
+                {!! trans('structure-manager::help.create_test_poses_features') !!}
+                
+                <h5>{{ trans('structure-manager::help.create_test_poses_usage_title') }}</h5>
+                {!! trans('structure-manager::help.create_test_poses_usage') !!}
+                
+                <div class="purple-box">
+                    <i class="fas fa-vial"></i>
+                    {!! trans('structure-manager::help.create_test_poses_use_cases') !!}
+                </div>
+
+                <h4><i class="fas fa-flask"></i> {{ trans('structure-manager::help.create_test_metenox_cmd_title') }}</h4>
                 <p>{{ trans('structure-manager::help.create_test_metenox_cmd_desc') }}</p>
                 <p>{{ trans('structure-manager::help.create_test_metenox_cmd_note') }}</p>
                 {!! trans('structure-manager::help.create_test_metenox_features') !!}

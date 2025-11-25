@@ -10,6 +10,8 @@ use StructureManager\Console\Commands\CreateTestMetenoxCommand;
 use StructureManager\Console\Commands\TrackPosesFuelCommand;
 use StructureManager\Console\Commands\AnalyzePosConsumptionCommand;
 use StructureManager\Console\Commands\NotifyPosFuelCommand;
+use StructureManager\Console\Commands\CreateTestPoses;
+use StructureManager\Console\Commands\SimulateFastConsumption;
 use StructureManager\Database\Seeders\ScheduleSeeder;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
@@ -36,6 +38,8 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 TrackPosesFuelCommand::class,
                 AnalyzePosConsumptionCommand::class,
                 NotifyPosFuelCommand::class,
+                CreateTestPoses::class,
+                SimulateFastConsumption::class,
             ]);
         }
 

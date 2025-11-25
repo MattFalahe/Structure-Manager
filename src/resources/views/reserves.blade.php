@@ -141,7 +141,7 @@
 
 <div class="card refuel-event-card">
     <div class="card-header">
-        <h3 class="card-title">Recent Refuel Events</h3>
+        <h3 class="card-title">Fuel Withdrawals</h3>
         <div class="card-tools">
             <select id="history-days" class="form-control form-control-sm">
                 <option value="7">Last 7 Days</option>
@@ -158,7 +158,7 @@
                         <th>Timestamp</th>
                         <th>System</th>
                         <th>Structure</th>
-                        <th>Blocks Moved</th>
+                        <th>Quantity Withdrawn</th>
                         <th>From Location</th>
                         <th>Fuel Type</th>
                     </tr>
@@ -166,7 +166,7 @@
                 <tbody id="refuel-events-body">
                     <tr>
                         <td colspan="6" class="text-center py-3">
-                            <i class="fas fa-spinner fa-spin"></i> Loading refuel events...
+                            <i class="fas fa-spinner fa-spin"></i> Loading withdrawal events...
                         </td>
                     </tr>
                 </tbody>
@@ -399,7 +399,7 @@ $(document).ready(function() {
         $('#refuel-events-body').html(`
             <tr>
                 <td colspan="6" class="text-center py-3">
-                    <i class="fas fa-spinner fa-spin"></i> Loading refuel events...
+                    <i class="fas fa-spinner fa-spin"></i> Loading withdrawal events...
                 </td>
             </tr>
         `);
@@ -411,7 +411,7 @@ $(document).ready(function() {
             let html = '';
             
             if (data.length === 0) {
-                html = '<tr><td colspan="6" class="text-center py-3"><i class="fas fa-info-circle"></i> No refuel events in this period.</td></tr>';
+                html = '<tr><td colspan="6" class="text-center py-3"><i class="fas fa-info-circle"></i> No withdrawal events in this period.</td></tr>';
             } else {
                 for (const event of data) {
                     const timestamp = new Date(event.timestamp);
@@ -439,11 +439,11 @@ $(document).ready(function() {
             
             $('#refuel-events-body').html(html);
         }).fail(function(xhr, status, error) {
-            console.error('Error loading refuel events:', error);
+            console.error('Error loading withdrawal events:', error);
             $('#refuel-events-body').html(`
                 <tr>
                     <td colspan="6" class="text-center text-danger py-3">
-                        <i class="fas fa-exclamation-triangle"></i> Error loading refuel events: ${error}
+                        <i class="fas fa-exclamation-triangle"></i> Error loading withdrawal events: ${error}
                     </td>
                 </tr>
             `);

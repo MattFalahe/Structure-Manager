@@ -331,41 +331,34 @@ class FuelReserveController extends Controller
     
     /**
      * Get refuel events history
-     * UPDATED: Now includes POS refuel events
+     * UPDATED: Only tracks Upwell structures (excludes Metenox and POS)
      */
     public function getRefuelHistory($days = 30)
     {
         $userCorps = $this->getUserCorporations();
         
-        // Get structure refuel events
+        // Get structure refuel events (Upwell only, no Metenox or POS)
         $structureEvents = $this->getStructureRefuelEvents($days, $userCorps);
         
-        // Get POS refuel events
-        $posEvents = $this->getPosRefuelEvents($days, $userCorps);
-        
-        // Merge and sort by timestamp
-        $allEvents = array_merge($structureEvents, $posEvents);
-        usort($allEvents, function($a, $b) {
-            return strtotime($b['timestamp']) - strtotime($a['timestamp']);
-        });
-        
-        return response()->json($allEvents);
+        return response()->json($structureEvents);
     }
     
     /**
-     * Get structure refuel events
+     * Get structure refuel events (Upwell only, excluding Metenox)
      */
     private function getStructureRefuelEvents($days, $userCorps)
     {
         $query = StructureFuelReserves::where('is_refuel_event', true)
-            ->where('created_at', '>=', Carbon::now()->subDays($days))
-            ->orderBy('created_at', 'desc');
+            ->where('structure_fuel_reserves.created_at', '>=', Carbon::now()->subDays($days))
+            ->join('corporation_structures as cs', 'structure_fuel_reserves.structure_id', '=', 'cs.structure_id')
+            ->where('cs.type_id', '!=', self::METENOX_TYPE_ID) // Exclude Metenox
+            ->orderBy('structure_fuel_reserves.created_at', 'desc');
         
         if ($userCorps !== null) {
-            $query->whereIn('corporation_id', $userCorps);
+            $query->whereIn('structure_fuel_reserves.corporation_id', $userCorps);
         }
         
-        $events = $query->get();
+        $events = $query->select('structure_fuel_reserves.*')->get();
         
         $eventData = [];
         foreach ($events as $event) {

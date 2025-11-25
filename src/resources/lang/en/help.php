@@ -404,10 +404,137 @@ return [
     'critical_example' => '<strong>Critical Alert Example:</strong><br><br>🚨 <strong>CRITICAL POS FUEL ALERT</strong><br><br><strong>Tower:</strong> Death Star (Large Amarr Control Tower)<br><strong>System:</strong> 3-FKCZ (Null-Sec)<br><strong>Corporation:</strong> Test Corp<br><br><strong>Fuel Blocks:</strong> 245 remaining (4.3 days) [LIMITING FACTOR]<br><strong>Strontium:</strong> 15,432 remaining<br><br><strong>Status:</strong> CRITICAL - Refuel immediately!',
     
     'warning_example' => '<strong>Warning Alert Example:</strong><br><br>⚠️ <strong>POS FUEL WARNING</strong><br><br><strong>Tower:</strong> Moon Mining Base (Medium Caldari Control Tower)<br><strong>System:</strong> J123456 (W-Space)<br><br><strong>Fuel Blocks:</strong> 5,840 remaining (12.2 days)<br><strong>Strontium:</strong> 8,200 remaining<br><br><strong>Status:</strong> LOW - Schedule refuel operation',
+
+    'zero_strontium_title' => 'Zero Strontium Behavior',
+    'zero_strontium_intro' => 'Structure Manager has intelligent handling for POSes with zero strontium clathrates, recognizing different scenarios and alerting appropriately.',
+    'zero_strontium_scenarios' => '<strong>Scenarios:</strong>
+        <ul>
+            <li><strong>Online POS (State 4) with 0 Strontium:</strong>
+                <ul>
+                    <li>Alert message: "Strontium Clathrates - Structure in Possible Danger"</li>
+                    <li>Severity: Warning level (yellow)</li>
+                    <li>Meaning: POS is operational but has no reinforcement protection</li>
+                    <li>Impact: If attacked, POS will enter reinforced mode without a timer</li>
+                    <li>Recommended action: Add strontium for defensive protection</li>
+                </ul>
+            </li>
+            <li><strong>Reinforced POS (State 3) with 0 Strontium:</strong>
+                <ul>
+                    <li>Alert message: "Strontium Clathrates - Structure in Danger!"</li>
+                    <li>Severity: Critical level (red)</li>
+                    <li>Meaning: POS is reinforced but has no timer protection</li>
+                    <li>Impact: POS can come out of reinforcement at any moment</li>
+                    <li>Recommended action: URGENT - Add strontium immediately</li>
+                </ul>
+            </li>
+        </ul>',
+    'zero_strontium_notification_behavior' => '<strong>Notification Behavior:</strong>
+        <ul>
+            <li><strong>One-time notification:</strong> Initial alert sent when 0 strontium is first detected</li>
+            <li><strong>Status change alerts:</strong> Additional notifications sent if POS state changes (online ↔ reinforced)</li>
+            <li><strong>No spam protection:</strong> Does not send repeated interval reminders for prolonged 0 strontium (configurable grace period: 2 hours)</li>
+            <li><strong>Grace period behavior:</strong> After initial notification, only sends new alerts if status changes or after grace period expires</li>
+            <li><strong>Final alert exemption:</strong> No "1 hour remaining" alert for strontium since it\'s already at 0</li>
+        </ul>',
+    'zero_strontium_use_cases' => '<strong>Common Use Cases:</strong>
+        <ul>
+            <li><strong>Economic POS:</strong> Low-value POSes in safe space where reinforcement protection isn\'t critical</li>
+            <li><strong>Planned decommission:</strong> POSes being shut down where defensive capabilities aren\'t needed</li>
+            <li><strong>High-sec only:</strong> POSes in very high security systems with minimal attack risk</li>
+            <li><strong>Emergency situations:</strong> When strontium supplies are depleted and immediate restocking isn\'t possible</li>
+        </ul>',
+
+    'multiple_webhooks_title' => 'Multiple Webhook Support',
+    'multiple_webhooks_intro' => 'Structure Manager supports up to 10 concurrent webhooks with per-webhook corporation filtering and role mentions. This is ideal for hosting multiple corporations with separate alert channels.',
+    'multiple_webhooks_features' => '<strong>Features:</strong>
+        <ul>
+            <li><strong>Up to 10 webhooks:</strong> Configure multiple Discord or Slack webhook URLs simultaneously</li>
+            <li><strong>Corporation filtering:</strong> Each webhook can target specific corporations or "all corporations"</li>
+            <li><strong>Independent configuration:</strong> Each webhook has its own enabled/disabled state</li>
+            <li><strong>Per-webhook role mentions:</strong> Different Discord role mentions for each webhook</li>
+            <li><strong>Optional descriptions:</strong> Add notes to identify webhook purpose</li>
+            <li><strong>Individual testing:</strong> Test each webhook separately to verify configuration</li>
+        </ul>',
+    'multiple_webhooks_use_cases' => '<strong>Use Cases:</strong>
+        <ul>
+            <li><strong>Multi-Corp Hosting:</strong> Main corporation uses Webhook #1, alt corporations #2-5 use separate webhooks
+                <ul>
+                    <li>Webhook #1 → Main Corp Discord (Corporation filter: "Main Corp" / Role: @Logistics-Main)</li>
+                    <li>Webhook #2 → Alt Corp 1 Discord (Corporation filter: "Alt Corp 1" / Role: @Logistics-Alt1)</li>
+                    <li>Webhook #3 → Alt Corp 2 Discord (Corporation filter: "Alt Corp 2" / Role: @Logistics-Alt2)</li>
+                    <li>Result: Each corporation receives only their POS alerts in their own channel</li>
+                </ul>
+            </li>
+            <li><strong>Alert Segregation:</strong> Separate channels for different alert types
+                <ul>
+                    <li>Webhook #1 → General POS alerts (All corps / Role: @Everyone)</li>
+                    <li>Webhook #2 → Critical-only channel (All corps / Role: @Directors)</li>
+                    <li>Configure different notification thresholds per channel</li>
+                </ul>
+            </li>
+            <li><strong>Regional Coordination:</strong> Multiple alliances sharing SeAT infrastructure
+                <ul>
+                    <li>Each alliance gets their own webhook targeting their corporations</li>
+                    <li>Alerts stay within alliance boundaries</li>
+                    <li>Different role mentions per alliance for appropriate escalation</li>
+                </ul>
+            </li>
+            <li><strong>Redundancy:</strong> Send critical alerts to multiple channels
+                <ul>
+                    <li>Webhook #1 → Primary ops channel</li>
+                    <li>Webhook #2 → Backup logistics channel</li>
+                    <li>Both configured for same corporations with different role mentions</li>
+                </ul>
+            </li>
+        </ul>',
+    'multiple_webhooks_configuration' => '<strong>Configuration:</strong>
+        <ol>
+            <li>Navigate to Settings → POS Notifications → Webhook Configuration</li>
+            <li>Click "Add Webhook" button (max 10 webhooks)</li>
+            <li>Enter webhook URL (Discord or Slack)</li>
+            <li>Select corporation filter:
+                <ul>
+                    <li>"All Corporations" - Receives alerts for all POSes regardless of corporation</li>
+                    <li>Specific Corporation - Receives alerts only for that corporation\'s POSes</li>
+                </ul>
+            </li>
+            <li>Configure Discord role mention (optional):
+                <ul>
+                    <li>Format: <code>&lt;@&amp;ROLE_ID&gt;</code> or just the role ID number</li>
+                    <li>Only triggers for critical and final alerts</li>
+                    <li>Leave empty for no mentions</li>
+                </ul>
+            </li>
+            <li>Add description (optional) to identify webhook purpose</li>
+            <li>Test webhook with "Test Webhook" button</li>
+            <li>Enable webhook to start receiving notifications</li>
+        </ol>',
+    'multiple_webhooks_example' => '<strong>Example Multi-Corp Setup:</strong><br>
+        <pre>Webhook #1:
+  URL: https://discord.com/api/webhooks/.../primary-corp
+  Corporation: Main Corp Alliance
+  Role Mention: &lt;@&amp;123456789&gt; (@Fuel-Team-Main)
+  Description: Main corp fuel alerts
+  Status: ✅ Enabled
+
+Webhook #2:
+  URL: https://discord.com/api/webhooks/.../alt-corp-1
+  Corporation: Alt Corp Alpha
+  Role Mention: &lt;@&amp;987654321&gt; (@Fuel-Team-Alpha)
+  Description: Alpha alt corp alerts
+  Status: ✅ Enabled
+
+Webhook #3:
+  URL: https://discord.com/api/webhooks/.../alt-corp-2
+  Corporation: Alt Corp Beta
+  Role Mention: &lt;@&amp;111222333&gt; (@Fuel-Team-Beta)
+  Description: Beta alt corp alerts
+  Status: ✅ Enabled</pre>',
     
     // Settings Section
     'settings_title' => 'Settings & Configuration',
     'settings_intro' => 'Configure Structure Manager to match your corporation\'s needs. Access settings from the main navigation menu.',
+    'settings_notification_note' => '<strong>Note:</strong> For detailed information about the notification system, webhook behavior, zero strontium alerts, and multiple webhook support, see the <a href="#notifications">Notifications section</a>.',
     
     'webhook_settings' => 'Webhook Settings',
     'webhook_settings_desc' => 'Configure Discord or Slack webhook notifications for POS fuel alerts.',
@@ -551,20 +678,56 @@ return [
     // Commands
     'commands_title' => 'Artisan Commands Reference',
     'commands_intro' => 'Structure Manager provides several artisan commands for manual operations and maintenance.',
+    'commands_notification_note' => '<strong>Note:</strong> For detailed information about the notification system, webhook configuration, and alert behavior, see the <a href="#notifications">Notifications section</a>.',
 
-    'track_fuel_cmd_title' => 'Track Fuel Levels',
-    'track_fuel_cmd_desc' => 'Manually triggers fuel level tracking for all Upwell structures. This reads fuel bay data from SeAT\'s database and stores snapshots.',
-    'track_fuel_cmd_note' => 'This command runs automatically every hour via scheduled job. Manual execution is only needed for troubleshooting or immediate updates.',
+    'track_fuel_cmd_title' => 'Track Fuel (Levels + Reserves)',
+    'track_fuel_cmd_desc' => 'Tracks fuel consumption and reserves for all Upwell structures. This command performs two operations: (1) Fuel Bay Tracking - reads fuel bay data (what\'s being consumed), and (2) Reserve Tracking - scans corporation hangars for staged fuel (what\'s in storage). Supports both standard fuel blocks and magmatic gas for Metenox Moon Drills.',
+    'track_fuel_cmd_note' => 'This command runs automatically every hour at :15 past the hour (e.g., 00:15, 01:15, 02:15...). Manual execution is only needed for troubleshooting or immediate updates.',
 
     'analyze_fuel_cmd_title' => 'Analyze Fuel Consumption',
-    'analyze_fuel_cmd_desc' => 'Analyzes fuel bay history to calculate consumption rates, detect anomalies, and identify refuel events.',
-    'analyze_fuel_cmd_note' => 'This command runs automatically every 30 minutes via scheduled job. The analysis uses recent fuel bay snapshots to determine consumption patterns.',
+    'analyze_fuel_cmd_desc' => 'Analyzes fuel bay history to calculate consumption rates, detect anomalies, and identify refuel events. Can analyze all structures, a specific structure, or all structures for a specific corporation.',
+    'analyze_fuel_cmd_note' => 'This command runs automatically every hour at :30 past the hour (e.g., 00:30, 01:30, 02:30...). The analysis uses recent fuel bay snapshots to determine consumption patterns.',
+    'analyze_fuel_cmd_options' => '<strong>Options:</strong>
+    <ul>
+        <li><code>--structure=ID</code> - Analyze a specific structure by ID</li>
+        <li><code>--corporation=ID</code> - Analyze all structures for a specific corporation</li>
+    </ul>
+    <strong>Examples:</strong>
+    <pre><code># Analyze all structures
+php artisan structure-manager:analyze-consumption
 
-    'track_reserves_cmd_title' => 'Track Fuel Reserves',
-    'track_reserves_cmd_desc' => 'Scans all corporation structure hangars for fuel blocks and magmatic gas, storing reserve quantities and locations.',
-    'track_reserves_cmd_note' => 'This command runs automatically every hour via scheduled job. It monitors CorpSAG hangar divisions for staged fuel.',
+# Analyze specific structure
+php artisan structure-manager:analyze-consumption --structure=1234567890
 
-    'create_test_metenox_cmd_title' => 'Create Test Metenox Structures',
+# Analyze all structures for a corporation
+php artisan structure-manager:analyze-consumption --corporation=98765432</code></pre>',
+
+    'cleanup_history_cmd_title' => 'Clean Up Old History',
+    'cleanup_history_cmd_desc' => 'Removes old fuel history records to maintain database performance and save storage space. Cleans up Upwell structure fuel history, POS fuel history, and consumption records.',
+    'cleanup_history_cmd_note' => 'This command runs automatically daily at 3:00 AM. Once deleted, historical data cannot be recovered!',
+    'cleanup_history_cmd_options' => '<strong>Options:</strong>
+    <ul>
+        <li><code>--days=180</code> - Days to retain Upwell structure history (default: 180)</li>
+        <li><code>--pos-days=90</code> - Days to retain POS history (default: 90)</li>
+    </ul>
+    <strong>What gets cleaned:</strong>
+    <ul>
+        <li>Upwell structure fuel history older than specified days</li>
+        <li>POS fuel history older than specified days</li>
+        <li>Structure consumption records older than 6 months</li>
+        <li>POS consumption records older than 3 months</li>
+    </ul>
+    <strong>Examples:</strong>
+    <pre><code># Use defaults (180 days for structures, 90 days for POS)
+php artisan structure-manager:cleanup-history
+
+# Keep 365 days of structure history, 180 days of POS history
+php artisan structure-manager:cleanup-history --days=365 --pos-days=180
+
+# Keep only 30 days of all history
+php artisan structure-manager:cleanup-history --days=30 --pos-days=30</code></pre>',
+
+    'create_test_metenox_cmd_title' => 'Create Test Metenox Structures (Development)',
     'create_test_metenox_cmd_desc' => 'Creates test structures (Metenox Moon Drill + Astrahus) with realistic dual-fuel data for testing and demonstration purposes.',
     'create_test_metenox_cmd_note' => 'This command is designed for testing the plugin\'s Metenox dual-fuel tracking features. It creates:',
     'create_test_metenox_features' => '<ul>
@@ -662,6 +825,74 @@ return [
     'pos_notify_title' => 'POS Low Fuel Notifications',
     'pos_notify_desc' => 'Checks all POSes for low fuel/strontium/charter levels and sends webhook notifications. Runs every 10 minutes via scheduler.',
     'pos_notify_cmd' => 'php artisan structure-manager:notify-pos-fuel',
+
+    'simulate_consumption_title' => 'Simulate Fast Consumption (Development)',
+    'simulate_consumption_desc' => 'Simulates rapid fuel consumption for testing notifications without waiting days. Only works with test POSes created by the create-test-poses command. Reduces fuel levels artificially in 20-minute cycles.',
+    'simulate_consumption_cmd' => 'php artisan structure-manager:simulate-consumption',
+    'simulate_consumption_options' => '<strong>Options:</strong>
+    <ul>
+        <li><code>--cycles=1</code> - Number of 20-minute cycles to simulate (default: 1)</li>
+        <li><code>--test-only</code> - Only process test POSes (IDs >= 1000000000)</li>
+    </ul>
+    <strong>Examples:</strong>
+    <pre><code># Simulate one 20-minute cycle
+php artisan structure-manager:simulate-consumption
+
+# Simulate 10 cycles (simulate ~3.3 hours of consumption)
+php artisan structure-manager:simulate-consumption --cycles=10
+
+# Simulate 72 cycles (simulate 24 hours in ~24 minutes)
+php artisan structure-manager:simulate-consumption --cycles=72</code></pre>
+    <strong>Testing Workflow:</strong>
+    <pre><code># 1. Create test POSes with fast consumption
+php artisan structure-manager:create-test-poses --fast-consumption
+
+# 2. Simulate consumption cycles
+php artisan structure-manager:simulate-consumption --cycles=20
+
+# 3. Trigger notifications
+php artisan structure-manager:notify-pos-fuel
+
+# 4. Cleanup when done
+php artisan structure-manager:create-test-poses --cleanup</code></pre>
+    <div class="warning-box"><i class="fas fa-exclamation-triangle"></i> <strong>Testing Only:</strong> This manipulates fuel levels artificially. Do not use in production!</div>',
+
+    'create_test_poses_title' => 'Create Test POSes (Development)',
+    'create_test_poses_desc' => 'Creates realistic test POSes across multiple corporations for testing webhook filtering, notifications, and fuel consumption scenarios. Uses safe ID ranges far outside EVE\'s data allocation (corporations: 2.1B range, POSes: 2.2B range).',
+    'create_test_poses_cmd' => 'php artisan structure-manager:create-test-poses',
+    'create_test_poses_features' => '<strong>Features:</strong>
+        <ul>
+            <li><strong>Multiple corporations:</strong> Create 1-10 test corporations (default: 3)</li>
+            <li><strong>Multiple POSes per corp:</strong> Add 1-10 POSes to each corporation (default: 2)</li>
+            <li><strong>Varied scenarios:</strong> Automatically creates POSes with different fuel levels (critical, warning, good, zero strontium)</li>
+            <li><strong>Security space variety:</strong> POSes in high-sec (with charters), low-sec, and null-sec systems</li>
+            <li><strong>Tower type diversity:</strong> Various Amarr, Caldari, Gallente, and Minmatar towers (small/medium/large)</li>
+            <li><strong>Fuel reserves:</strong> Automatically creates hangar reserves for testing reserve tracking</li>
+            <li><strong>Fast consumption mode:</strong> Optional 20-minute fuel cycles for rapid testing</li>
+            <li><strong>Complete cleanup:</strong> Easy removal of all test data with --cleanup flag</li>
+        </ul>',
+    'create_test_poses_usage_title' => 'Usage Examples',
+    'create_test_poses_usage' => '<pre><code># Create 3 corporations with 2 POSes each (defaults)
+php artisan structure-manager:create-test-poses
+
+# Create 5 corporations with 4 POSes each
+php artisan structure-manager:create-test-poses --corporations=5 --poses-per-corp=4
+
+# Enable fast consumption for rapid testing (20-min cycles)
+php artisan structure-manager:create-test-poses --fast-consumption
+
+# Remove all test data
+php artisan structure-manager:create-test-poses --cleanup</code></pre>',
+    'create_test_poses_use_cases' => '<strong>Testing Scenarios:</strong>
+        <ul>
+            <li><strong>Webhook filtering:</strong> Create multiple test corporations to verify webhook corporation filters work correctly</li>
+            <li><strong>Notification testing:</strong> Generate POSes at critical/warning fuel levels to test Discord alerts</li>
+            <li><strong>Multiple webhooks:</strong> Test that notifications are sent to correct channels based on corporation filters</li>
+            <li><strong>Fuel consumption:</strong> Use --fast-consumption to verify fuel tracking and calculations</li>
+            <li><strong>Zero strontium behavior:</strong> Test POSes include scenarios with 0 strontium for testing alerts</li>
+            <li><strong>Charter tracking:</strong> High-sec POSes automatically require charters for testing</li>
+            <li><strong>Role mentions:</strong> Test per-webhook role mentions with different corporations</li>
+        </ul>',
 
     'pos_example_title' => 'POS Tracking Example',
     'pos_example_desc' => 'A Large Amarr Control Tower in High Security requires:',
@@ -787,11 +1018,11 @@ return [
         <li><strong>Test webhook:</strong> Use the "Test Webhook" button in Settings to verify connectivity.</li>
         <li><strong>Check notification intervals:</strong> Review fuel and strontium reminder intervals. Set to 0 to disable interval reminders (receive only status change alerts).</li>
         <li><strong>Verify POS status:</strong> Notifications only trigger when POS status changes (good→warning→critical) or during critical interval reminders.</li>
-        <li><strong>Check notification tracking:</strong> Review database table <code>corporation_starbases</code> for columns <code>fuel_last_notification_at</code> and <code>strontium_last_notification_at</code> to see last notification times.</li>
+        <li><strong>Check notification tracking:</strong> Review database table <code>starbase_fuel_history</code> for columns <code>last_fuel_notification_at</code>, <code>last_strontium_notification_at</code>, <code>last_fuel_notification_status</code>, and <code>last_strontium_notification_status</code> to see last notification times and status.</li>
         <li><strong>Inspect scheduler:</strong> Verify that <code>structure-manager:notify-pos-fuel</code> command is running every 10 minutes in SeAT scheduler.</li>
         <li><strong>Review logs:</strong> Check Laravel logs for webhook errors: <code>storage/logs/laravel.log</code></li>
         <li><strong>Validate thresholds:</strong> Ensure critical thresholds are less than warning thresholds in Settings.</li>
-        <li><strong>Discord role mentions:</strong> Verify role ID format is correct: <code>&lt;@&amp;ROLE_ID&gt;</code></li>
+        <li><strong>Per-webhook role mentions:</strong> Verify each webhook\'s role ID format is correct: <code>&lt;@&amp;ROLE_ID&gt;</code></li>
         <li><strong>Final alert timing:</strong> Remember that final alerts are sent at exactly 1 hour remaining, regardless of intervals.</li>
     </ul>',
 
