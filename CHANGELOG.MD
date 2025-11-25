@@ -5,7 +5,41 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
-## 🆕 Version 1.0.9 — *November 2025*
+## 🆕 Version 1.0.10 — *November 2025*
+
+### Added
+- Multiple webhook support with per-webhook configuration (corporation filters, location filters, role mentions)
+- Zero strontium behavior handling for POSes (proper critical alerts and status detection)
+- Status-based POS notifications (good → warning → critical transitions with optional reminders)
+- Final 1-hour alert for POSes before going offline
+- `simulate-consumption` command for rapid fuel consumption testing
+- Webhook test button in settings for connectivity verification
+- Enhanced reserve tracking with nested Office container support
+
+### Changed
+- Renamed "Recent Refuel Events" section to "Fuel Withdrawals" for clarity
+- Fuel Withdrawals now only shows Upwell structures (excludes POS and Metenox)
+- Enhanced refuel event detection logic
+- Updated help documentation with corrected command schedules
+- `track-fuel` command now documented as handling both fuel bays and reserves
+- `analyze-consumption` command now includes `--structure` and `--corporation` options
+
+### Fixed
+- POS and Metenox entries incorrectly appearing in Fuel Withdrawals section
+- Incorrect command schedules in help documentation (analyze-consumption)
+- Duplicate "Track Fuel Reserves" section in help documentation
+- Zero strontium alert triggers not working correctly
+
+### Documented
+- Added missing `cleanup-history` command documentation
+- Added missing `simulate-consumption` command documentation
+- Removed confusing duplicate command sections
+- Added command options and usage examples throughout
+- Corrected all command schedules (hourly at :15/:30, every 10 minutes, etc.)
+
+---
+
+## Version 1.0.9 — *November 2025*
 
 ### 🐛 Bug Fixes
 

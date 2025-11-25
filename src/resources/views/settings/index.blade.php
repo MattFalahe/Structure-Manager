@@ -169,6 +169,74 @@
         color: #b0b0b0;
     }
     
+    /* Webhook List Styles */
+    .webhook-list {
+        margin-top: 1rem;
+    }
+
+    .webhook-item {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 0.25rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+    }
+
+    .webhook-item:hover {
+        background: rgba(0, 0, 0, 0.3);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .webhook-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+
+    .webhook-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .webhook-status {
+        font-size: 0.75rem;
+    }
+
+    .webhook-status.enabled {
+        color: #28a745;
+    }
+
+    .webhook-status.disabled {
+        color: #6c757d;
+    }
+
+    .webhook-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .webhook-details {
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .webhook-url {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.2rem;
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .webhook-test-result {
+        margin-left: 0.5rem;
+    }
+    
     /* Construction Placeholder Styles */
     .construction-placeholder {
         text-align: center;
@@ -580,47 +648,94 @@
                     </p>
                 </div>
                 
-                <!-- POS Notification Settings -->
+                <!-- POS Notification Webhooks Section -->
                 <div class="settings-section">
-                    <h4><i class="fas fa-bell"></i> POS Notifications</h4>
+                    <h4><i class="fas fa-bell"></i> POS Notification Webhooks</h4>
                     
                     <div class="info-banner">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Webhook Notifications:</strong> Configure Discord or Slack webhooks to receive automated alerts for critical POS fuel and strontium levels.
+                        <strong>Multiple Webhooks:</strong> Configure up to 10 Discord or Slack webhooks with optional corporation filtering. 
+                        Notifications will be sent to all enabled webhooks that match the corporation filter.
                     </div>
                     
-                    <div class="form-group">
-                        <label for="pos_webhook_enabled">
-                            <input type="checkbox" id="pos_webhook_enabled" name="pos_webhook_enabled" value="1" 
-                                   {{ StructureManager\Models\StructureManagerSettings::get('pos_webhook_enabled') ? 'checked' : '' }}>
-                            Enable POS Webhook Notifications
-                        </label>
-                        <small class="help-text">Send alerts when POSes reach critical fuel/strontium thresholds</small>
+                    <!-- Existing Webhooks List -->
+                    @if($webhooks->count() > 0)
+                    <div class="webhook-list mb-4">
+                        @foreach($webhooks as $webhook)
+                        <div class="webhook-item" data-webhook-id="{{ $webhook->id }}">
+                            <div class="webhook-header">
+                                <div class="webhook-info">
+                                    <span class="webhook-status {{ $webhook->enabled ? 'enabled' : 'disabled' }}">
+                                        <i class="fas fa-circle"></i>
+                                    </span>
+                                    <strong>Webhook #{{ $loop->iteration }}</strong>
+                                    @if($webhook->description)
+                                        <span class="text-muted">- {{ $webhook->description }}</span>
+                                    @endif
+                                </div>
+                                <div class="webhook-actions">
+                                    <button type="button" class="btn btn-sm btn-info" onclick="testWebhook({{ $webhook->id }})">
+                                        <i class="fas fa-paper-plane"></i> Test
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="editWebhook({{ $webhook->id }})">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteWebhook({{ $webhook->id }})">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="webhook-details">
+                                <div class="row">
+                                    <div class="col-md-12 mb-2">
+                                        <small class="text-muted">URL:</small>
+                                        <code class="webhook-url">{{ substr($webhook->webhook_url, 0, 60) }}...</code>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Corporation Filter:</small>
+                                        <strong>{{ $webhook->getCorporationLabel() }}</strong>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Role Mention:</small>
+                                        @if($webhook->role_mention)
+                                            <code>{{ $webhook->role_mention }}</code>
+                                        @else
+                                            <span class="text-muted">None</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endforeach
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="pos_webhook_url">Webhook URL</label>
-                        <input type="url" 
-                               class="form-control" 
-                               id="pos_webhook_url" 
-                               name="pos_webhook_url" 
-                               value="{{ StructureManager\Models\StructureManagerSettings::get('pos_webhook_url') }}"
-                               placeholder="https://discord.com/api/webhooks/...">
-                        <small class="help-text">Discord or Slack webhook URL for notifications</small>
+                    @else
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No webhooks configured. Add at least one webhook to receive notifications.
                     </div>
+                    @endif
                     
-                    <div class="form-group">
-                        <label for="pos_discord_role_mention">Discord Role Mention (Optional)</label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="pos_discord_role_mention" 
-                               name="pos_discord_role_mention" 
-                               value="{{ StructureManager\Models\StructureManagerSettings::get('pos_discord_role_mention') }}"
-                               placeholder="<@&1234567890>">
-                        <small class="help-text">
-                            Discord role mention for critical alerts. Format: <code>&lt;@&amp;ROLE_ID&gt;</code>
-                            <br>To get role ID: Server Settings → Roles → Right-click role → Copy ID (Developer Mode must be enabled)
-                        </small>
+                    <!-- Add New Webhook Button -->
+                    @if($webhooks->count() < 10)
+                    <button type="button" class="btn btn-success" onclick="showAddWebhookModal()">
+                        <i class="fas fa-plus"></i> Add Webhook ({{ $webhooks->count() }}/10)
+                    </button>
+                    @else
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Maximum of 10 webhooks reached.
+                    </div>
+                    @endif
+                </div>
+
+                <!-- Additional Notification Settings -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-cog"></i> Notification Behavior</h4>
+                    
+                    <div class="info-banner mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Note:</strong> Discord role mentions are now configured per-webhook above. Each webhook can have its own role mention for flexible notification routing.
                     </div>
                     
                     <div class="row">
@@ -665,10 +780,49 @@
                         </div>
                     </div>
                     
-                    <button type="button" class="btn btn-info btn-test-webhook" onclick="testWebhook()">
-                        <i class="fas fa-paper-plane"></i> Test Webhook
-                    </button>
-                    <span id="webhook-test-result"></span>
+                    <!-- Zero Strontium Settings -->
+                    <div class="settings-subsection mt-3">
+                        <h5><i class="fas fa-shield-alt"></i> Zero Strontium Behavior</h5>
+                        
+                        <div class="info-banner">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Zero Strontium:</strong> Some POSes are intentionally run with 0 strontium. These settings prevent notification spam.
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" 
+                                       id="pos_strontium_zero_notify_once" 
+                                       name="pos_strontium_zero_notify_once" 
+                                       value="1"
+                                       {{ StructureManager\Models\StructureManagerSettings::get('pos_strontium_zero_notify_once', true) ? 'checked' : '' }}>
+                                Only notify once for prolonged zero strontium
+                            </label>
+                            <small class="help-text">
+                                For online POSes with 0 strontium longer than the grace period, only send notifications on status changes (not on intervals)
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="pos_strontium_zero_grace_period">
+                                <i class="fas fa-clock"></i> Zero Strontium Grace Period
+                            </label>
+                            <div class="input-group" style="max-width: 300px;">
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="pos_strontium_zero_grace_period" 
+                                       name="pos_strontium_zero_grace_period" 
+                                       value="{{ StructureManager\Models\StructureManagerSettings::get('pos_strontium_zero_grace_period', 2) }}"
+                                       min="1" max="24" required>
+                                <div class="input-group-append">
+                                    <span class="input-group-text">hours</span>
+                                </div>
+                            </div>
+                            <small class="help-text">
+                                Time to wait after first 0 strontium notification before treating it as "intentional" (default: 2 hours)
+                            </small>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- POS Alert Thresholds -->
@@ -994,32 +1148,161 @@
 
 </div>
 </div>
+
+<!-- Modal for Add/Edit Webhook -->
+<div class="modal fade" id="webhookModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="webhookModalTitle">Add Webhook</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="webhookForm" method="POST">
+                @csrf
+                <input type="hidden" name="_method" id="webhookMethod" value="POST">
+                
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="webhook_url">Webhook URL *</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="webhook_url" 
+                               name="webhook_url" 
+                               required
+                               placeholder="https://discord.com/api/webhooks/...">
+                        <small class="text-muted">Discord or Slack webhook URL</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="webhook_corporation_id">Corporation Filter</label>
+                        <select class="form-control" id="webhook_corporation_id" name="corporation_id">
+                            <option value="">All Corporations</option>
+                            @foreach($corporations as $corp)
+                                <option value="{{ $corp->corporation_id }}">
+                                    {{ $corp->name }} (ID: {{ $corp->corporation_id }})
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted">
+                            Select a corporation to only receive notifications for that corporation, or leave as "All Corporations"
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="webhook_description">Description (Optional)</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="webhook_description" 
+                               name="description" 
+                               maxlength="255"
+                               placeholder="e.g., Main Alliance Discord">
+                        <small class="text-muted">A label to help you identify this webhook</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="webhook_role_mention">Discord Role Mention (Optional)</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="webhook_role_mention" 
+                               name="role_mention" 
+                               maxlength="100"
+                               placeholder="<@&123456789> or 123456789">
+                        <small class="text-muted">
+                            Discord role mention for critical alerts. Format: <code>&lt;@&amp;ROLE_ID&gt;</code> or just the role ID number.<br>
+                            <strong>Tip:</strong> Enable Developer Mode in Discord, right-click role → Copy ID
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" 
+                                   id="webhook_enabled" 
+                                   name="enabled" 
+                                   checked>
+                            Enabled
+                        </label>
+                        <small class="text-muted">Uncheck to disable this webhook without deleting it</small>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Webhook
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('javascript')
 <script>
-function testWebhook() {
-    const button = $('.btn-test-webhook');
-    const result = $('#webhook-test-result');
+function showAddWebhookModal() {
+    $('#webhookModalTitle').text('Add Webhook');
+    $('#webhookForm').attr('action', '{{ route("structure-manager.webhook.add") }}');
+    $('#webhookMethod').val('POST');
+    $('#webhook_url').val('');
+    $('#webhook_corporation_id').val('');
+    $('#webhook_description').val('');
+    $('#webhook_role_mention').val('');
+    $('#webhook_enabled').prop('checked', true);
+    $('#webhookModal').modal('show');
+}
+
+function editWebhook(id) {
+    // Get webhook data via AJAX
+    $.get('{{ route("structure-manager.webhook.get", ":id") }}'.replace(':id', id), function(webhook) {
+        $('#webhookModalTitle').text('Edit Webhook');
+        $('#webhookForm').attr('action', '{{ route("structure-manager.webhook.update", ":id") }}'.replace(':id', id));
+        $('#webhookMethod').val('PUT');
+        $('#webhook_url').val(webhook.webhook_url);
+        $('#webhook_corporation_id').val(webhook.corporation_id || '');
+        $('#webhook_description').val(webhook.description || '');
+        $('#webhook_role_mention').val(webhook.role_mention || '');
+        $('#webhook_enabled').prop('checked', webhook.enabled);
+        $('#webhookModal').modal('show');
+    });
+}
+
+function deleteWebhook(id) {
+    if (!confirm('Are you sure you want to delete this webhook?')) {
+        return;
+    }
+    
+    $('<form method="POST" action="' + '{{ route("structure-manager.webhook.delete", ":id") }}'.replace(':id', id) + '">' +
+        '@csrf' +
+        '<input type="hidden" name="_method" value="DELETE">' +
+        '</form>').appendTo('body').submit();
+}
+
+function testWebhook(id) {
+    const button = $('[data-webhook-id="' + id + '"] .btn-info');
+    const originalText = button.html();
     
     button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
-    result.html('');
     
-    $.post('{{ route('structure-manager.settings.test-webhook') }}', {
+    $.post('{{ route("structure-manager.webhook.test", ":id") }}'.replace(':id', id), {
         _token: '{{ csrf_token() }}'
     })
     .done(function(response) {
         if (response.success) {
-            result.html('<span class="text-success ml-2"><i class="fas fa-check-circle"></i> ' + response.message + '</span>');
+            button.html('<i class="fas fa-check"></i> Success');
+            setTimeout(() => button.html(originalText).prop('disabled', false), 2000);
         } else {
-            result.html('<span class="text-danger ml-2"><i class="fas fa-times-circle"></i> ' + response.message + '</span>');
+            button.html('<i class="fas fa-times"></i> Failed');
+            alert('Test failed: ' + response.message);
+            setTimeout(() => button.html(originalText).prop('disabled', false), 2000);
         }
     })
     .fail(function() {
-        result.html('<span class="text-danger ml-2"><i class="fas fa-times-circle"></i> Failed to send test notification</span>');
-    })
-    .always(function() {
-        button.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Test Webhook');
+        button.html('<i class="fas fa-times"></i> Error');
+        alert('Failed to send test notification');
+        setTimeout(() => button.html(originalText).prop('disabled', false), 2000);
     });
 }
 
