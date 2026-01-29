@@ -1,0 +1,583 @@
+/**
+ * Structure Manager Plugin - Scoped CSS
+ * Version: 3.0 (Wrapper Approach)
+ * 
+ * Uses a wrapper div to scope all custom styles to the plugin only
+ * Keeps original Bootstrap classes but isolates custom overrides
+ * 
+ * Usage: Wrap plugin content in <div class="structure-manager-wrapper">
+ */
+
+/* ==================== SCOPED CUSTOM STYLES ==================== */
+/* All styles are scoped to .structure-manager-wrapper to prevent conflicts */
+
+/* Fuel status colors - Better contrast for all themes */
+.structure-manager-wrapper .fuel-critical { 
+    color: #dc3545; 
+    font-weight: bold; 
+}
+
+.structure-manager-wrapper .fuel-warning { 
+    color: #ffc107; 
+    font-weight: bold; 
+}
+
+.structure-manager-wrapper .fuel-normal { 
+    color: #28a745; 
+}
+
+.structure-manager-wrapper .fuel-good { 
+    color: #17a2b8; 
+}
+
+.structure-manager-wrapper .fuel-unknown { 
+    color: #6c757d; 
+}
+
+/* Status badges */
+.structure-manager-wrapper .status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.structure-manager-wrapper .status-online {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.structure-manager-wrapper .status-offline {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.structure-manager-wrapper .status-shield_vulnerable {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+/* Consumption stats display */
+.structure-manager-wrapper .consumption-stats {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    flex-wrap: wrap;
+}
+
+.structure-manager-wrapper .stat-item {
+    padding: 0.25rem 0.5rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    white-space: nowrap;
+}
+
+.structure-manager-wrapper .stat-item i {
+    margin-right: 0.25rem;
+    opacity: 0.7;
+}
+
+/* Metenox indicators */
+.structure-manager-wrapper .metenox-indicator {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    margin-left: 0.25rem;
+}
+
+.structure-manager-wrapper .limiting-fuel {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.structure-manager-wrapper .limiting-gas {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+/* Metenox tooltips */
+.structure-manager-wrapper .metenox-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.structure-manager-wrapper .metenox-tooltip .tooltip-content {
+    visibility: hidden;
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    text-align: left;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 250px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.structure-manager-wrapper .metenox-tooltip:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Metenox badge */
+.structure-manager-wrapper .badge-metenox {
+    background-color: #9c27b0;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+/* Security status colors */
+.structure-manager-wrapper .sec-high { 
+    background-color: #28a745; 
+    color: #fff; 
+}
+
+.structure-manager-wrapper .sec-low { 
+    background-color: #ffc107; 
+    color: #000; 
+}
+
+.structure-manager-wrapper .sec-null { 
+    background-color: #dc3545; 
+    color: #fff; 
+}
+
+/* Alert cards for critical alerts page */
+.structure-manager-wrapper .alert-card {
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    transition: transform 0.2s ease;
+}
+
+.structure-manager-wrapper .alert-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.structure-manager-wrapper .alert-critical {
+    border-left: 4px solid #dc3545;
+}
+
+.structure-manager-wrapper .alert-warning {
+    border-left: 4px solid #ffc107;
+}
+
+/* Stat boxes */
+.structure-manager-wrapper .stat-box {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* List group items with hover */
+.structure-manager-wrapper .list-group-item {
+    transition: background-color 0.2s ease;
+}
+
+.structure-manager-wrapper .list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Custom badge sizing */
+.structure-manager-wrapper .badge-custom {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.875rem;
+}
+
+/* Refuel event cards */
+.structure-manager-wrapper .refuel-event-card {
+    margin-bottom: 1.5rem;
+}
+
+.structure-manager-wrapper .refuel-event-card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Metenox structure highlighting */
+.structure-manager-wrapper .metenox-structure .card-header {
+    background: rgba(156, 39, 176, 0.1);
+    border-left: 4px solid #9c27b0;
+}
+
+/* Dual fuel display for Metenox */
+.structure-manager-wrapper .metenox-dual-fuel {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+    margin: 0.5rem 0;
+}
+
+.structure-manager-wrapper .fuel-type-display {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.structure-manager-wrapper .fuel-blocks-display {
+    background: rgba(0, 123, 255, 0.1);
+    border: 1px solid rgba(0, 123, 255, 0.2);
+}
+
+.structure-manager-wrapper .magmatic-gas-display {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+/* No-print class for buttons that shouldn't appear in printouts */
+.structure-manager-wrapper .no-print {
+    /* Inherits from Bootstrap but ensures it's scoped */
+}
+
+@media print {
+    .structure-manager-wrapper .no-print {
+        display: none !important;
+    }
+}
+
+/* Empty state styling */
+.structure-manager-wrapper .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6c757d;
+}
+
+.structure-manager-wrapper .empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* ============================================
+   POS Detail View Styles for Structure Manager
+   ============================================ */
+
+/* Fuel status cards */
+.structure-manager-wrapper .fuel-card {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.structure-manager-wrapper .fuel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Progress bars - POS style */
+.structure-manager-wrapper .progress {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.structure-manager-wrapper .progress-bar {
+    transition: width 0.6s ease;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Status colors for text */
+.structure-manager-wrapper .text-success-bright {
+    color: #51cf66 !important;
+}
+
+.structure-manager-wrapper .text-warning-bright {
+    color: #ffd43b !important;
+}
+
+.structure-manager-wrapper .text-danger-bright {
+    color: #ff6b6b !important;
+}
+
+.structure-manager-wrapper .text-info-bright {
+    color: #5dade2 !important;
+}
+
+/* LIMITING badge */
+.structure-manager-wrapper .badge-danger {
+    background-color: #ff6b6b;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.structure-manager-wrapper .badge-warning {
+    background-color: #ffd43b;
+    color: #000000;
+    font-weight: bold;
+}
+
+.structure-manager-wrapper .badge-success {
+    background-color: #51cf66;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.structure-manager-wrapper .badge-info {
+    background-color: #5dade2;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.structure-manager-wrapper .badge-secondary {
+    background-color: #6c757d;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+/* Alert boxes */
+.structure-manager-wrapper .alert-info {
+    background: rgba(93, 173, 226, 0.1);
+    border: 1px solid rgba(93, 173, 226, 0.2);
+    border-radius: 0.5rem;
+    color: #e0e0e0;
+    padding: 1rem;
+}
+
+.structure-manager-wrapper .alert-success {
+    background: rgba(81, 207, 102, 0.1);
+    border: 1px solid rgba(81, 207, 102, 0.2);
+    border-radius: 0.5rem;
+    color: #e0e0e0;
+    padding: 0.5rem;
+}
+
+.structure-manager-wrapper .alert-warning {
+    background: rgba(255, 212, 59, 0.1);
+    border: 1px solid rgba(255, 212, 59, 0.2);
+    border-radius: 0.5rem;
+    color: #e0e0e0;
+    padding: 1rem;
+}
+
+.structure-manager-wrapper .alert-danger {
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.2);
+    border-radius: 0.5rem;
+    color: #e0e0e0;
+    padding: 1rem;
+}
+
+/* Definition lists (dl/dt/dd) for consumption rates */
+.structure-manager-wrapper dl.row {
+    margin-bottom: 0.5rem;
+}
+
+.structure-manager-wrapper dt {
+    font-weight: 600;
+    color: #a0a0a0;
+}
+
+.structure-manager-wrapper dd {
+    color: #e0e0e0;
+    margin-bottom: 0.5rem;
+}
+
+/* Card styling */
+.structure-manager-wrapper .card {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.structure-manager-wrapper .card-header {
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.structure-manager-wrapper .card-body {
+    padding: 1.5rem;
+    color: #e0e0e0;
+}
+
+.structure-manager-wrapper .card-title {
+    color: #e0e0e0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.structure-manager-wrapper .card-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Borders for sections */
+.structure-manager-wrapper .border {
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.structure-manager-wrapper .rounded {
+    border-radius: 0.5rem !important;
+}
+
+/* Text colors */
+.structure-manager-wrapper .text-success {
+    color: #51cf66 !important;
+}
+
+.structure-manager-wrapper .text-warning {
+    color: #ffd43b !important;
+}
+
+.structure-manager-wrapper .text-danger {
+    color: #ff6b6b !important;
+}
+
+.structure-manager-wrapper .text-info {
+    color: #5dade2 !important;
+}
+
+.structure-manager-wrapper .text-muted {
+    color: #a0a0a0 !important;
+}
+
+/* Small text */
+.structure-manager-wrapper small {
+    font-size: 0.875rem;
+    color: #a0a0a0;
+}
+
+/* Tooltips */
+.structure-manager-wrapper [data-toggle="tooltip"] {
+    cursor: help;
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.3);
+}
+
+/* Chart containers */
+.structure-manager-wrapper canvas {
+    max-height: 400px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .structure-manager-wrapper .fuel-card {
+        margin-bottom: 1rem;
+    }
+    
+    .structure-manager-wrapper .card-body {
+        padding: 1rem;
+    }
+    
+    .structure-manager-wrapper dl.row dt,
+    .structure-manager-wrapper dl.row dd {
+        width: 100% !important;
+        margin-left: 0 !important;
+    }
+}
+
+/* Icon colors */
+.structure-manager-wrapper .fas.fa-fire {
+    color: #5dade2;
+}
+
+.structure-manager-wrapper .fas.fa-certificate {
+    color: #9b59b6;
+}
+
+.structure-manager-wrapper .fas.fa-shield-alt {
+    color: #5dade2;
+}
+
+.structure-manager-wrapper .fas.fa-info-circle {
+    color: #5dade2;
+}
+
+.structure-manager-wrapper .fas.fa-percentage {
+    color: #51cf66;
+}
+
+/* POS-specific spacing */
+.structure-manager-wrapper .mb-0 {
+    margin-bottom: 0 !important;
+}
+
+.structure-manager-wrapper .mb-1 {
+    margin-bottom: 0.25rem !important;
+}
+
+.structure-manager-wrapper .mb-2 {
+    margin-bottom: 0.5rem !important;
+}
+
+.structure-manager-wrapper .mb-3 {
+    margin-bottom: 1rem !important;
+}
+
+.structure-manager-wrapper .mt-1 {
+    margin-top: 0.25rem !important;
+}
+
+.structure-manager-wrapper .mt-2 {
+    margin-top: 0.5rem !important;
+}
+
+.structure-manager-wrapper .mt-3 {
+    margin-top: 1rem !important;
+}
+
+.structure-manager-wrapper .p-3 {
+    padding: 1rem !important;
+}
+
+/* D-flex utilities */
+.structure-manager-wrapper .d-flex {
+    display: flex !important;
+}
+
+.structure-manager-wrapper .justify-content-between {
+    justify-content: space-between !important;
+}
+
+.structure-manager-wrapper .align-items-center {
+    align-items: center !important;
+}
+
+/* Text alignment */
+.structure-manager-wrapper .text-center {
+    text-align: center !important;
+}
+
+/* Row and column spacing */
+.structure-manager-wrapper .row {
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+}
+
+.structure-manager-wrapper [class*="col-"] {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+}
+
+/* ==================== THAT'S IT! ==================== */
+/* 
+ * All other styling comes from SeAT's loaded Bootstrap CSS
+ * No need to redefine cards, buttons, badges, tables, etc.
+ * They work perfectly as-is!
+ */
