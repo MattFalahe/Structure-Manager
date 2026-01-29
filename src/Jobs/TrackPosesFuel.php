@@ -73,13 +73,20 @@ class TrackPosesFuel implements ShouldQueue
         }
         
         Log::info("TrackPosesFuel: Completed. Tracked: $tracked, Reserves: $reservesTracked, Skipped: $skipped");
-        
+
+        // CRITICAL: Clean up orphaned POSes (exist in history but not in corporation_starbases)
+        // This handles POSes that were unanchored/removed from the game
+        $orphanedCleaned = $this->cleanupOrphanedPoses($poses->pluck('starbase_id')->toArray());
+        if ($orphanedCleaned > 0) {
+            Log::info("TrackPosesFuel: Cleaned up $orphanedCleaned orphaned POS(es) no longer in corporation_starbases");
+        }
+
         // Clean old history (keep 6 months)
         $deleted = StarbaseFuelHistory::where('created_at', '<', Carbon::now()->subMonths(6))->delete();
         if ($deleted > 0) {
             Log::info("TrackPosesFuel: Cleaned $deleted old history records");
         }
-        
+
         // Clean old reserve records (keep 3 months)
         $deletedReserves = StarbaseFuelReserves::where('created_at', '<', Carbon::now()->subMonths(3))->delete();
         if ($deletedReserves > 0) {
@@ -332,11 +339,119 @@ class TrackPosesFuel implements ShouldQueue
     }
     
     /**
+     * Clean up orphaned POSes that no longer exist in corporation_starbases
+     *
+     * When a POS is unanchored/removed from the game, it disappears from corporation_starbases
+     * but the history records remain. This method:
+     * 1. Finds POSes with recent history that no longer exist in corporation_starbases
+     * 2. Creates a final "unanchored" record (state=0) to mark them as removed
+     * 3. Resets notification tracking to prevent future alerts
+     *
+     * @param array $currentPosIds Array of starbase_ids that currently exist
+     * @return int Number of orphaned POSes cleaned up
+     */
+    private function cleanupOrphanedPoses(array $currentPosIds)
+    {
+        try {
+            // Find POSes that have history records but no longer exist in corporation_starbases
+            // Only look at POSes whose latest record shows them as online/reinforced (state 3 or 4)
+            // to avoid processing POSes that were already marked as unanchored
+            $orphanedPoses = StarbaseFuelHistory::select(
+                    'starbase_id',
+                    'corporation_id',
+                    'tower_type_id',
+                    'starbase_name',
+                    'system_id',
+                    'system_security',
+                    'space_type',
+                    'metadata'
+                )
+                ->whereIn('id', function($query) {
+                    $query->selectRaw('MAX(id)')
+                        ->from('starbase_fuel_history')
+                        ->groupBy('starbase_id');
+                })
+                ->whereIn('state', [3, 4]) // Last known state was online or reinforced
+                ->when(!empty($currentPosIds), function($query) use ($currentPosIds) {
+                    // Exclude POSes that currently exist
+                    $query->whereNotIn('starbase_id', $currentPosIds);
+                }, function($query) {
+                    // If no current POSes, check against corporation_starbases directly
+                    $query->whereNotExists(function($subQuery) {
+                        $subQuery->select(DB::raw(1))
+                            ->from('corporation_starbases')
+                            ->whereColumn('corporation_starbases.starbase_id', 'starbase_fuel_history.starbase_id');
+                    });
+                })
+                ->get();
+
+            $cleanedCount = 0;
+
+            foreach ($orphanedPoses as $orphan) {
+                Log::warning("TrackPosesFuel: Detected orphaned POS {$orphan->starbase_id} (" .
+                    ($orphan->starbase_name ?? 'Unnamed') . ") - marking as unanchored");
+
+                // Create a final history record marking the POS as unanchored (state=0)
+                // This prevents future notifications and provides an audit trail
+                StarbaseFuelHistory::create([
+                    'starbase_id' => $orphan->starbase_id,
+                    'corporation_id' => $orphan->corporation_id,
+                    'tower_type_id' => $orphan->tower_type_id,
+                    'starbase_name' => $orphan->starbase_name,
+                    'system_id' => $orphan->system_id,
+                    'state' => 0, // UNANCHORED - this prevents any future notifications
+
+                    // Zero out fuel data since POS no longer exists
+                    'fuel_blocks_quantity' => 0,
+                    'fuel_days_remaining' => 0,
+                    'strontium_quantity' => 0,
+                    'strontium_hours_available' => 0,
+                    'strontium_status' => 'none',
+                    'charter_quantity' => 0,
+                    'charter_days_remaining' => 0,
+                    'requires_charters' => false,
+                    'actual_days_remaining' => 0,
+                    'limiting_factor' => 'unanchored',
+
+                    // Context
+                    'system_security' => $orphan->system_security,
+                    'space_type' => $orphan->space_type,
+
+                    // CRITICAL: Reset all notification tracking to prevent future alerts
+                    'last_fuel_notification_status' => null,
+                    'last_fuel_notification_at' => null,
+                    'fuel_final_alert_sent' => false,
+                    'last_strontium_notification_status' => null,
+                    'last_strontium_notification_at' => null,
+                    'strontium_final_alert_sent' => false,
+
+                    'metadata' => array_merge(
+                        is_array($orphan->metadata) ? $orphan->metadata : [],
+                        [
+                            'cleanup_reason' => 'POS no longer exists in corporation_starbases',
+                            'cleanup_at' => Carbon::now()->toIso8601String(),
+                            'previous_state' => 'online/reinforced',
+                        ]
+                    ),
+                ]);
+
+                $cleanedCount++;
+            }
+
+            return $cleanedCount;
+
+        } catch (\Exception $e) {
+            Log::error("TrackPosesFuel: Error cleaning up orphaned POSes: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * Convert state string to integer
-     * 
+     *
      * SeAT stores state as string in corporation_starbases (e.g., "online", "offline")
      * but we need to store it as integer in history for proper querying
-     * 
+     *
      * @param mixed $state State value (string or integer)
      * @return int|null State as integer
      */

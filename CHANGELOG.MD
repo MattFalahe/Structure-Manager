@@ -5,7 +5,31 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
-## 🆕 Version 1.0.10 — *November 2025*
+## 🆕 Version 1.0.11 — *January 2026*
+
+### 🐛 Bug Fixes
+
+**Fixed notifications for unanchored/removed POSes**
+
+**Issue:** Users received critical fuel notifications for POSes that had already been unanchored or removed from the game. The POS was not visible in the plugin UI or SeAT, but notifications continued with stale data showing "Last updated 1h ago", "11h ago", etc.
+
+**Root Cause:** The notification job queried historical records (`starbase_fuel_history`) without verifying if the POS still existed in the current corporation holdings (`corporation_starbases`). When a POS was unanchored, it was removed from ESI data but old history records with state=4 (online) remained, triggering repeated notifications.
+
+**What's Fixed:**
+
+- **Added POS existence verification** - Notification job now validates POSes exist in `corporation_starbases` before sending alerts
+- **Primary query filter** - Added `whereExists` clause to exclude POSes no longer in corporation holdings
+- **Secondary safety check** - Per-POS existence verification catches race conditions
+- **Orphaned POS cleanup** - Tracking job now detects and marks removed POSes as unanchored (state=0)
+- **Notification state reset** - Orphaned POSes have all notification tracking fields cleared
+
+**Technical Changes:**
+- `NotifyPosLowFuel.php`: Added DB facade import and existence checks
+- `TrackPosesFuel.php`: Added `cleanupOrphanedPoses()` method that runs after each tracking cycle
+
+---
+
+## Version 1.0.10 — *November 2025*
 
 ### Added
 - Multiple webhook support with per-webhook configuration (corporation filters, location filters, role mentions)
