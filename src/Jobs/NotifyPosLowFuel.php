@@ -12,6 +12,7 @@ use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\WebhookConfiguration;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Send Discord/Slack notifications for POSes with low fuel
@@ -94,17 +95,25 @@ class NotifyPosLowFuel implements ShouldQueue
         ]);
 
         // Get latest history for all ONLINE (state = 4) and REINFORCED (state = 3) POSes
+        // CRITICAL FIX: Only include POSes that STILL EXIST in corporation_starbases
+        // This prevents notifications for unanchored/removed POSes that have stale history records
         $allPoses = StarbaseFuelHistory::select('starbase_fuel_history.starbase_id', 'starbase_fuel_history.corporation_id')
             ->whereIn('id', function($query) {
-                $query->select(\DB::raw('MAX(id)'))
+                $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
             ->whereIn('starbase_fuel_history.state', [3, 4]) // Only ONLINE and REINFORCED POSes
+            // CRITICAL: Verify POS still exists in current corporation holdings (ESI data)
+            ->whereExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('corporation_starbases')
+                    ->whereColumn('corporation_starbases.starbase_id', 'starbase_fuel_history.starbase_id');
+            })
             ->distinct()
             ->get();
 
-        \Log::channel('stack')->info('NotifyPosLowFuel: Found ' . $allPoses->count() . ' ONLINE/REINFORCED POSes to check');
+        \Log::channel('stack')->info('NotifyPosLowFuel: Found ' . $allPoses->count() . ' ONLINE/REINFORCED POSes to check (verified in corporation_starbases)');
 
         $notificationsSent = 0;
 
@@ -133,6 +142,17 @@ class NotifyPosLowFuel implements ShouldQueue
                 // Double-check POS is still online or reinforced
                 if (!in_array($latest->state, [3, 4])) {
                     \Log::channel('stack')->debug("NotifyPosLowFuel: Skipping POS {$latest->starbase_id} - not online/reinforced (state: {$latest->state})");
+                    continue;
+                }
+
+                // CRITICAL FIX: Secondary check - verify POS still exists in corporation_starbases
+                // This catches race conditions or POSes removed after initial query
+                $posStillExists = DB::table('corporation_starbases')
+                    ->where('starbase_id', $latest->starbase_id)
+                    ->exists();
+
+                if (!$posStillExists) {
+                    \Log::channel('stack')->warning("NotifyPosLowFuel: Skipping POS {$latest->starbase_id} - no longer exists in corporation_starbases (unanchored/removed)");
                     continue;
                 }
 

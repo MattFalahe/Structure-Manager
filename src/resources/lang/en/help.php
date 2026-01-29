@@ -1024,6 +1024,7 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
         <li><strong>Validate thresholds:</strong> Ensure critical thresholds are less than warning thresholds in Settings.</li>
         <li><strong>Per-webhook role mentions:</strong> Verify each webhook\'s role ID format is correct: <code>&lt;@&amp;ROLE_ID&gt;</code></li>
         <li><strong>Final alert timing:</strong> Remember that final alerts are sent at exactly 1 hour remaining, regardless of intervals.</li>
+        <li><strong>Notifications for removed POSes:</strong> If you receive alerts for POSes that no longer exist (unanchored/removed), this was fixed in v1.0.11. Update to the latest version. The tracking job now automatically detects and marks orphaned POSes as unanchored.</li>
     </ul>',
 
     'need_help' => 'Need More Help?',
