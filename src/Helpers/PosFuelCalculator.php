@@ -19,7 +19,7 @@ class PosFuelCalculator
      */
     const FUEL_BLOCKS = [
         4051 => 'Nitrogen Fuel Block',   // Caldari
-        4246 => 'Hydrogen Fuel Block',   // Caldari/Minmatar  
+        4246 => 'Hydrogen Fuel Block',   // Minmatar
         4247 => 'Helium Fuel Block',     // Amarr
         4312 => 'Oxygen Fuel Block',     // Gallente
     ];
@@ -31,7 +31,7 @@ class PosFuelCalculator
     
     /**
      * Starbase Charter type IDs
-     * Required in high-sec space (security >= 0.45) at 1 per hour
+     * Required in high-sec space (truesec >= 0.45, displays as >= 0.5) at 1 per hour
      * Charter type depends on system sovereignty/faction
      */
     const CHARTER_TYPES = [
@@ -44,7 +44,14 @@ class PosFuelCalculator
     ];
     
     /**
-     * High-sec security threshold for charter requirement
+     * High-sec security threshold for charter requirement.
+     *
+     * SeAT's mapDenormalize.security column stores the raw truesec (unrounded
+     * float, e.g. 0.459 for Tasabeshi). EVE rounds truesec >= 0.45 up to a
+     * displayed 0.5, and those systems ARE high-sec — CONCORD responds and
+     * starbase charters are required. So the comparator must be 0.45, not 0.5:
+     * a 0.5 threshold would wrongly flag ~40-50 real high-sec systems (truesec
+     * 0.45-0.499) as low-sec, suppressing their charter alerts.
      */
     const HIGH_SEC_THRESHOLD = 0.45;
     
@@ -139,19 +146,22 @@ class PosFuelCalculator
      */
     public static function getFuelConsumptionRate($towerTypeId, $systemSecurity = null)
     {
-        // Get base fuel consumption from invControlTowerResources
+        // Get base fuel consumption from invControlTowerResources. Coalesce to 0
+        // when the SDE lacks a row (e.g. custom/unknown tower) so subsequent math
+        // does not trigger PHP 8+ null-to-float deprecations.
         $baseFuelRate = DB::table('invControlTowerResources')
             ->where('controlTowerTypeID', $towerTypeId)
             ->whereIn('resourceTypeID', array_keys(self::FUEL_BLOCKS))
             ->where('purpose', 1) // Power (online)
-            ->value('quantity');
-        
-        // Get strontium requirement for reinforced mode
+            ->value('quantity') ?? 0;
+
+        // Get strontium requirement for reinforced mode (coalesce null to 0 for the
+        // same reason).
         $strontiumRate = DB::table('invControlTowerResources')
             ->where('controlTowerTypeID', $towerTypeId)
             ->where('resourceTypeID', self::STRONTIUM)
             ->where('purpose', 4) // Reinforced
-            ->value('quantity');
+            ->value('quantity') ?? 0;
         
         // Try to get fuel modifier from database first
         $fuelModifier = self::getFuelModifierFromDatabase($towerTypeId);
@@ -281,31 +291,27 @@ class PosFuelCalculator
     public static function calculateDaysRemaining($towerTypeId, $currentFuelBlocks, $currentStrontium = null, $currentCharters = 0, $systemSecurity = null)
     {
         $rates = self::getFuelConsumptionRate($towerTypeId, $systemSecurity);
-        
-        // CRITICAL FIX: POS fuel mechanics
-        // - POS pulls fuel at the START of each hour cycle
-        // - Fuel in bay will be consumed for FUTURE hours
-        // - Current hour is running on previously-pulled fuel
-        // 
-        // Example: 10 blocks in bay @ 10 blocks/hour consumption
-        // - Old calculation: 10 / 10 = 1 hour ❌ WRONG
-        // - Correct calculation: (10 / 10) + 1 = 2 hours ✅
-        //   * 10 blocks will power the NEXT hour
-        //   * Current hour is still running (not yet expired)
+
+        // POS fuel mechanics: a POS pulls fuel at the start of each hour cycle.
+        // Previously this method added +1 hour to the raw (blocks / rate) estimate
+        // on the theory that the current cycle is still running. In practice, the
+        // POS could be anywhere in the hour, so +1 was the *maximum* correction —
+        // which overstated remaining time in the UNSAFE direction (real empty time
+        // arrives up to an hour before the displayed time).
         //
-        // Edge case: 0 blocks in bay
-        // - Old: 0 / 10 = 0 hours ❌ (POS shown as offline but it's still running!)
-        // - Correct: (0 / 10) + 1 = 1 hour ✅ (current cycle finishing)
-        
-        $fuelHours = $rates['fuel_per_hour'] > 0 
-            ? ($currentFuelBlocks / $rates['fuel_per_hour']) + 1  // +1 for current cycle
+        // Report the conservative estimate (no cushion) so refuel planning is safe:
+        // if the UI says 19h remaining, the POS WILL still be up in 19h. The worst
+        // case is that it stays online slightly longer than displayed, which is
+        // safe. Sub-hour precision is preserved in the decimal.
+        $fuelHours = $rates['fuel_per_hour'] > 0
+            ? ($currentFuelBlocks / $rates['fuel_per_hour'])
             : 0;
-        $fuelDays = round($fuelHours / 24, 2);  // Keep 2 decimal precision for sub-day accuracy
-        
-        // If charters are required, calculate charter days with same logic
+        $fuelDays = round($fuelHours / 24, 2);
+
+        // If charters are required, calculate charter days with same conservative logic
         $charterDays = null;
         if ($rates['requires_charters'] && $rates['charters_per_hour'] > 0) {
-            $charterHours = ($currentCharters / $rates['charters_per_hour']) + 1;  // +1 for current cycle
+            $charterHours = $currentCharters / $rates['charters_per_hour'];
             $charterDays = round($charterHours / 24, 2);
         }
         
@@ -499,15 +505,21 @@ class PosFuelCalculator
     {
         $rates = self::getFuelConsumptionRate($towerTypeId);
         $strontiumPerHour = $rates['strontium_for_reinforced'];
-        
-        if ($strontiumPerHour == 0) {
+
+        // Guard against DivisionByZeroError when the SDE has no strontium row for
+        // this tower type. Also handles null (from ->value() missing rows).
+        if (empty($strontiumPerHour)) {
             return [
-                'has_strontium' => false,
+                'has_strontium' => $currentStrontium > 0,
+                'current_amount' => $currentStrontium,
+                'consumption_per_hour' => 0,
+                'hours_available' => 0,
                 'status' => 'unknown',
+                'severity' => 'secondary',
                 'message' => 'Unable to determine strontium requirements',
             ];
         }
-        
+
         // Calculate reinforcement timer
         $hoursAvailable = $currentStrontium / $strontiumPerHour;
         $days = floor($hoursAvailable / 24);

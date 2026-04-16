@@ -8,5 +8,6 @@ return [
     'logistics_report' => 'Logistics Report',
     'critical_alerts' => 'Critical Alerts',
     'settings' => 'Settings',
+    'diagnostics' => 'Diagnostics',
     'help' => 'Help & Documentation',
 ];

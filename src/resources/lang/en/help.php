@@ -922,7 +922,7 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'faq_a3' => 'Yes! Structure Manager automatically tracks all corporations that your SeAT installation manages. The dashboard includes filters to view specific corporations, and all pages support multi-corporation data.',
 
     'faq_q4' => 'Q4: How often does the plugin check fuel levels?',
-    'faq_a4' => 'Upwell structures: Fuel levels tracked hourly, consumption analysis runs every 30 minutes. POSes: Tracked every 10 minutes for real-time monitoring, notifications checked every 10 minutes. Reserve tracking occurs hourly for all structure types. These schedules are automatic and require no configuration.',
+    'faq_a4' => 'Upwell structures: Fuel levels tracked hourly, consumption analysis runs every 30 minutes, reserves tracked hourly as part of the fuel tracking pass. POSes: Fuel, strontium, charters, and reserves all tracked every 10 minutes for real-time monitoring; notifications checked every 10 minutes. These schedules are automatic and require no configuration.',
 
     'faq_q5' => 'Q5: What happens if I refuel a structure?',
     'faq_a5' => 'The plugin automatically detects refuel events by analyzing fuel bay history. Significant increases in fuel levels are logged as refuel events, which appear in the structure detail page and can help track refueling operations.',
@@ -986,10 +986,10 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'issue3_desc' => 'If fuel reserves aren\'t showing:',
     'issue3_solutions' => '<ul>
         <li><strong>Check hangar divisions:</strong> Reserves must be in CorpSAG hangar divisions (not personal hangars).</li>
-        <li><strong>Verify item types:</strong> Plugin tracks Type ID 4312 (Fuel Blocks) and 58903 (Magmatic Gas) only.</li>
+        <li><strong>Verify item types:</strong> Plugin tracks the four fuel block types (4051 Nitrogen, 4246 Hydrogen, 4247 Helium, 4312 Oxygen) plus Magmatic Gas (81143, Metenox only).</li>
         <li><strong>Asset sync required:</strong> SeAT must have synced corporation asset data.</li>
-        <li><strong>Run reserve tracking:</strong> Execute <code>php artisan structure-manager:track-reserves</code> manually.</li>
-        <li><strong>Wait for next cycle:</strong> Reserve tracking occurs hourly.</li>
+        <li><strong>Run reserve tracking:</strong> Reserves are tracked inside the fuel-tracking commands. Execute <code>php artisan structure-manager:track-fuel</code> for Upwell reserves or <code>php artisan structure-manager:track-poses-fuel</code> for POS reserves.</li>
+        <li><strong>Wait for next cycle:</strong> Upwell reserves track hourly (with the main fuel pass); POS reserves track every 10 minutes.</li>
     </ul>',
 
     'issue4_title' => '4. Metenox Dual-Fuel Not Showing',

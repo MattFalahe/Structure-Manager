@@ -52,7 +52,7 @@ class FuelConsumptionTracker
                 continue;
             }
             
-            $realHoursPassed = $previous->created_at->diffInHours($current->created_at);
+            $realHoursPassed = $previous->created_at->diffInHours($current->created_at, true);
             
             if ($realHoursPassed == 0) continue;
             
@@ -367,8 +367,8 @@ class FuelConsumptionTracker
             'structure' => $structure->name ?? 'Unknown',
             'report_date' => Carbon::now(),
             'fuel_expires' => $structure->fuel_expires,
-            'days_remaining' => $structure->fuel_expires ? 
-                Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::now()) : null,
+            'days_remaining' => $structure->fuel_expires ?
+                Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::now(), true) : null,
             'consumption_analysis' => $analysis,
             'consumption_spikes' => $spikes,
             'fuel_status' => $analysis['current_status'] ?? [],

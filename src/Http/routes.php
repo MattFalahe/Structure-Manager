@@ -163,8 +163,8 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
     
-    // Reset Settings
-    Route::get('/settings/reset', [
+    // Reset Settings - POST only (destructive action requires CSRF token)
+    Route::post('/settings/reset', [
         'as' => 'structure-manager.settings.reset',
         'uses' => 'SettingsController@reset',
         'middleware' => 'can:structure-manager.admin',
@@ -208,5 +208,40 @@ Route::group([
         'uses' => 'SettingsController@testWebhook',
         'middleware' => 'can:structure-manager.admin',
     ]);
-    
+
+    // ============================================
+    // Diagnostics (admin-only, read-only checks +
+    // guarded dev-only test data generation)
+    // ============================================
+
+    Route::get('/diagnostic', [
+        'as'         => 'structure-manager.diagnostic',
+        'uses'       => 'DiagnosticController@index',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/poses', [
+        'as'         => 'structure-manager.diagnostic.test-data.poses',
+        'uses'       => 'DiagnosticController@generateTestPoses',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/metenox', [
+        'as'         => 'structure-manager.diagnostic.test-data.metenox',
+        'uses'       => 'DiagnosticController@generateTestMetenox',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/simulate', [
+        'as'         => 'structure-manager.diagnostic.test-data.simulate',
+        'uses'       => 'DiagnosticController@simulateConsumption',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/cleanup', [
+        'as'         => 'structure-manager.diagnostic.test-data.cleanup',
+        'uses'       => 'DiagnosticController@cleanupTestData',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
 });

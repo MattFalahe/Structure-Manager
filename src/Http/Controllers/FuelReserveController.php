@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureFuelReserves;
 use StructureManager\Models\StarbaseFuelReserves;
 use StructureManager\Models\StructureManagerSettings;
-use StructureManager\Helpers\PosFuelCalculator;
 use Carbon\Carbon;
 
 class FuelReserveController extends Controller
@@ -24,10 +23,19 @@ class FuelReserveController extends Controller
     
     /**
      * Get user's accessible corporation IDs
+     *
+     * Returns null when the user has explicit structure-manager.admin permission
+     * (full cross-corporation access). Otherwise returns an array of corp IDs the
+     * user's linked characters belong to, which may be empty.
      */
     private function getUserCorporations()
     {
-        $corporationIds = DB::table('refresh_tokens')
+        // SECURITY: Only users with explicit admin permission get cross-corp access.
+        if (auth()->user() && auth()->user()->can('structure-manager.admin')) {
+            return null;
+        }
+
+        return DB::table('refresh_tokens')
             ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
             ->where('refresh_tokens.user_id', auth()->id())
             ->whereNull('refresh_tokens.deleted_at')
@@ -35,8 +43,18 @@ class FuelReserveController extends Controller
             ->unique()
             ->filter()
             ->toArray();
-        
-        return !empty($corporationIds) ? $corporationIds : null;
+    }
+
+    /**
+     * Abort 403 if the given corporation_id is not accessible to the current user.
+     * Admin (null = full access) always passes.
+     */
+    private function requireCorporationAccess($corporationId)
+    {
+        $userCorps = $this->getUserCorporations();
+        if ($userCorps !== null && !in_array($corporationId, $userCorps)) {
+            abort(403, 'Access denied');
+        }
     }
     
     /**
@@ -391,73 +409,52 @@ class FuelReserveController extends Controller
     }
     
     /**
-     * Get POS refuel events
-     */
-    private function getPosRefuelEvents($days, $userCorps)
-    {
-        $query = StarbaseFuelReserves::where('is_refuel_event', true)
-            ->where('created_at', '>=', Carbon::now()->subDays($days))
-            ->orderBy('created_at', 'desc');
-        
-        if ($userCorps !== null) {
-            $query->whereIn('corporation_id', $userCorps);
-        }
-        
-        $events = $query->get();
-        
-        $eventData = [];
-        foreach ($events as $event) {
-            // Skip excluded hangars
-            if ($this->isHangarExcluded($event->location_flag)) {
-                continue;
-            }
-            
-            $pos = DB::table('corporation_starbases as cs')
-                ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
-                ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
-                ->where('cs.starbase_id', $event->starbase_id)
-                ->select('it.typeName as tower_type', 'md.itemName as system_name')
-                ->first();
-            
-            $eventData[] = [
-                'timestamp' => $event->created_at,
-                'starbase_id' => $event->starbase_id,
-                'structure_name' => $pos->tower_type ?? 'Unknown POS',
-                'system_name' => $pos->system_name ?? 'Unknown',
-                'blocks_moved' => abs($event->quantity_change),
-                'from_location' => $event->location_flag,
-                'resource_type_id' => $event->resource_type_id,
-                'resource_category' => $event->resource_category,
-                'asset_type' => 'pos',
-            ];
-        }
-        
-        return $eventData;
-    }
-    
-    /**
      * Get reserve movements for a specific structure
      */
     public function getStructureReserveHistory($structureId)
     {
+        // SECURITY: scope check - resolve corporation and enforce access
+        $structure = DB::table('corporation_structures')
+            ->where('structure_id', $structureId)
+            ->select('corporation_id')
+            ->first();
+
+        if (!$structure) {
+            abort(404);
+        }
+
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $history = StructureFuelReserves::where('structure_id', $structureId)
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get();
-        
+
         return response()->json($history);
     }
-    
+
     /**
      * Get reserve movements for a specific POS
      */
     public function getPosReserveHistory($starbaseId)
     {
+        // SECURITY: scope check - resolve corporation and enforce access
+        $starbase = DB::table('corporation_starbases')
+            ->where('starbase_id', $starbaseId)
+            ->select('corporation_id')
+            ->first();
+
+        if (!$starbase) {
+            abort(404);
+        }
+
+        $this->requireCorporationAccess($starbase->corporation_id);
+
         $history = StarbaseFuelReserves::where('starbase_id', $starbaseId)
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get();
-        
+
         return response()->json($history);
     }
 }

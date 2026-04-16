@@ -52,6 +52,13 @@ return [
                 'permission' => 'structure-manager.admin',
             ],
             [
+                'name'  => 'Diagnostics',
+                'label' => 'structure-manager::menu.diagnostics',
+                'icon'  => 'fas fa-stethoscope',
+                'route' => 'structure-manager.diagnostic',
+                'permission' => 'structure-manager.admin',
+            ],
+            [
                 'name'  => 'Help & Documentation',
                 'label' => 'structure-manager::menu.help',
                 'icon'  => 'fas fa-question-circle',

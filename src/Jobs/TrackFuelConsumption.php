@@ -18,6 +18,21 @@ class TrackFuelConsumption implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable;
 
     /**
+     * Max seconds the job is allowed to run before the worker kills it.
+     */
+    public $timeout = 600;
+
+    /**
+     * Retry count on unhandled exceptions.
+     */
+    public $tries = 3;
+
+    /**
+     * Retry back-off schedule in seconds.
+     */
+    public $backoff = [60, 300, 900];
+
+    /**
      * Fuel block type IDs from EVE
      */
     const FUEL_BLOCK_TYPES = [4051, 4246, 4247, 4312];
@@ -51,35 +66,43 @@ class TrackFuelConsumption implements ShouldQueue
         $metenoxTracked = 0;
         
         foreach ($structures as $structure) {
-            // Check if this is a Metenox Moon Drill
-            $isMetenox = $structure->type_id == self::METENOX_TYPE_ID;
-            
-            if ($isMetenox) {
-                $result = $this->trackMetenoxFuel($structure);
-                if ($result['tracked']) {
-                    $metenoxTracked++;
-                    $tracked++;
-                } else {
-                    $skipped++;
-                }
-            } else {
-                $result = $this->trackStructureFuel($structure);
-                if ($result['tracked']) {
-                    $tracked++;
-                    if ($result['method'] === 'fuel_bay') {
-                        $fuelBaySuccess++;
+            // Isolate each structure so one bad row (malformed fuel_expires, missing
+            // SDE join, etc.) does not abort the whole job and skip the rest.
+            try {
+                // Check if this is a Metenox Moon Drill
+                $isMetenox = $structure->type_id == self::METENOX_TYPE_ID;
+
+                if ($isMetenox) {
+                    $result = $this->trackMetenoxFuel($structure);
+                    if ($result['tracked']) {
+                        $metenoxTracked++;
+                        $tracked++;
                     } else {
-                        $fallbackMethod++;
+                        $skipped++;
                     }
                 } else {
-                    $skipped++;
+                    $result = $this->trackStructureFuel($structure);
+                    if ($result['tracked']) {
+                        $tracked++;
+                        if ($result['method'] === 'fuel_bay') {
+                            $fuelBaySuccess++;
+                        } else {
+                            $fallbackMethod++;
+                        }
+                    } else {
+                        $skipped++;
+                    }
                 }
-            }
-            
-            // FIXED: Track reserves for ALL structures (including Metenox)
-            // Metenox needs tracking for BOTH fuel blocks AND magmatic gas reserves
-            if ($this->trackStructureReserves($structure->structure_id, $structure->corporation_id, $isMetenox)) {
-                $reservesTracked++;
+
+                // Track reserves for ALL structures (including Metenox): Metenox needs
+                // tracking for both fuel blocks AND magmatic gas reserves.
+                if ($this->trackStructureReserves($structure->structure_id, $structure->corporation_id, $isMetenox)) {
+                    $reservesTracked++;
+                }
+            } catch (\Throwable $e) {
+                Log::error("TrackFuelConsumption: Error tracking structure {$structure->structure_id}: " . $e->getMessage());
+                $skipped++;
+                // Continue with next structure.
             }
         }
         
@@ -130,7 +153,7 @@ class TrackFuelConsumption implements ShouldQueue
         if (!$lastRecord) {
             $shouldCreateRecord = true;
             Log::info("Metenox {$structure->structure_id}: First snapshot");
-        } elseif ($lastRecord->created_at->diffInHours(now()) >= 1) {
+        } elseif ($lastRecord->created_at->diffInHours(now(), true) >= 1) {
             $shouldCreateRecord = true;
         }
         
@@ -197,30 +220,30 @@ class TrackFuelConsumption implements ShouldQueue
         $fuelBayData = $this->getFuelBayQuantity($structure->structure_id);
         
         // METHOD 2: Calculate from days_remaining (FALLBACK)
-        $currentDaysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
-        
+        $currentDaysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
+
         // Get last record for comparison
         $lastRecord = StructureFuelHistory::where('structure_id', $structure->structure_id)
             ->orderBy('created_at', 'desc')
             ->first();
-        
+
         $shouldCreateRecord = false;
         $fuelBlocksUsed = null;
         $dailyConsumption = null;
         $trackingMethod = 'unknown';
-        
+
         // Determine if we should create a record
         if (!$lastRecord) {
             $shouldCreateRecord = true;
             $trackingMethod = $fuelBayData['available'] ? 'fuel_bay' : 'days_remaining';
             Log::info("Structure {$structure->structure_id}: First snapshot (method: {$trackingMethod})");
-        } elseif ($lastRecord->created_at->diffInHours(now()) >= 1) {
+        } elseif ($lastRecord->created_at->diffInHours(now(), true) >= 1) {
             $shouldCreateRecord = true;
         }
-        
+
         // Calculate consumption if we have a previous record
         if ($lastRecord && $shouldCreateRecord) {
-            $realHoursPassed = $lastRecord->created_at->diffInHours(now());
+            $realHoursPassed = $lastRecord->created_at->diffInHours(now(), true);
             
             if ($realHoursPassed > 0) {
                 // METHOD 1: Use actual fuel bay quantities (BEST - ONLY FUEL BAY)
@@ -402,7 +425,7 @@ class TrackFuelConsumption implements ShouldQueue
                 } else {
                     Log::info("Structure {$structureId}: Reserve {$resourceType} added - +{$quantityChange} to {$reserve->location_flag}");
                 }
-            } elseif ($lastReserve->created_at->diffInHours(now()) >= 24) {
+            } elseif ($lastReserve->created_at->diffInHours(now(), true) >= 24) {
                 // Create daily snapshot even if no change
                 $shouldTrack = true;
                 $quantityChange = 0;

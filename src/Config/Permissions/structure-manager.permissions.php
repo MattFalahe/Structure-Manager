@@ -9,8 +9,4 @@ return [
         'label' => 'structure-manager::permissions.admin_label',
         'description' => 'structure-manager::permissions.admin_description',
     ],
-    'export' => [
-        'label' => 'structure-manager::permissions.export_label',
-        'description' => 'structure-manager::permissions.export_description',
-    ],
 ];

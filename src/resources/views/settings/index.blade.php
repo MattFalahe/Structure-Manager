@@ -1135,15 +1135,20 @@
             <button type="submit" class="btn btn-success">
                 <i class="fas fa-save"></i> Save Settings
             </button>
-            <a href="{{ route('structure-manager.settings.reset') }}" 
-               class="btn btn-warning"
-               onclick="return confirm('Are you sure you want to reset all settings to defaults?')">
+            <button type="button"
+                    class="btn btn-warning"
+                    onclick="if (confirm('Are you sure you want to reset all settings to defaults?')) { document.getElementById('structure-manager-reset-form').submit(); }">
                 <i class="fas fa-undo"></i> Reset to Defaults
-            </a>
+            </button>
             <a href="{{ route('structure-manager.index') }}" class="btn btn-secondary">
                 <i class="fas fa-times"></i> Cancel
             </a>
         </div>
+    </form>
+
+    {{-- Separate reset form kept outside the main settings form because nested forms are invalid HTML --}}
+    <form id="structure-manager-reset-form" method="POST" action="{{ route('structure-manager.settings.reset') }}" style="display:none;">
+        @csrf
     </form>
 
 </div>
@@ -1273,11 +1278,14 @@ function deleteWebhook(id) {
     if (!confirm('Are you sure you want to delete this webhook?')) {
         return;
     }
-    
-    $('<form method="POST" action="' + '{{ route("structure-manager.webhook.delete", ":id") }}'.replace(':id', id) + '">' +
-        '@csrf' +
-        '<input type="hidden" name="_method" value="DELETE">' +
-        '</form>').appendTo('body').submit();
+
+    // Build form explicitly; @csrf inside a JS string literal does not produce a
+    // usable token input, so we inline csrf_token() here and append a real _token input.
+    const action = '{{ route("structure-manager.webhook.delete", ":id") }}'.replace(':id', id);
+    const $form = $('<form method="POST"></form>').attr('action', action);
+    $('<input type="hidden" name="_token">').val('{{ csrf_token() }}').appendTo($form);
+    $('<input type="hidden" name="_method" value="DELETE">').appendTo($form);
+    $form.appendTo('body').submit();
 }
 
 function testWebhook(id) {

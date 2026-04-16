@@ -6,18 +6,27 @@ use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureFuelHistory;
-use StructureManager\Models\StructureFuelReserves; 
 use Carbon\Carbon;
 
 class StructureManagerController extends Controller
 {
     /**
      * Get user's accessible corporation IDs
+     *
+     * Returns null when the user has explicit structure-manager.admin permission
+     * (full cross-corporation access). Otherwise returns an array of corp IDs the
+     * user's linked characters belong to, which may be empty.
      */
     private function getUserCorporations()
     {
-        // Get corporation IDs from user's characters via refresh_tokens and character_affiliations
-        $corporationIds = DB::table('refresh_tokens')
+        // SECURITY: Only users with explicit admin permission get cross-corp access.
+        // Previously an empty query (user with no linked characters) was treated as
+        // superadmin, which was a privilege-escalation path.
+        if (auth()->user() && auth()->user()->can('structure-manager.admin')) {
+            return null;
+        }
+
+        return DB::table('refresh_tokens')
             ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
             ->where('refresh_tokens.user_id', auth()->id())
             ->whereNull('refresh_tokens.deleted_at')
@@ -25,8 +34,18 @@ class StructureManagerController extends Controller
             ->unique()
             ->filter()
             ->toArray();
-        
-        return !empty($corporationIds) ? $corporationIds : null;
+    }
+
+    /**
+     * Abort 403 if the given corporation_id is not accessible to the current user.
+     * Admin (null = full access) always passes.
+     */
+    private function requireCorporationAccess($corporationId)
+    {
+        $userCorps = $this->getUserCorporations();
+        if ($userCorps !== null && !in_array($corporationId, $userCorps)) {
+            abort(403, 'Access denied');
+        }
     }
     
     public function index()
@@ -168,7 +187,8 @@ class StructureManagerController extends Controller
             \Log::error('Structure Manager - Error fetching structures data: ' . $e->getMessage());
             return response()->json([
                 'error' => true,
-                'message' => $e->getMessage(),
+                'message' => 'Failed to load structures data',
+                'debug' => config('app.debug') ? $e->getMessage() : null,
                 'data' => []
             ], 500);
         }
@@ -195,7 +215,10 @@ class StructureManagerController extends Controller
         if (!$structure) {
             abort(404);
         }
-        
+
+        // SECURITY: scope check - user must have access to this structure's corporation
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $services = DB::table('corporation_structure_services')
             ->where('structure_id', $id)
             ->get();
@@ -232,11 +255,23 @@ class StructureManagerController extends Controller
     
     public function getFuelHistory($id)
     {
+        // SECURITY: scope check - resolve corporation and enforce access
+        $structure = DB::table('corporation_structures')
+            ->where('structure_id', $id)
+            ->select('corporation_id')
+            ->first();
+
+        if (!$structure) {
+            abort(404);
+        }
+
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $history = StructureFuelHistory::where('structure_id', $id)
             ->orderBy('created_at', 'desc')
             ->limit(90) // 3 months of daily data
             ->get();
-        
+
         return response()->json($history);
     }
     
@@ -253,18 +288,18 @@ class StructureManagerController extends Controller
                 ->first();
             
             // Only create new record if fuel_expires changed or it's been 24 hours
-            if (!$lastRecord || 
+            if (!$lastRecord ||
                 $lastRecord->fuel_expires != $structure->fuel_expires ||
-                $lastRecord->created_at->diffInHours(now()) >= 24) {
-                
-                $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
-                
+                $lastRecord->created_at->diffInHours(now(), true) >= 24) {
+
+                $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
+
                 $fuelUsed = null;
                 $dailyConsumption = null;
-                
+
                 if ($lastRecord && $lastRecord->fuel_expires != $structure->fuel_expires) {
                     // Fuel was added
-                    $daysDiff = Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::parse($lastRecord->fuel_expires));
+                    $daysDiff = Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::parse($lastRecord->fuel_expires), true);
                     if ($daysDiff > 0) {
                         // Estimate blocks added (assuming 40 blocks per day for large structures)
                         $fuelUsed = $daysDiff * -40; // Negative means fuel was added
@@ -352,6 +387,18 @@ class StructureManagerController extends Controller
      */
     public function getFuelAnalysis($id)
     {
+        // SECURITY: scope check - resolve corporation and enforce access
+        $structure = DB::table('corporation_structures')
+            ->where('structure_id', $id)
+            ->select('corporation_id')
+            ->first();
+
+        if (!$structure) {
+            abort(404);
+        }
+
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($id, 30);
         return response()->json($analysis);
     }

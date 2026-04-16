@@ -154,7 +154,7 @@
                             @php
                                 $fuelExpires = \Carbon\Carbon::parse($structure->fuel_expires);
                                 $now = now();
-                                $totalHours = $fuelExpires->diffInHours($now);
+                                $totalHours = $fuelExpires->diffInHours($now, true);
                                 $days = floor($totalHours / 24);
                                 $hours = $totalHours % 24;
                                 $colorClass = $totalHours < 168 ? 'text-danger-bright' : ($totalHours < 336 ? 'text-warning-bright' : 'text-success-bright');
@@ -529,7 +529,7 @@
                 <h5><i class="fas fa-chart-line"></i> Fuel Projections</h5>
                 @if($structure->fuel_expires && ($consumption['daily'] ?? 0) > 0)
                     @php
-                        $daysRemaining = \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now());
+                        $daysRemaining = \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
                         $blocksRemaining = $daysRemaining * ($consumption['daily'] ?? 0);
                         $volumeM3 = $blocksRemaining * 5; // Each fuel block is 5 m³
                     @endphp
@@ -761,7 +761,7 @@ $(document).ready(function() {
     
     // Calculate current consumption line
     let currentRate = {{ $consumption['daily'] ?? 0 }};
-    let currentDaysRemaining = {{ $structure->fuel_expires ? \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now()) : 0 }};
+    let currentDaysRemaining = {{ $structure->fuel_expires ? \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now(), true) : 0 }};
     
     // Fix chart height to prevent infinite growth
     const canvas = document.getElementById('fuelHistoryChart');

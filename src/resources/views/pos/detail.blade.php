@@ -660,7 +660,7 @@
 @endsection
 
 @push('javascript')
-<script src="{{ asset('web/css/structure-manager/js/chart.min.js') }}"></script>
+<script src="{{ asset('vendor/structure-manager/js/chart.min.js') }}"></script>
 <script>
 @if($history && $history->count() > 0)
 // Prepare chart data

@@ -20,11 +20,19 @@ class PosManagerController extends Controller
 {
     /**
      * Get user's accessible corporation IDs
+     *
+     * Returns null when the user has explicit structure-manager.admin permission
+     * (full cross-corporation access). Otherwise returns an array of corp IDs the
+     * user's linked characters belong to, which may be empty.
      */
     private function getUserCorporations()
     {
-        // Get corporation IDs from user's characters
-        $corporationIds = DB::table('refresh_tokens')
+        // SECURITY: Only users with explicit admin permission get cross-corp access.
+        if (auth()->user() && auth()->user()->can('structure-manager.admin')) {
+            return null;
+        }
+
+        return DB::table('refresh_tokens')
             ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
             ->where('refresh_tokens.user_id', auth()->id())
             ->whereNull('refresh_tokens.deleted_at')
@@ -32,8 +40,6 @@ class PosManagerController extends Controller
             ->unique()
             ->filter()
             ->toArray();
-        
-        return !empty($corporationIds) ? $corporationIds : null;
     }
     
     /**
@@ -176,7 +182,8 @@ class PosManagerController extends Controller
             \Log::error('PosManagerController::getPosesData error: ' . $e->getMessage());
             return response()->json([
                 'data' => [],
-                'error' => $e->getMessage(),
+                'error' => 'Failed to load POS data',
+                'debug' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }

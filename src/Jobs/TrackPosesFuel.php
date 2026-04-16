@@ -27,6 +27,21 @@ class TrackPosesFuel implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable;
 
     /**
+     * Max seconds the job is allowed to run before the worker kills it.
+     */
+    public $timeout = 600;
+
+    /**
+     * Retry count on unhandled exceptions.
+     */
+    public $tries = 3;
+
+    /**
+     * Retry back-off schedule in seconds.
+     */
+    public $backoff = [60, 300, 900];
+
+    /**
      * Execute the job.
      */
     public function handle()
@@ -110,12 +125,14 @@ class TrackPosesFuel implements ShouldQueue
                 ->whereIn('type_id', array_keys(PosFuelCalculator::FUEL_BLOCKS))
                 ->sum('quantity');
             
-            // Get current strontium
+            // Get current strontium. Use sum() instead of value() so multiple
+            // strontium stacks (edge case observed on some SeAT schemas) are
+            // correctly aggregated rather than returning only the first row.
             $strontium = DB::table('corporation_starbase_fuels')
                 ->where('starbase_id', $pos->starbase_id)
                 ->where('corporation_id', $pos->corporation_id)
                 ->where('type_id', PosFuelCalculator::STRONTIUM)
-                ->value('quantity') ?? 0;
+                ->sum('quantity');
             
             // Get current charters (if high-sec)
             $charters = DB::table('corporation_starbase_fuels')
@@ -149,7 +166,7 @@ class TrackPosesFuel implements ShouldQueue
             
             if ($lastHistory && $lastHistory->fuel_blocks_quantity) {
                 $fuelBlocksUsed = $lastHistory->fuel_blocks_quantity - $fuelBlocks;
-                $hoursSinceLastCheck = Carbon::now()->diffInHours($lastHistory->created_at);
+                $hoursSinceLastCheck = Carbon::now()->diffInHours($lastHistory->created_at, true);
                 
                 if ($hoursSinceLastCheck > 0 && $fuelBlocksUsed > 0) {
                     $fuelHourlyConsumption = round($fuelBlocksUsed / $hoursSinceLastCheck, 4);

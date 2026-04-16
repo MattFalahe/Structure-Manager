@@ -183,7 +183,9 @@ class FuelCalculator
         // Navigation Structures
         35841 => ['name' => 'Ansiblex Jump Gate', 'category' => 'navigation', 'size' => 'medium'],
         35840 => ['name' => 'Pharolux Cyno Beacon', 'category' => 'navigation', 'size' => 'medium'],
-        35839 => ['name' => 'Tenebrex Cyno Jammer', 'category' => 'navigation', 'size' => 'medium'],
+        // Corrected: 35839 was the unpublished "Large Observatory Array" type.
+        // Real Tenebrex Cyno Jammer is typeID 37534 (verified against SDE invTypes).
+        37534 => ['name' => 'Tenebrex Cyno Jammer', 'category' => 'navigation', 'size' => 'medium'],
         
         // Metenox Moon Drill (Deployable)
         81826 => ['name' => 'Metenox Moon Drill', 'category' => 'deployable', 'size' => 'medium'],

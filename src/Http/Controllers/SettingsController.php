@@ -98,23 +98,37 @@ class SettingsController extends Controller
             $allHangars = [1, 2, 3, 4, 5, 6, 7];
             $trackedHangars = $request->input('excluded_hangars', []);
             $excludedHangars = array_diff($allHangars, $trackedHangars);
-            
+
             StructureManagerSettings::set(
-                'excluded_hangars', 
+                'excluded_hangars',
                 implode(',', $excludedHangars),
                 'string',
                 'reserves'
             );
-            
-            // Update all other settings
-            foreach ($request->except(['_token', 'excluded_hangars']) as $key => $value) {
-                // Skip webhook-related fields (handled separately)
-                if (strpos($key, 'webhook_') === 0) {
-                    continue;
+
+            // SECURITY: explicit allowlist of settings keys that the settings form is
+            // allowed to write. Previously, any non-webhook_ key was blind-written into
+            // the settings table, which would let an admin inject arbitrary rows.
+            $allowedKeys = [
+                'pos_strontium_critical_hours',
+                'pos_strontium_warning_hours',
+                'pos_strontium_good_hours',
+                'pos_fuel_critical_days',
+                'pos_fuel_warning_days',
+                'pos_charter_critical_days',
+                'pos_fuel_notification_interval',
+                'pos_strontium_notification_interval',
+                'pos_strontium_zero_notify_once',
+                'pos_strontium_zero_grace_period',
+                'pos_discord_role_mention',
+            ];
+
+            foreach ($allowedKeys as $key) {
+                if ($request->has($key)) {
+                    StructureManagerSettings::set($key, $request->input($key));
                 }
-                StructureManagerSettings::set($key, $value);
             }
-            
+
             // Clear cache
             StructureManagerSettings::clearCache();
             
@@ -312,13 +326,30 @@ class SettingsController extends Controller
                 ]]
             ];
             
+            // SECURITY: re-validate the stored URL before sending, in case a DB row
+            // was tampered with after creation.
+            if (!WebhookConfiguration::isValidWebhookUrl($webhookUrl)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stored webhook URL is invalid (not a Discord/Slack https URL). Please edit and re-save.'
+                ]);
+            }
+
             $ch = curl_init($webhookUrl);
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
             curl_setopt($ch, CURLOPT_POST, 1);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($message));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            
+            // SECURITY: verify TLS certificates and hostnames against the system CA bundle.
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            // SECURITY: bound the connect/read phases so a hung endpoint cannot stall admin.
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            // SECURITY: disable redirects so an attacker cannot bounce the request to an
+            // arbitrary target after the host check passes.
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);

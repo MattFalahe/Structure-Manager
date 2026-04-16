@@ -83,7 +83,7 @@ class CreateTestPoses extends Command
         
         // Low-sec
         30002053 => ['name' => 'Amamake', 'security' => 0.4, 'requires_charters' => false],
-        30002187 => ['name' => 'Tama', 'security' => 0.3, 'requires_charters' => false],
+        30045349 => ['name' => 'Tama', 'security' => 0.3, 'requires_charters' => false],
         
         // Null-sec (using some random IDs for testing)
         30004970 => ['name' => 'Test Null System 1', 'security' => -0.5, 'requires_charters' => false],
