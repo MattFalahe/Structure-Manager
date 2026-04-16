@@ -236,8 +236,8 @@
     .webhook-test-result {
         margin-left: 0.5rem;
     }
-    
-    /* Construction Placeholder Styles */
+
+    /* Upwell Threshold Styles (matching POS threshold patterns) */
     .construction-placeholder {
         text-align: center;
         padding: 2rem;
@@ -630,7 +630,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link" id="upwell-tab" data-toggle="tab" href="#upwell" role="tab">
-                    <i class="fas fa-building"></i> Upwell Structures <small>(Coming Soon)</small>
+                    <i class="fas fa-building"></i> Upwell Structures
                 </a>
             </li>
         </ul>
@@ -1028,102 +1028,120 @@
                 </div>
             </div>
             
-            <!-- Upwell Structures Tab (Fun Placeholder) -->
+            <!-- Upwell Structures Tab -->
             <div class="tab-pane fade" id="upwell" role="tabpanel">
                 <div class="tab-description">
                     <p>
                         <i class="fas fa-info-circle"></i>
-                        Configure settings specific to Upwell Structures (Citadels, Engineering Complexes, Refineries, etc.).
+                        Configure fuel alert thresholds and notification behavior for Upwell Structures (Citadels, Engineering Complexes, Refineries, Metenox Moon Drills).
+                        These thresholds are independent from POS settings.
                     </p>
                 </div>
-                
+
+                <!-- Fuel Alert Thresholds -->
                 <div class="settings-section">
-                    <h4><i class="fas fa-building"></i> Upwell Structure Settings</h4>
-                    
-                    <div class="construction-placeholder">
-                        <!-- ASCII Art Header -->
-                        <div class="ascii-header">
-                            <pre class="ascii-art">
-   ___           _                 ___          _               _   _          
-  / __\___   __| | ___ _ __      / __\_ __ ___| |__   __ _  __| | | | ___     
- / /  / _ \ / _` |/ _ \ '__|    / /  | '__/ _ \ '_ \ / _` |/ _` | | |/ _ \    
-/ /__| (_) | (_| |  __/ |      / /___| | |  __/ |_) | (_| | (_| | | | (_) |   
-\____/\___/ \__,_|\___|_|      \____/|_|  \___|_.__/ \__,_|\__,_| |_|\___/    
-                            </pre>
-                        </div>
-                        
-                        <!-- Hamster Animation -->
-                        <div class="hamster-container">
-                            <div class="hamster">
-                                <div class="hamster-body">
-                                    <div class="hamster-ear left"></div>
-                                    <div class="hamster-ear right"></div>
-                                    <div class="hamster-face">
-                                        <div class="hamster-eye left"></div>
-                                        <div class="hamster-eye right"></div>
-                                        <div class="hamster-nose"></div>
-                                    </div>
-                                    <div class="hamster-paws">
-                                        <div class="hamster-paw left"></div>
-                                        <div class="hamster-paw right"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="tiny-computer">
-                                <div class="computer-screen">
-                                    <div class="code-lines">
-                                        <span class="code-line">struct Citadel {</span>
-                                        <span class="code-line">  fuel: u32,</span>
-                                        <span class="code-line">  quantum_core: bool,</span>
-                                        <span class="code-line">}<span class="cursor">_</span></span>
-                                    </div>
-                                </div>
-                                <div class="computer-keyboard"></div>
+                    <h4><i class="fas fa-gas-pump"></i> Upwell Fuel Alert Thresholds</h4>
+
+                    <div class="info-banner mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Proactive alerts:</strong> Structure Manager checks fuel levels every 10 minutes and sends
+                        Discord/Slack notifications on status transitions (good &rarr; warning &rarr; critical).
+                        These thresholds are separate from POS settings because Upwell structures have different operational risk profiles.
+                    </div>
+
+                    <div class="threshold-group">
+                        <!-- Critical threshold -->
+                        <div class="threshold-item critical">
+                            <div class="form-group">
+                                <label for="upwell_fuel_critical_days">
+                                    <i class="fas fa-exclamation-circle text-danger"></i>
+                                    Critical Threshold (days)
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       id="upwell_fuel_critical_days"
+                                       name="upwell_fuel_critical_days"
+                                       value="{{ \StructureManager\Models\StructureManagerSettings::get('upwell_fuel_critical_days', 7) }}"
+                                       min="1" max="90">
+                                <small class="form-text text-muted">
+                                    RED alert when structure has fewer than this many days of fuel. Default: 7 days.
+                                </small>
                             </div>
                         </div>
-                        
-                        <!-- Status Messages -->
-                        <div class="construction-status">
-                            <div class="status-text">
-                                <i class="fas fa-cog fa-spin"></i>
-                                <span id="status-message">Compiling Upwell protocols...</span>
-                            </div>
-                            <div class="progress-bar">
-                                <div class="progress-fill"></div>
-                            </div>
-                            <div class="eta-text">
-                                <small>ETA: When it's ready™</small>
-                            </div>
-                        </div>
-                        
-                        <!-- Fun Messages -->
-                        <div class="developer-notes">
-                            <div class="note-item">
-                                <i class="fas fa-coffee"></i>
-                                <span>Developer is currently powered by coffee and spreadsheets</span>
-                            </div>
-                            <div class="note-item">
-                                <i class="fas fa-code"></i>
-                                <span>Code quality: More bugs than a Sotiyo hangar</span>
-                            </div>
-                            <div class="note-item">
-                                <i class="fas fa-hammer"></i>
-                                <span>Status: Teaching hamsters to code in Rust</span>
+
+                        <!-- Warning threshold -->
+                        <div class="threshold-item warning">
+                            <div class="form-group">
+                                <label for="upwell_fuel_warning_days">
+                                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                                    Warning Threshold (days)
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       id="upwell_fuel_warning_days"
+                                       name="upwell_fuel_warning_days"
+                                       value="{{ \StructureManager\Models\StructureManagerSettings::get('upwell_fuel_warning_days', 14) }}"
+                                       min="1" max="90">
+                                <small class="form-text text-muted">
+                                    YELLOW alert when structure has fewer than this many days of fuel. Default: 14 days.
+                                </small>
                             </div>
                         </div>
-                        
-                        <!-- Coming Soon Features -->
-                        <div class="info-banner mt-4">
-                            <i class="fas fa-rocket"></i>
-                            <strong>Coming Soon™:</strong> This section will include settings for:
-                            <ul class="mt-2 mb-0">
-                                <li>Structure fuel notifications and thresholds</li>
-                                <li>Quantum core monitoring</li>
-                                <li>Service module management</li>
-                                <li>Vulnerability window alerts</li>
-                                <li>Metenox moon drill settings</li>
-                            </ul>
+
+                        <!-- Final alert (not configurable) -->
+                        <div class="threshold-item" style="border-left: 3px solid #6c757d; padding-left: 15px; margin-bottom: 15px;">
+                            <div class="form-group mb-0">
+                                <label><i class="fas fa-bell text-secondary"></i> Final Alert</label>
+                                <p class="form-text text-muted mb-0">
+                                    A final urgent notification fires automatically when a structure has <strong>1 hour or less</strong> of fuel remaining.
+                                    This alert fires once per fuel-depletion event and re-arms when the structure recovers above the critical threshold.
+                                    Not configurable.
+                                </p>
+                            </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Notification Behavior -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-bell"></i> Notification Behavior</h4>
+
+                    <div class="form-group">
+                        <label for="upwell_fuel_notification_interval">
+                            <i class="fas fa-clock"></i>
+                            Critical Stage Reminder Interval (hours)
+                        </label>
+                        <input type="number"
+                               class="form-control"
+                               id="upwell_fuel_notification_interval"
+                               name="upwell_fuel_notification_interval"
+                               value="{{ \StructureManager\Models\StructureManagerSettings::get('upwell_fuel_notification_interval', 0) }}"
+                               min="0" max="24">
+                        <small class="form-text text-muted">
+                            How often to send reminder alerts while a structure is in critical stage. Set to <strong>0</strong> to disable
+                            interval reminders and only receive status-change alerts (recommended). Range: 0-24 hours.
+                        </small>
+                    </div>
+
+                    <div class="info-banner">
+                        <i class="fas fa-link"></i>
+                        <strong>Shared webhooks:</strong> Upwell notifications use the same webhooks configured in the
+                        <strong>POS Notifications</strong> tab. Each webhook's corporation filter and role mention settings
+                        apply to both POS and Upwell alerts automatically.
+                    </div>
+                </div>
+
+                <!-- Metenox Information -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-moon"></i> Metenox Dual-Fuel Intelligence</h4>
+
+                    <div class="info-banner" style="border-left-color: #9b59b6;">
+                        <i class="fas fa-info-circle" style="color: #9b59b6;"></i>
+                        <strong>Automatic Metenox support:</strong> Metenox Moon Drills consume both fuel blocks and magmatic gas.
+                        Notifications automatically detect which resource is the limiting factor and will alert based on whichever runs out first.
+                        The embed shows both resources with remaining days and highlights the limiting factor.
+                        <strong>No additional configuration is needed</strong> &mdash; Metenox structures are detected by their type ID and
+                        handled with dual-fuel logic automatically.
                     </div>
                 </div>
             </div>
@@ -1328,57 +1346,6 @@ $(document).ready(function() {
     });
 });
 
-// Rotating status messages with multiple endings
-$(document).ready(function() {
-    const messages = [
-        "Compiling Upwell protocols...",
-        "Teaching hamsters Rust...",
-        "Downloading quantum cores...",
-        "Optimizing fuel efficiency algorithms...",
-        "Reverse-engineering Citadel firmware...",
-        "Asking Bob the Builder for advice...",
-        "Calculating optimal tether radius...",
-        "Debugging vulnerability window logic...",
-        "Consulting with hamster QA team...",
-        // Fun ending messages
-        "Realizing I should have just played EVE instead...",
-        "Waiting for hamsters to finish their coffee break...",
-        "Simulating 'fun per hour' metrics...",
-        "Adding features nobody asked for...",
-        "Running tests (hope they pass this time)...",
-        "Calculating ISK/hour vs fun/hour ratio...",
-        "Ensuring maximum spreadsheet compatibility...",
-        "Almost there (famous last words)...",
-        "Procrastinating with ASCII art...",
-        "Testing in production like a pro...",
-        "Convincing hamsters that bugs are features...",
-        "Refactoring code that already works...",
-        "Writing documentation (just kidding, who does that?)...",
-        "Fueling up with more coffee and determination...",
-        "Optimizing for nullsec timezone coverage..."
-    ];
-    
-    let currentIndex = 0;
-    
-    // Shuffle messages for variety
-    function shuffleArray(array) {
-        const shuffled = [...array];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-    }
-    
-    const shuffledMessages = shuffleArray(messages);
-    
-    // Rotate messages every 4 seconds
-    setInterval(function() {
-        currentIndex = (currentIndex + 1) % shuffledMessages.length;
-        $('#status-message').fadeOut(300, function() {
-            $(this).text(shuffledMessages[currentIndex]).fadeIn(300);
-        });
-    }, 4000);
-});
+// (Placeholder rotating messages removed - Upwell tab is now functional)
 </script>
 @endpush

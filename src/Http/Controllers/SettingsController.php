@@ -63,7 +63,7 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         try {
-            // Validate thresholds
+            // Validate POS thresholds
             $request->validate([
                 'pos_strontium_critical_hours' => 'required|integer|min:1|max:72',
                 'pos_strontium_warning_hours' => 'required|integer|min:1|max:72',
@@ -73,25 +73,38 @@ class SettingsController extends Controller
                 'pos_charter_critical_days' => 'required|integer|min:1|max:90',
                 'pos_fuel_notification_interval' => 'required|integer|min:0|max:24',
                 'pos_strontium_notification_interval' => 'required|integer|min:0|max:12',
+                // Upwell thresholds (nullable: only present when Upwell tab is submitted)
+                'upwell_fuel_critical_days' => 'nullable|integer|min:1|max:90',
+                'upwell_fuel_warning_days' => 'nullable|integer|min:1|max:90',
+                'upwell_fuel_notification_interval' => 'nullable|integer|min:0|max:24',
             ]);
-            
-            // Validate threshold relationships
+
+            // Validate POS threshold relationships
             if ($request->pos_strontium_critical_hours >= $request->pos_strontium_warning_hours) {
                 return redirect()
                     ->back()
                     ->with('error', 'Critical threshold must be less than warning threshold for strontium');
             }
-            
+
             if ($request->pos_strontium_warning_hours >= $request->pos_strontium_good_hours) {
                 return redirect()
                     ->back()
                     ->with('error', 'Warning threshold must be less than good threshold for strontium');
             }
-            
+
             if ($request->pos_fuel_critical_days >= $request->pos_fuel_warning_days) {
                 return redirect()
                     ->back()
                     ->with('error', 'Critical threshold must be less than warning threshold for fuel');
+            }
+
+            // Validate Upwell threshold relationships
+            if ($request->has('upwell_fuel_critical_days') && $request->has('upwell_fuel_warning_days')) {
+                if ((int) $request->upwell_fuel_critical_days >= (int) $request->upwell_fuel_warning_days) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'Upwell fuel critical threshold must be less than warning threshold');
+                }
             }
             
             // Handle excluded hangars
@@ -110,6 +123,7 @@ class SettingsController extends Controller
             // allowed to write. Previously, any non-webhook_ key was blind-written into
             // the settings table, which would let an admin inject arbitrary rows.
             $allowedKeys = [
+                // POS settings
                 'pos_strontium_critical_hours',
                 'pos_strontium_warning_hours',
                 'pos_strontium_good_hours',
@@ -121,6 +135,10 @@ class SettingsController extends Controller
                 'pos_strontium_zero_notify_once',
                 'pos_strontium_zero_grace_period',
                 'pos_discord_role_mention',
+                // Upwell settings
+                'upwell_fuel_critical_days',
+                'upwell_fuel_warning_days',
+                'upwell_fuel_notification_interval',
             ];
 
             foreach ($allowedKeys as $key) {
@@ -401,7 +419,12 @@ class SettingsController extends Controller
             
             // Reset reserves tracking settings
             StructureManagerSettings::set('excluded_hangars', '', 'string', 'reserves');
-            
+
+            // Reset Upwell thresholds
+            StructureManagerSettings::set('upwell_fuel_critical_days', 7);
+            StructureManagerSettings::set('upwell_fuel_warning_days', 14);
+            StructureManagerSettings::set('upwell_fuel_notification_interval', 0);
+
             StructureManagerSettings::clearCache();
             
             return redirect()

@@ -12,6 +12,7 @@ use StructureManager\Helpers\FuelCalculator;
 use StructureManager\Helpers\PosFuelCalculator;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Models\StarbaseFuelHistory;
+use StructureManager\Models\StructureNotificationStatus;
 
 /**
  * Admin-only diagnostic page for Structure Manager.
@@ -32,15 +33,17 @@ class DiagnosticController extends Controller
         'structure-manager:track-poses-fuel'       => '*/10 * * * *',
         'structure-manager:analyze-pos-consumption' => '0 1 * * *',
         'structure-manager:notify-pos-fuel'        => '*/10 * * * *',
+        'structure-manager:notify-upwell-fuel'      => '*/10 * * * *',
         'structure-manager:cleanup-history'        => '0 3 * * *',
     ];
 
     /**
-     * The seven database tables the plugin owns.
+     * The eight database tables the plugin owns.
      */
     private const PLUGIN_TABLES = [
         'structure_fuel_history',
         'structure_fuel_reserves',
+        'structure_notification_status',
         'starbase_fuel_history',
         'starbase_fuel_reserves',
         'starbase_fuel_consumption',
@@ -82,8 +85,9 @@ class DiagnosticController extends Controller
             'schedules'          => $this->checkSchedules(),
             'webhooks'           => $this->checkWebhooks(),
             'esi_coverage'       => $this->checkEsiCoverage(),
-            'notification_state' => $this->checkNotificationState(),
-            'user_context'       => $this->checkUserContext(),
+            'notification_state'        => $this->checkNotificationState(),
+            'upwell_notification_state' => $this->checkUpwellNotificationState(),
+            'user_context'              => $this->checkUserContext(),
         ];
 
         // Summary counts for the header banner
@@ -700,6 +704,76 @@ class DiagnosticController extends Controller
         return [
             'status'  => $status,
             'message' => "{$onlineReinforced} online/reinforced POS(es) - {$critical} critical, {$warning} warning.",
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Upwell structure notification state: how many are fueled, critical/warning
+     * counts, stuck latches, structures with no notification tracking row.
+     */
+    private function checkUpwellNotificationState(): array
+    {
+        if (!Schema::hasTable('structure_notification_status') || !Schema::hasTable('corporation_structures')) {
+            return [
+                'status'  => 'info',
+                'message' => 'Upwell notification table not yet created (run migrations).',
+                'details' => [],
+            ];
+        }
+
+        $fueledStructures = DB::table('corporation_structures')
+            ->whereNotNull('fuel_expires')
+            ->count();
+
+        $trackedStructures = StructureNotificationStatus::count();
+
+        $criticalDays = (int) \StructureManager\Models\StructureManagerSettings::get('upwell_fuel_critical_days', 7);
+        $warningDays = (int) \StructureManager\Models\StructureManagerSettings::get('upwell_fuel_warning_days', 14);
+
+        // Count structures currently below thresholds
+        $critical = DB::table('corporation_structures')
+            ->whereNotNull('fuel_expires')
+            ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), fuel_expires) < ?', [$criticalDays * 24])
+            ->count();
+
+        $warning = DB::table('corporation_structures')
+            ->whereNotNull('fuel_expires')
+            ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), fuel_expires) BETWEEN ? AND ?', [$criticalDays * 24, $warningDays * 24])
+            ->count();
+
+        // Stuck latches: latch set true but structure is above warning threshold
+        $stuckLatches = StructureNotificationStatus::where('fuel_final_alert_sent', true)
+            ->whereHas(null) // can't use relationship here, just count via join
+            ->count();
+
+        // More accurate: join to find stuck latches
+        $stuckLatches = DB::table('structure_notification_status as sns')
+            ->join('corporation_structures as cs', 'sns.structure_id', '=', 'cs.structure_id')
+            ->where('sns.fuel_final_alert_sent', true)
+            ->whereNotNull('cs.fuel_expires')
+            ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) >= ?', [$warningDays * 24])
+            ->count();
+
+        $details = [
+            'Fueled Upwell structures'    => $fueledStructures,
+            'With notification tracking'  => $trackedStructures,
+            'Currently in CRITICAL'       => $critical,
+            'Currently in WARNING'        => $warning,
+            'Stuck final-alert latches'   => $stuckLatches,
+        ];
+
+        $status = 'ok';
+        if ($critical > 0) {
+            $status = 'warn';
+        }
+        if ($stuckLatches > 0) {
+            $status = 'warn';
+        }
+
+        return [
+            'status'  => $status,
+            'message' => "{$fueledStructures} fueled Upwell structure(s) - {$critical} critical, {$warning} warning.",
             'details' => $details,
         ];
     }

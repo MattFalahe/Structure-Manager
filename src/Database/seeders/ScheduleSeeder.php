@@ -54,7 +54,17 @@ class ScheduleSeeder extends AbstractScheduleSeeder
                 'ping_before' => null,
                 'ping_after' => null,
             ],
-            
+
+            // Upwell Structure Notifications
+            [
+                'command' => 'structure-manager:notify-upwell-fuel',
+                'expression' => '*/10 * * * *', // Run every 10 minutes
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+
             // Cleanup
             [
                 'command' => 'structure-manager:cleanup-history',

@@ -590,8 +590,8 @@ Webhook #3:
         <li><strong>Hangar Exclusions:</strong> Regularly review excluded hangars to ensure they match your current operations</li>
     </ul>',
     
-    'upwell_notifications_note' => 'Note on Upwell Structures',
-    'upwell_notifications_desc' => 'Webhook notifications are currently available for POSes only. Upwell structure notifications (Citadels, Refineries, Engineering Complexes) are planned for a future release. Currently, Upwell structures use the dashboard critical alerts widget and in-app alerts page.',
+    'upwell_notifications_note' => 'Upwell Structure Notifications',
+    'upwell_notifications_desc' => 'Discord/Slack webhook notifications are available for both POSes and Upwell structures (Citadels, Refineries, Engineering Complexes, Metenox Moon Drills). Upwell alerts use proactive polling every 10 minutes with configurable thresholds (independent from POS settings). Notifications fire on status transitions (good/warning/critical) with an automatic final alert at 1 hour remaining. Metenox structures show dual-fuel intelligence (fuel blocks + magmatic gas) with limiting factor highlighting. Configure Upwell thresholds in Settings > Upwell Structures. Both POS and Upwell alerts share the same webhook configurations.',
 
     // Pages Guide
     'pages_intro' => 'Structure Manager consists of several pages, each designed for specific aspects of fuel management.',
@@ -946,7 +946,7 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'faq_a11' => 'Very accurate. The plugin uses official EVE Online fuel mechanics and, when possible, calculates consumption from actual fuel bay data rather than service counts. It correctly handles multi-service modules, refinery bonuses, moon drills, and Metenox dual-fuel requirements.',
 
     'faq_q12' => 'Q12: Does the plugin send Discord notifications?',
-    'faq_a12' => 'Yes! Discord/Slack webhook notifications are available for POS fuel alerts. Configure webhook URL and thresholds in Settings. Notifications use status-based alerting (good→warning→critical transitions) with optional critical stage reminders. Final alerts sent 1 hour before POS goes offline. Avatar uses your webhook configuration. Rich embeds show tower location, type, and resource levels. Upwell structure notifications are planned for a future release.',
+    'faq_a12' => 'Yes! Discord/Slack webhook notifications are available for both POS and Upwell structure fuel alerts. Configure webhook URLs in Settings > POS Notifications, and Upwell thresholds in Settings > Upwell Structures. Notifications use status-based alerting (good→warning→critical transitions) with optional critical stage reminders. Final alerts fire 1 hour before a structure goes offline. Metenox Moon Drills show dual-fuel data (blocks + magmatic gas) with limiting factor. Both POS and Upwell alerts share the same webhook configuration including per-webhook corporation filters and role mentions.',
 
     'faq_q13' => 'Q13: How does POS charter tracking work?',
     'faq_a13' => 'Starbase charters are automatically tracked for POSes in high-security space. The plugin detects system security level and monitors charter consumption (1/hour) alongside fuel blocks. POSes in low-sec, null-sec (both sovereign and NPC), or wormhole space don\'t require charters and won\'t show charter tracking.',

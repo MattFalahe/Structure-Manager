@@ -476,6 +476,26 @@
         </div>
     </div>
 
+    {{-- =================== CHECK: Upwell Notification State =================== --}}
+    @php $c = $checks['upwell_notification_state']; @endphp
+    <div class="diag-section">
+        <div class="diag-section-header">
+            <h3 class="diag-section-title">Upwell Notification State</h3>
+            <span class="diag-badge {{ $c['status'] }}">{{ strtoupper($c['status']) }}</span>
+        </div>
+        <div class="diag-section-body">
+            <p class="diag-msg">{{ $c['message'] }}</p>
+            <dl class="diag-kv" style="margin-top:0.8rem;">
+                @foreach($c['details'] as $k => $v)
+                    @if(!is_array($v))
+                        <dt>{{ $k }}</dt>
+                        <dd>{{ $v }}</dd>
+                    @endif
+                @endforeach
+            </dl>
+        </div>
+    </div>
+
     {{-- =================== CHECK: Current user context =================== --}}
     @php $c = $checks['user_context']; @endphp
     <div class="diag-section">
