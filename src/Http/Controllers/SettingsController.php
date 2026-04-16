@@ -503,7 +503,9 @@ class SettingsController extends Controller
             return response()->json(['error' => 'Character already in key pool'], 409);
         }
 
-        // Resolve name and corp
+        // Resolve name and corp, and verify Director role server-side
+        // (the UI only shows eligible characters, but the endpoint must
+        // also validate to prevent crafted requests from adding non-directors)
         $info = \DB::table('refresh_tokens as rt')
             ->join('character_affiliations as ca', 'rt.character_id', '=', 'ca.character_id')
             ->leftJoin('character_infos as ci', 'rt.character_id', '=', 'ci.character_id')
@@ -514,6 +516,17 @@ class SettingsController extends Controller
 
         if (!$info) {
             return response()->json(['error' => 'Character not found in SeAT'], 404);
+        }
+
+        // Verify Director role
+        $isDirector = \DB::table('corporation_roles')
+            ->where('character_id', $characterId)
+            ->where('type', 'roles')
+            ->where('role', 'Director')
+            ->exists();
+
+        if (!$isDirector) {
+            return response()->json(['error' => 'Character does not have Director role'], 403);
         }
 
         $keyHolder = EsiKeyHolder::create([

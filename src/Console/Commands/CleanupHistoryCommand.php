@@ -49,7 +49,10 @@ class CleanupHistoryCommand extends Command
         
         // Also clean up orphaned consumption records
         $this->cleanupConsumptionRecords();
-        
+
+        // Clean up processed ESI notifications (keep 30 days for audit trail)
+        $this->cleanupEsiNotifications();
+
         return 0;
     }
     
@@ -69,5 +72,23 @@ class CleanupHistoryCommand extends Command
             ->delete();
             
         $this->info("Deleted {$deletedPosConsumption} old POS consumption records.");
+    }
+
+    /**
+     * Clean up old processed ESI notifications.
+     * Keep unprocessed forever (shouldn't exist, but safety) and processed for 30 days.
+     */
+    private function cleanupEsiNotifications()
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('structure_manager_esi_notifications')) {
+            return;
+        }
+
+        $deletedEsi = \DB::table('structure_manager_esi_notifications')
+            ->where('processed', true)
+            ->where('created_at', '<', Carbon::now()->subDays(30))
+            ->delete();
+
+        $this->info("Deleted {$deletedEsi} old processed ESI notification records.");
     }
 }

@@ -232,20 +232,33 @@ class PollStructureNotifications implements ShouldQueue
                 $parsedData = ['raw' => $rawText];
             }
 
-            // Insert new notification
-            EsiNotification::create([
-                'notification_id' => $notificationId,
-                'character_id' => $characterId,
-                'corporation_id' => $corporationId,
-                'type' => $type,
-                'sender_id' => $notification->sender_id ?? null,
-                'sender_type' => $notification->sender_type ?? null,
-                'timestamp' => $timestamp,
-                'text' => $rawText,
-                'parsed_data' => $parsedData,
-                'source' => 'fast_poll',
-                'processed' => false,
-            ]);
+            // Insert new notification. Use try/catch for the unique constraint
+            // on notification_id — if the sweep job (or another poll cycle)
+            // inserted the same notification between our exists() check and
+            // this insert, the DB throws a duplicate key exception. That's a
+            // normal race, not a key-holder failure.
+            try {
+                EsiNotification::create([
+                    'notification_id' => $notificationId,
+                    'character_id' => $characterId,
+                    'corporation_id' => $corporationId,
+                    'type' => $type,
+                    'sender_id' => $notification->sender_id ?? null,
+                    'sender_type' => $notification->sender_type ?? null,
+                    'timestamp' => $timestamp,
+                    'text' => $rawText,
+                    'parsed_data' => $parsedData,
+                    'source' => 'fast_poll',
+                    'processed' => false,
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Duplicate key = another job already inserted this notification.
+                // Not an error — skip silently.
+                if (str_contains($e->getMessage(), 'Duplicate entry') || str_contains($e->getMessage(), 'UNIQUE constraint')) {
+                    continue;
+                }
+                throw $e; // Re-throw non-duplicate DB errors
+            }
 
             $newCount++;
             Log::info("PollStructureNotifications: New {$type} notification #{$notificationId} from key holder {$keyHolder->character_name} ({$characterId})");
@@ -260,30 +273,38 @@ class PollStructureNotifications implements ShouldQueue
     /**
      * Process all unprocessed notifications: build embeds and send to webhooks.
      *
+     * Uses a DB transaction with lockForUpdate to prevent double dispatch
+     * when PollStructureNotifications and SweepSeatNotifications run
+     * concurrently — without locking, both could SELECT the same
+     * unprocessed rows and send duplicate webhook messages.
+     *
      * @return int Number processed
      */
     private function processUnprocessedNotifications(): int
     {
-        $unprocessed = EsiNotification::where('processed', false)
-            ->orderBy('timestamp', 'asc')
-            ->limit(50)
-            ->get();
-
-        if ($unprocessed->isEmpty()) {
-            return 0;
-        }
-
         $processed = 0;
 
-        foreach ($unprocessed as $notification) {
-            try {
-                $this->dispatchNotification($notification);
-                $notification->markProcessed();
-                $processed++;
-            } catch (\Throwable $e) {
-                Log::error("PollStructureNotifications: Failed to process notification #{$notification->notification_id}: " . $e->getMessage());
+        DB::transaction(function () use (&$processed) {
+            $unprocessed = EsiNotification::where('processed', false)
+                ->orderBy('timestamp', 'asc')
+                ->limit(50)
+                ->lockForUpdate()
+                ->get();
+
+            if ($unprocessed->isEmpty()) {
+                return;
             }
-        }
+
+            foreach ($unprocessed as $notification) {
+                try {
+                    $this->dispatchNotification($notification);
+                    $notification->markProcessed();
+                    $processed++;
+                } catch (\Throwable $e) {
+                    Log::error("PollStructureNotifications: Failed to process notification #{$notification->notification_id}: " . $e->getMessage());
+                }
+            }
+        });
 
         return $processed;
     }

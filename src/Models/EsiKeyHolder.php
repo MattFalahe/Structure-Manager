@@ -78,7 +78,7 @@ class EsiKeyHolder extends Model
                 $query->select(\DB::raw(1))
                     ->from('corporation_roles')
                     ->whereColumn('corporation_roles.character_id', 'rt.character_id')
-                    ->where('corporation_roles.scope', 'roles')
+                    ->where('corporation_roles.type', 'roles')
                     ->where('corporation_roles.role', 'Director');
             })
             // Exclude characters already in the pool

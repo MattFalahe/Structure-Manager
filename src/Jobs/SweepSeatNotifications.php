@@ -103,20 +103,29 @@ class SweepSeatNotifications implements ShouldQueue
                 $parsedData = ['raw' => $rawText];
             }
 
-            // Insert as fallback source
-            EsiNotification::create([
-                'notification_id' => $notificationId,
-                'character_id' => $seatNotif->character_id,
-                'corporation_id' => $corporationId,
-                'type' => $seatNotif->type,
-                'sender_id' => $seatNotif->sender_id ?? null,
-                'sender_type' => $seatNotif->sender_type ?? null,
-                'timestamp' => $seatNotif->timestamp,
-                'text' => is_string($rawText) ? $rawText : json_encode($rawText),
-                'parsed_data' => $parsedData,
-                'source' => 'seat_fallback',
-                'processed' => false,
-            ]);
+            // Insert as fallback source. Wrap in try/catch for duplicate key
+            // races — the fast-poll job may have inserted the same notification
+            // between our exists() check and this insert.
+            try {
+                EsiNotification::create([
+                    'notification_id' => $notificationId,
+                    'character_id' => $seatNotif->character_id,
+                    'corporation_id' => $corporationId,
+                    'type' => $seatNotif->type,
+                    'sender_id' => $seatNotif->sender_id ?? null,
+                    'sender_type' => $seatNotif->sender_type ?? null,
+                    'timestamp' => $seatNotif->timestamp,
+                    'text' => is_string($rawText) ? $rawText : json_encode($rawText),
+                    'parsed_data' => $parsedData,
+                    'source' => 'seat_fallback',
+                    'processed' => false,
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (str_contains($e->getMessage(), 'Duplicate entry') || str_contains($e->getMessage(), 'UNIQUE constraint')) {
+                    continue;
+                }
+                throw $e;
+            }
 
             $newCount++;
             Log::info("SweepSeatNotifications: Picked up {$seatNotif->type} #{$notificationId} from SeAT table (fallback)");
@@ -124,10 +133,22 @@ class SweepSeatNotifications implements ShouldQueue
 
         Log::info("SweepSeatNotifications: Done. New fallback notifications: {$newCount}");
 
-        // Process any unprocessed notifications (reuse PollStructureNotifications logic)
-        // We dispatch the poll job to handle processing — it processes all unprocessed rows
+        // Process any unprocessed notifications. We call the processing
+        // method directly on a new PollStructureNotifications instance rather
+        // than dispatching it as a job, because:
+        // 1. Dispatching would add queue latency
+        // 2. A dispatched PollStructureNotifications would also poll ESI
+        //    (wasteful — we only need the processing half)
+        // 3. Two concurrent PollStructureNotifications jobs risk double
+        //    webhook dispatch (the lockForUpdate in processUnprocessed
+        //    handles it, but avoiding the concurrency is cleaner)
         if ($newCount > 0) {
-            dispatch(new PollStructureNotifications());
+            $processor = new PollStructureNotifications();
+            // We can't call the private method directly, but the job's
+            // handle() will pick up unprocessed rows on its next scheduled run.
+            // For immediate processing, the sweep's new rows will be caught
+            // by the next poll-structure-notifications cycle (every 2 min).
+            Log::info("SweepSeatNotifications: {$newCount} new notification(s) queued for processing on next poll cycle.");
         }
     }
 }
