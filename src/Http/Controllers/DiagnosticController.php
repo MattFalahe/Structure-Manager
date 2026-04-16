@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use StructureManager\Helpers\FuelCalculator;
@@ -1103,6 +1104,150 @@ class DiagnosticController extends Controller
 
         Log::info('Structure Manager diagnostic: cleaned up test data');
         return back()->with('success', 'All test data cleaned up.');
+    }
+
+    // ==================================================================
+    // Notification testing endpoints
+    // ==================================================================
+
+    /**
+     * Dispatch the real NotifyUpwellLowFuel job so it processes actual
+     * structures and sends real notifications for any below thresholds.
+     */
+    public function runUpwellNotificationCheck(Request $request)
+    {
+        if (!$this->confirmed($request)) {
+            return back()->with('error', 'Notification check requires the confirmation checkbox.');
+        }
+
+        try {
+            Artisan::call('structure-manager:notify-upwell-fuel');
+            Log::info('Structure Manager diagnostic: dispatched Upwell notification check');
+            return back()->with('success', 'Upwell notification job dispatched. Any structures below your thresholds will receive alerts on configured webhooks.');
+        } catch (\Throwable $e) {
+            Log::error('Structure Manager diagnostic: Upwell notification check failed - ' . $e->getMessage());
+            return back()->with('error', 'Upwell notification check failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Dispatch the real NotifyPosLowFuel job so it processes actual POSes
+     * and sends real notifications for any below thresholds.
+     */
+    public function runPosNotificationCheck(Request $request)
+    {
+        if (!$this->confirmed($request)) {
+            return back()->with('error', 'Notification check requires the confirmation checkbox.');
+        }
+
+        try {
+            Artisan::call('structure-manager:notify-pos-fuel');
+            Log::info('Structure Manager diagnostic: dispatched POS notification check');
+            return back()->with('success', 'POS notification job dispatched. Any POSes below your thresholds will receive alerts on configured webhooks.');
+        } catch (\Throwable $e) {
+            Log::error('Structure Manager diagnostic: POS notification check failed - ' . $e->getMessage());
+            return back()->with('error', 'POS notification check failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Send a sample Upwell fuel alert to a specific webhook so the admin
+     * can preview embed formatting without needing a real low-fuel structure.
+     */
+    public function sendTestUpwellAlert(Request $request)
+    {
+        $request->validate([
+            'webhook_id' => 'required|integer',
+        ]);
+
+        $webhook = WebhookConfiguration::find($request->webhook_id);
+        if (!$webhook) {
+            return back()->with('error', 'Webhook not found.');
+        }
+
+        if (!WebhookConfiguration::isValidWebhookUrl($webhook->webhook_url)) {
+            return back()->with('error', 'Webhook URL fails validation. Edit and re-save it in Settings.');
+        }
+
+        // Build a realistic sample embed
+        $payload = $this->buildSampleUpwellPayload($webhook->role_mention ?? '');
+
+        try {
+            $response = Http::connectTimeout(5)->timeout(10)->post($webhook->webhook_url, $payload);
+
+            if ($response->successful()) {
+                return back()->with('success', 'Sample Upwell fuel alert sent to webhook #' . $webhook->id . '. Check your Discord/Slack channel.');
+            } else {
+                return back()->with('error', 'Webhook returned HTTP ' . $response->status() . '. Check the URL.');
+            }
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Failed to send test alert: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Build a realistic sample payload that looks like a real Upwell fuel alert
+     * so admins can preview the embed format.
+     */
+    private function buildSampleUpwellPayload(string $roleMention): array
+    {
+        $content = '';
+        $allowedMentions = ['parse' => [], 'users' => [], 'roles' => []];
+
+        if (!empty($roleMention)) {
+            $mention = trim($roleMention);
+            if (preg_match('/^<@&(\d+)>$/', $mention, $m)) {
+                $content = "<@&{$m[1]}> ";
+                $allowedMentions['roles'][] = $m[1];
+            } elseif (preg_match('/^\d+$/', $mention)) {
+                $content = "<@&{$mention}> ";
+                $allowedMentions['roles'][] = $mention;
+            }
+        }
+
+        $content .= '**Critical: Upwell Structure Low Fuel** - 1 structure needs attention';
+
+        // Standard structure sample
+        $standardEmbed = [
+            'title' => 'Test Fortizar - Fuel Alert Preview',
+            'color' => 15158332, // red
+            'fields' => [
+                ['name' => "\u{1F4CD} Location", 'value' => 'Jita (0.95)', 'inline' => true],
+                ['name' => 'Structure Type', 'value' => 'Fortizar', 'inline' => true],
+                ['name' => "\u{23F0} Last Update", 'value' => 'just now', 'inline' => true],
+                ['name' => 'Fuel Blocks', 'value' => '3,240 blocks remaining', 'inline' => false],
+                ['name' => 'Time Remaining', 'value' => '5d 18h at current rate', 'inline' => false],
+                ['name' => 'Consumption Rate', 'value' => '23.5 blocks/hour', 'inline' => true],
+                ['name' => 'Active Services', 'value' => '4 service(s) online', 'inline' => true],
+                ['name' => 'Weekly Requirement', 'value' => '3,948 blocks', 'inline' => true],
+            ],
+            'footer' => ['text' => 'SeAT Structure Manager | TEST PREVIEW - Not a real alert'],
+            'timestamp' => now()->toIso8601String(),
+        ];
+
+        // Metenox sample
+        $metenoxEmbed = [
+            'title' => 'Test Metenox - Dual Fuel Preview',
+            'color' => 16776960, // yellow (warning)
+            'fields' => [
+                ['name' => "\u{1F4CD} Location", 'value' => 'Amamake (0.40)', 'inline' => true],
+                ['name' => 'Structure Type', 'value' => 'Metenox Moon Drill', 'inline' => true],
+                ['name' => "\u{23F0} Last Update", 'value' => 'just now', 'inline' => true],
+                ['name' => 'Fuel Blocks', 'value' => '1,680 blocks (14.0d)', 'inline' => false],
+                ['name' => 'Magmatic Gas **[LIMITING]**', 'value' => '52,800 gas (11.0d)', 'inline' => false],
+                ['name' => 'Offline In', 'value' => '11d 0h (gas runs out first)', 'inline' => false],
+                ['name' => 'Weekly Requirement', 'value' => '840 blocks + 33,600 gas', 'inline' => true],
+            ],
+            'footer' => ['text' => 'SeAT Structure Manager | TEST PREVIEW - Not a real alert'],
+            'timestamp' => now()->toIso8601String(),
+        ];
+
+        return [
+            'content' => $content,
+            'embeds' => [$standardEmbed, $metenoxEmbed],
+            'username' => 'SeAT Structure Manager',
+            'allowed_mentions' => $allowedMentions,
+        ];
     }
 
     /**

@@ -531,6 +531,90 @@
     </div>
 
     {{-- =================================================================== --}}
+    {{-- NOTIFICATION TESTING                                                 --}}
+    {{-- =================================================================== --}}
+    <div class="diag-section">
+        <div class="diag-section-header">
+            <h3 class="diag-section-title">Notification Testing</h3>
+            <span class="diag-badge info">TOOLS</span>
+        </div>
+        <div class="diag-section-body">
+            <p class="diag-msg">Trigger notification jobs or send sample alerts to verify webhook delivery and embed formatting.</p>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+
+                {{-- Run Upwell Notification Check --}}
+                <div style="background:#2a2f3a; border:1px solid #454d55; border-radius:6px; padding:1rem;">
+                    <h5 style="color:#fff; margin-top:0; font-size:0.95rem;">Run Upwell Notification Check</h5>
+                    <small style="color:#8b95a5;">
+                        Dispatches the <code>NotifyUpwellLowFuel</code> job against your real structures.
+                        Any structure currently below your configured thresholds will fire a real alert to configured webhooks.
+                    </small>
+                    <form method="POST" action="{{ route('structure-manager.diagnostic.notify.upwell') }}" style="margin-top:0.8rem;">
+                        @csrf
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin:0.5rem 0; font-size:0.85rem; color:#c2c7d0;">
+                            <input type="checkbox" name="confirm" value="yes" required>
+                            I understand this sends real notifications
+                        </label>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fas fa-building"></i> Check Upwell Structures
+                        </button>
+                    </form>
+                </div>
+
+                {{-- Run POS Notification Check --}}
+                <div style="background:#2a2f3a; border:1px solid #454d55; border-radius:6px; padding:1rem;">
+                    <h5 style="color:#fff; margin-top:0; font-size:0.95rem;">Run POS Notification Check</h5>
+                    <small style="color:#8b95a5;">
+                        Dispatches the <code>NotifyPosLowFuel</code> job against your real POSes.
+                        Any POS currently below configured thresholds will fire a real alert to configured webhooks.
+                    </small>
+                    <form method="POST" action="{{ route('structure-manager.diagnostic.notify.pos') }}" style="margin-top:0.8rem;">
+                        @csrf
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin:0.5rem 0; font-size:0.85rem; color:#c2c7d0;">
+                            <input type="checkbox" name="confirm" value="yes" required>
+                            I understand this sends real notifications
+                        </label>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fas fa-broadcast-tower"></i> Check POSes
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {{-- Send Test Upwell Alert (sample preview) --}}
+            <div style="background:#2a2f3a; border:1px solid #454d55; border-radius:6px; padding:1rem; margin-top:1rem;">
+                <h5 style="color:#fff; margin-top:0; font-size:0.95rem;">Send Sample Upwell Alert (Preview)</h5>
+                <small style="color:#8b95a5;">
+                    Sends a sample embed to a specific webhook with fake data (a test Fortizar + test Metenox)
+                    so you can preview the notification format without needing a real low-fuel structure.
+                    Useful for verifying embed formatting, role mentions, and channel routing.
+                </small>
+                <form method="POST" action="{{ route('structure-manager.diagnostic.notify.test-upwell-alert') }}" style="margin-top:0.8rem;">
+                    @csrf
+                    <div class="form-group" style="margin-bottom:0.6rem;">
+                        <label style="color:#c2c7d0; font-size:0.82rem;">Send to webhook:</label>
+                        <select name="webhook_id" class="form-control" style="max-width:400px;" required>
+                            <option value="">— Select webhook —</option>
+                            @php $allWebhooks = \StructureManager\Models\WebhookConfiguration::all(); @endphp
+                            @foreach($allWebhooks as $wh)
+                                <option value="{{ $wh->id }}">
+                                    #{{ $wh->id }}
+                                    — {{ $wh->description ?: $wh->getCorporationLabel() }}
+                                    {{ $wh->enabled ? '' : '(disabled)' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-info btn-sm">
+                        <i class="fas fa-paper-plane"></i> Send Sample Alert
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- =================================================================== --}}
     {{-- DEV-ONLY DANGER ZONE: test data generation                           --}}
     {{-- =================================================================== --}}
     <div class="diag-danger-zone">

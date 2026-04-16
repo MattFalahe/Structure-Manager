@@ -244,4 +244,23 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
 
+    // Notification testing
+    Route::post('/diagnostic/notify/upwell', [
+        'as'         => 'structure-manager.diagnostic.notify.upwell',
+        'uses'       => 'DiagnosticController@runUpwellNotificationCheck',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/notify/pos', [
+        'as'         => 'structure-manager.diagnostic.notify.pos',
+        'uses'       => 'DiagnosticController@runPosNotificationCheck',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/notify/test-upwell-alert', [
+        'as'         => 'structure-manager.diagnostic.notify.test-upwell-alert',
+        'uses'       => 'DiagnosticController@sendTestUpwellAlert',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
 });
