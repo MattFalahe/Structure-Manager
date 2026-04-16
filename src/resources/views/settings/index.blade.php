@@ -633,6 +633,11 @@
                     <i class="fas fa-building"></i> Upwell Structures
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" id="events-tab" data-toggle="tab" href="#events" role="tab">
+                    <i class="fas fa-bolt"></i> Structure Events
+                </a>
+            </li>
         </ul>
         
         <!-- Tabs Content -->
@@ -1145,9 +1150,146 @@
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Structure Events Tab (ESI Fast-Polling) -->
+            <div class="tab-pane fade" id="events" role="tabpanel">
+                <div class="tab-description">
+                    <p>
+                        <i class="fas fa-info-circle"></i>
+                        Configure fast ESI polling for structure event notifications (attacks, anchoring, destroyed, low power).
+                        This system bypasses SeAT's 20-30 minute bucket delay by polling director characters directly.
+                    </p>
+                </div>
+
+                <!-- ESI Polling Toggle -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-satellite-dish"></i> ESI Fast-Polling</h4>
+
+                    <div class="info-banner mb-3">
+                        <i class="fas fa-bolt"></i>
+                        <strong>Speed advantage:</strong> Structure Manager polls ESI notifications directly from director characters
+                        in a round-robin pattern. With 10 directors in the key pool, detection time drops from SeAT's 20-30 minutes
+                        to approximately 2 minutes. The more directors you add, the faster and more fault-tolerant the system.
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="esi_polling_enabled" value="1"
+                                {{ \StructureManager\Models\StructureManagerSettings::get('esi_polling_enabled', true) ? 'checked' : '' }}>
+                            Enable ESI fast-polling for structure events
+                        </label>
+                        <small class="form-text text-muted">
+                            When disabled, only the SeAT fallback sweep runs (every 10 minutes, no speed advantage).
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Notification Categories -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-bell"></i> Notification Categories</h4>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="notify_structure_attack" value="1"
+                                {{ \StructureManager\Models\StructureManagerSettings::get('notify_structure_attack', true) ? 'checked' : '' }}>
+                            <strong>Attack Events</strong> — Structure under attack, shields/armor down, structure destroyed
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="notify_structure_lifecycle" value="1"
+                                {{ \StructureManager\Models\StructureManagerSettings::get('notify_structure_lifecycle', true) ? 'checked' : '' }}>
+                            <strong>Lifecycle Events</strong> — Anchoring, unanchoring, ownership transferred
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="notify_structure_fuel_events" value="1"
+                                {{ \StructureManager\Models\StructureManagerSettings::get('notify_structure_fuel_events', true) ? 'checked' : '' }}>
+                            <strong>Fuel Events</strong> — Low power, high power, services offline, CCP fuel alerts
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Attack Role Mention -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-at"></i> Attack Alert Role Mention</h4>
+
+                    <div class="form-group">
+                        <label for="esi_attack_role_mention">Discord Role Mention for Attack Alerts</label>
+                        <input type="text" class="form-control" id="esi_attack_role_mention"
+                               name="esi_attack_role_mention"
+                               value="{{ \StructureManager\Models\StructureManagerSettings::get('esi_attack_role_mention', '') }}"
+                               placeholder="<@&123456789> or raw role ID"
+                               style="max-width:400px;">
+                        <small class="form-text text-muted">
+                            Separate role mention for attack alerts (structure under attack, destroyed).
+                            If empty, falls back to each webhook's own role mention setting.
+                            Format: <code>&lt;@&amp;ROLE_ID&gt;</code> or just the numeric role ID.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- ESI Key Holder Pool -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-key"></i> ESI Key Holder Pool</h4>
+
+                    <div class="info-banner mb-3">
+                        <i class="fas fa-shield-alt"></i>
+                        <strong>How it works:</strong> Assign director characters from your corporations to the polling pool.
+                        The plugin round-robins through enabled characters, calling ESI's notifications endpoint for each.
+                        If a character's token fails or expires, the system skips to the next and continues.
+                        Add multiple directors per corporation for redundancy — if one key fails, others pick up the slack.
+                    </div>
+
+                    {{-- Current key holders table (loaded via AJAX) --}}
+                    <div id="key-holders-container">
+                        <div class="text-center py-3">
+                            <i class="fas fa-spinner fa-spin"></i> Loading key holders...
+                        </div>
+                    </div>
+
+                    {{-- Add key holder button --}}
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-success btn-sm" id="btn-add-key-holder">
+                            <i class="fas fa-plus"></i> Add Director to Pool
+                        </button>
+                    </div>
+
+                    {{-- Eligible characters modal --}}
+                    <div class="modal fade" id="addKeyHolderModal" tabindex="-1" role="dialog">
+                        <div class="modal-dialog modal-lg" role="document">
+                            <div class="modal-content" style="background:#2a2f3a; border:1px solid #454d55;">
+                                <div class="modal-header" style="border-bottom-color:#454d55;">
+                                    <h5 class="modal-title" style="color:#fff;">
+                                        <i class="fas fa-user-plus"></i> Add Director to Key Pool
+                                    </h5>
+                                    <button type="button" class="close" data-dismiss="modal" style="color:#fff;">
+                                        <span>&times;</span>
+                                    </button>
+                                </div>
+                                <div class="modal-body" id="eligible-characters-container">
+                                    <div class="text-center py-3">
+                                        <i class="fas fa-spinner fa-spin"></i> Loading eligible directors...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-banner">
+                    <i class="fas fa-link"></i>
+                    <strong>Shared webhooks:</strong> Structure event notifications use the same webhooks configured in the
+                    <strong>POS Notifications</strong> tab. Each webhook's corporation filter applies. Attack alerts use
+                    the dedicated role mention above (if set), otherwise fall back to each webhook's own role mention.
+                </div>
+            </div>
+
         </div>
-        
+
         <!-- Save Buttons -->
         <div class="form-group mt-4">
             <button type="submit" class="btn btn-success">
@@ -1346,6 +1488,136 @@ $(document).ready(function() {
     });
 });
 
-// (Placeholder rotating messages removed - Upwell tab is now functional)
+// ============================================
+// ESI Key Holder Pool Management
+// ============================================
+
+function loadKeyHolders() {
+    $.get('{{ route("structure-manager.key-holders.list") }}', function(data) {
+        if (data.length === 0) {
+            $('#key-holders-container').html(
+                '<div class="info-banner"><i class="fas fa-info-circle"></i> No key holders assigned yet. Click "Add Director to Pool" to get started.</div>'
+            );
+            return;
+        }
+
+        let html = '<table class="table table-sm table-dark" style="font-size:0.88rem;">';
+        html += '<thead><tr><th>Character</th><th>Corporation</th><th>Status</th><th>Last Poll</th><th>Polls</th><th>Found</th><th>Actions</th></tr></thead><tbody>';
+
+        data.forEach(function(kh) {
+            const statusBadge = '<span class="badge ' + kh.health_badge + '">' + kh.health_status + '</span>';
+            const scopeBadge = kh.has_scope
+                ? '<span class="badge badge-success" title="Has notification scope">scope</span>'
+                : '<span class="badge badge-danger" title="Missing esi-characters.read_notifications.v1">no scope</span>';
+            const lastPoll = kh.last_polled_at ? moment(kh.last_polled_at).fromNow() : 'never';
+            const toggleBtn = kh.enabled
+                ? '<button class="btn btn-xs btn-warning" onclick="toggleKeyHolder(' + kh.id + ')"><i class="fas fa-pause"></i></button>'
+                : '<button class="btn btn-xs btn-success" onclick="toggleKeyHolder(' + kh.id + ')"><i class="fas fa-play"></i></button>';
+            const removeBtn = '<button class="btn btn-xs btn-danger" onclick="removeKeyHolder(' + kh.id + ', \'' + (kh.character_name || '').replace(/'/g, "\\'") + '\')"><i class="fas fa-trash"></i></button>';
+
+            html += '<tr' + (kh.enabled ? '' : ' style="opacity:0.5;"') + '>';
+            html += '<td>' + (kh.character_name || 'Unknown') + '</td>';
+            html += '<td>' + (kh.corporation_id || '-') + '</td>';
+            html += '<td>' + statusBadge + ' ' + scopeBadge + '</td>';
+            html += '<td>' + lastPoll + '</td>';
+            html += '<td>' + kh.total_polls + '</td>';
+            html += '<td>' + kh.total_notifications_found + '</td>';
+            html += '<td>' + toggleBtn + ' ' + removeBtn + '</td>';
+            html += '</tr>';
+
+            if (kh.last_error) {
+                html += '<tr><td colspan="7" style="font-size:0.78rem; color:#e57373; padding-top:0;"><i class="fas fa-exclamation-triangle"></i> ' + kh.last_error + '</td></tr>';
+            }
+        });
+
+        html += '</tbody></table>';
+        $('#key-holders-container').html(html);
+    });
+}
+
+$('#btn-add-key-holder').on('click', function() {
+    $('#eligible-characters-container').html('<div class="text-center py-3"><i class="fas fa-spinner fa-spin"></i> Loading eligible directors...</div>');
+    $('#addKeyHolderModal').modal('show');
+
+    $.get('{{ route("structure-manager.key-holders.eligible") }}', function(data) {
+        if (data.length === 0) {
+            $('#eligible-characters-container').html(
+                '<div class="info-banner"><i class="fas fa-info-circle"></i> No eligible directors found. Characters need: Director role + <code>esi-characters.read_notifications.v1</code> ESI scope + not already in pool.</div>'
+            );
+            return;
+        }
+
+        let html = '<table class="table table-sm table-dark" style="font-size:0.88rem;">';
+        html += '<thead><tr><th>Character</th><th>Corporation</th><th>Scope</th><th>Token</th><th></th></tr></thead><tbody>';
+
+        data.forEach(function(c) {
+            const scopeBadge = c.has_notification_scope
+                ? '<span class="badge badge-success">OK</span>'
+                : '<span class="badge badge-danger">Missing</span>';
+            const tokenBadge = c.token_expired
+                ? '<span class="badge badge-warning">Expired</span>'
+                : '<span class="badge badge-success">Valid</span>';
+
+            html += '<tr>';
+            html += '<td>' + (c.character_name || 'Unknown') + '</td>';
+            html += '<td>' + (c.corporation_name || 'Corp #' + c.corporation_id) + '</td>';
+            html += '<td>' + scopeBadge + '</td>';
+            html += '<td>' + tokenBadge + '</td>';
+            html += '<td><button class="btn btn-xs btn-primary" onclick="addKeyHolder(' + c.character_id + ')"' +
+                    (!c.has_notification_scope ? ' disabled title="Missing notification scope"' : '') +
+                    '><i class="fas fa-plus"></i> Add</button></td>';
+            html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        $('#eligible-characters-container').html(html);
+    });
+});
+
+function addKeyHolder(characterId) {
+    $.post('{{ route("structure-manager.key-holders.add") }}', {
+        _token: '{{ csrf_token() }}',
+        character_id: characterId
+    }).done(function() {
+        $('#addKeyHolderModal').modal('hide');
+        loadKeyHolders();
+    }).fail(function(xhr) {
+        alert('Failed to add key holder: ' + (xhr.responseJSON?.error || 'Unknown error'));
+    });
+}
+
+function toggleKeyHolder(id) {
+    $.post('{{ route("structure-manager.key-holders.toggle", ":id") }}'.replace(':id', id), {
+        _token: '{{ csrf_token() }}'
+    }).done(function() {
+        loadKeyHolders();
+    });
+}
+
+function removeKeyHolder(id, name) {
+    if (!confirm('Remove ' + name + ' from the key pool?')) return;
+
+    $.ajax({
+        url: '{{ route("structure-manager.key-holders.remove", ":id") }}'.replace(':id', id),
+        method: 'DELETE',
+        data: { _token: '{{ csrf_token() }}' }
+    }).done(function() {
+        loadKeyHolders();
+    });
+}
+
+// Load key holders when events tab is shown
+$('a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+    if ($(e.target).attr('href') === '#events') {
+        loadKeyHolders();
+    }
+});
+
+// Also load if events tab is already active on page load
+$(document).ready(function() {
+    if ($('#events-tab').hasClass('active')) {
+        loadKeyHolders();
+    }
+});
 </script>
 @endpush

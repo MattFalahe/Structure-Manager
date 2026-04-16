@@ -65,6 +65,26 @@ class ScheduleSeeder extends AbstractScheduleSeeder
                 'ping_after' => null,
             ],
 
+            // Fast ESI Polling for Structure Events (attacks, anchoring, etc.)
+            [
+                'command' => 'structure-manager:poll-structure-notifications',
+                'expression' => '*/2 * * * *', // Run every 2 minutes
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+
+            // SeAT Notification Sweep (fallback for missed fast-poll)
+            [
+                'command' => 'structure-manager:sweep-seat-notifications',
+                'expression' => '*/10 * * * *', // Run every 10 minutes
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+
             // Cleanup
             [
                 'command' => 'structure-manager:cleanup-history',

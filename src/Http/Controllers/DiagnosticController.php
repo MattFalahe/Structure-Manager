@@ -14,6 +14,8 @@ use StructureManager\Helpers\PosFuelCalculator;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StructureNotificationStatus;
+use StructureManager\Models\EsiKeyHolder;
+use StructureManager\Models\EsiNotification;
 
 /**
  * Admin-only diagnostic page for Structure Manager.
@@ -35,16 +37,20 @@ class DiagnosticController extends Controller
         'structure-manager:analyze-pos-consumption' => '0 1 * * *',
         'structure-manager:notify-pos-fuel'        => '*/10 * * * *',
         'structure-manager:notify-upwell-fuel'      => '*/10 * * * *',
+        'structure-manager:poll-structure-notifications' => '*/2 * * * *',
+        'structure-manager:sweep-seat-notifications'     => '*/10 * * * *',
         'structure-manager:cleanup-history'        => '0 3 * * *',
     ];
 
     /**
-     * The eight database tables the plugin owns.
+     * The ten database tables the plugin owns.
      */
     private const PLUGIN_TABLES = [
         'structure_fuel_history',
         'structure_fuel_reserves',
         'structure_notification_status',
+        'structure_manager_esi_notifications',
+        'structure_manager_esi_key_holders',
         'starbase_fuel_history',
         'starbase_fuel_reserves',
         'starbase_fuel_consumption',
@@ -88,6 +94,7 @@ class DiagnosticController extends Controller
             'esi_coverage'       => $this->checkEsiCoverage(),
             'notification_state'        => $this->checkNotificationState(),
             'upwell_notification_state' => $this->checkUpwellNotificationState(),
+            'esi_polling_state'         => $this->checkEsiPollingState(),
             'user_context'              => $this->checkUserContext(),
         ];
 
@@ -780,6 +787,75 @@ class DiagnosticController extends Controller
     }
 
     /**
+     * ESI fast-polling health: key holder pool status, recent polls, notification
+     * counts, fast-poll vs fallback ratio.
+     */
+    private function checkEsiPollingState(): array
+    {
+        if (!Schema::hasTable('structure_manager_esi_key_holders')) {
+            return [
+                'status'  => 'info',
+                'message' => 'ESI key holders table not yet created (run migrations).',
+                'details' => [],
+            ];
+        }
+
+        $enabled = \StructureManager\Models\StructureManagerSettings::get('esi_polling_enabled', true);
+        $totalKeyHolders = EsiKeyHolder::count();
+        $enabledKeyHolders = EsiKeyHolder::where('enabled', true)->count();
+        $healthyKeyHolders = EsiKeyHolder::where('enabled', true)
+            ->where('last_poll_status', 'success')
+            ->count();
+        $suspendedKeyHolders = EsiKeyHolder::where('consecutive_failures', '>=', 5)->count();
+
+        // Recent notification stats
+        $lastHourNotifications = 0;
+        $fastPollCount = 0;
+        $fallbackCount = 0;
+        if (Schema::hasTable('structure_manager_esi_notifications')) {
+            $lastHourNotifications = EsiNotification::where('created_at', '>=', \Carbon\Carbon::now()->subHour())->count();
+            $fastPollCount = EsiNotification::where('source', 'fast_poll')->count();
+            $fallbackCount = EsiNotification::where('source', 'seat_fallback')->count();
+        }
+
+        $details = [
+            'ESI polling enabled'          => $enabled ? 'yes' : 'NO (disabled)',
+            'Key holders in pool'          => $totalKeyHolders,
+            'Enabled key holders'          => $enabledKeyHolders,
+            'Healthy (last poll OK)'       => $healthyKeyHolders,
+            'Suspended (5+ failures)'      => $suspendedKeyHolders,
+            'Notifications (last hour)'    => $lastHourNotifications,
+            'Total via fast-poll'          => $fastPollCount,
+            'Total via SeAT fallback'      => $fallbackCount,
+        ];
+
+        $status = 'ok';
+        if (!$enabled) {
+            $status = 'warn';
+        } elseif ($totalKeyHolders === 0) {
+            $status = 'warn';
+        } elseif ($suspendedKeyHolders > 0) {
+            $status = 'warn';
+        } elseif ($enabledKeyHolders === 0) {
+            $status = 'error';
+        }
+
+        $message = $enabled
+            ? "{$enabledKeyHolders} key holder(s) active, {$healthyKeyHolders} healthy."
+            : 'ESI fast-polling is disabled. Only SeAT fallback sweep is active.';
+
+        if ($totalKeyHolders === 0 && $enabled) {
+            $message = 'No key holders assigned. Go to Settings > Structure Events to add directors.';
+        }
+
+        return [
+            'status'  => $status,
+            'message' => $message,
+            'details' => $details,
+        ];
+    }
+
+    /**
      * What the plugin sees for the currently-logged-in admin. Helps diagnose
      * "why can I only see N corps" by showing exactly what the scope resolver
      * would return for this user.
@@ -1127,6 +1203,25 @@ class DiagnosticController extends Controller
         } catch (\Throwable $e) {
             Log::error('Structure Manager diagnostic: Upwell notification check failed - ' . $e->getMessage());
             return back()->with('error', 'Upwell notification check failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Dispatch the ESI polling job to poll key holders immediately.
+     */
+    public function runEsiPollNow(Request $request)
+    {
+        if (!$this->confirmed($request)) {
+            return back()->with('error', 'ESI poll requires the confirmation checkbox.');
+        }
+
+        try {
+            Artisan::call('structure-manager:poll-structure-notifications');
+            Log::info('Structure Manager diagnostic: dispatched ESI poll');
+            return back()->with('success', 'ESI polling job dispatched. Key holders are being polled now.');
+        } catch (\Throwable $e) {
+            Log::error('Structure Manager diagnostic: ESI poll failed - ' . $e->getMessage());
+            return back()->with('error', 'ESI poll failed: ' . $e->getMessage());
         }
     }
 

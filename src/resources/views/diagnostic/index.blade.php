@@ -496,6 +496,24 @@
         </div>
     </div>
 
+    {{-- =================== CHECK: ESI Polling State =================== --}}
+    @php $c = $checks['esi_polling_state']; @endphp
+    <div class="diag-section">
+        <div class="diag-section-header">
+            <h3 class="diag-section-title">ESI Fast-Polling State</h3>
+            <span class="diag-badge {{ $c['status'] }}">{{ strtoupper($c['status']) }}</span>
+        </div>
+        <div class="diag-section-body">
+            <p class="diag-msg">{{ $c['message'] }}</p>
+            <dl class="diag-kv" style="margin-top:0.8rem;">
+                @foreach($c['details'] as $k => $v)
+                    <dt>{{ $k }}</dt>
+                    <dd>{{ $v }}</dd>
+                @endforeach
+            </dl>
+        </div>
+    </div>
+
     {{-- =================== CHECK: Current user context =================== --}}
     @php $c = $checks['user_context']; @endphp
     <div class="diag-section">
@@ -577,6 +595,26 @@
                         </label>
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="fas fa-broadcast-tower"></i> Check POSes
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+                {{-- Run ESI Poll Now --}}
+                <div style="background:#2a2f3a; border:1px solid #454d55; border-radius:6px; padding:1rem;">
+                    <h5 style="color:#fff; margin-top:0; font-size:0.95rem;">Run ESI Poll Now</h5>
+                    <small style="color:#8b95a5;">
+                        Dispatches the <code>PollStructureNotifications</code> job. Polls the next key holder(s)
+                        in the rotation and processes any new structure events found. Sends real alerts if events are detected.
+                    </small>
+                    <form method="POST" action="{{ route('structure-manager.diagnostic.notify.esi-poll') }}" style="margin-top:0.8rem;">
+                        @csrf
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin:0.5rem 0; font-size:0.85rem; color:#c2c7d0;">
+                            <input type="checkbox" name="confirm" value="yes" required>
+                            I understand this polls ESI and may send real notifications
+                        </label>
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="fas fa-satellite-dish"></i> Poll ESI Now
                         </button>
                     </form>
                 </div>

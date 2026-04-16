@@ -6,6 +6,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\WebhookConfiguration;
+use StructureManager\Models\EsiKeyHolder;
 
 /**
  * Controller for plugin settings management
@@ -139,6 +140,13 @@ class SettingsController extends Controller
                 'upwell_fuel_critical_days',
                 'upwell_fuel_warning_days',
                 'upwell_fuel_notification_interval',
+                // ESI polling settings
+                'esi_polling_enabled',
+                'esi_polling_interval',
+                'esi_attack_role_mention',
+                'notify_structure_attack',
+                'notify_structure_lifecycle',
+                'notify_structure_fuel_events',
             ];
 
             foreach ($allowedKeys as $key) {
@@ -425,6 +433,14 @@ class SettingsController extends Controller
             StructureManagerSettings::set('upwell_fuel_warning_days', 14);
             StructureManagerSettings::set('upwell_fuel_notification_interval', 0);
 
+            // Reset ESI polling settings
+            StructureManagerSettings::set('esi_polling_enabled', 1);
+            StructureManagerSettings::set('esi_polling_interval', 2);
+            StructureManagerSettings::set('esi_attack_role_mention', null);
+            StructureManagerSettings::set('notify_structure_attack', 1);
+            StructureManagerSettings::set('notify_structure_lifecycle', 1);
+            StructureManagerSettings::set('notify_structure_fuel_events', 1);
+
             StructureManagerSettings::clearCache();
             
             return redirect()
@@ -436,5 +452,108 @@ class SettingsController extends Controller
                 ->back()
                 ->with('error', 'Error resetting settings: ' . $e->getMessage());
         }
+    }
+
+    // ============================================
+    // ESI Key Holder Management
+    // ============================================
+
+    /**
+     * Get eligible characters that can be added to the key pool.
+     * Returns JSON for the AJAX-powered assignment UI.
+     */
+    public function getEligibleKeyHolders()
+    {
+        $eligible = EsiKeyHolder::getEligibleCharacters();
+
+        return response()->json($eligible->values());
+    }
+
+    /**
+     * Get all currently assigned key holders with health status.
+     */
+    public function getKeyHolders()
+    {
+        $keyHolders = EsiKeyHolder::orderBy('corporation_id')
+            ->orderBy('character_name')
+            ->get()
+            ->map(function ($kh) {
+                $kh->health_status = $kh->getHealthStatus();
+                $kh->health_badge = $kh->getHealthBadgeClass();
+                $kh->has_scope = $kh->hasNotificationScope();
+                return $kh;
+            });
+
+        return response()->json($keyHolders);
+    }
+
+    /**
+     * Add a character to the key holder pool.
+     */
+    public function addKeyHolder(Request $request)
+    {
+        $request->validate([
+            'character_id' => 'required|integer',
+        ]);
+
+        $characterId = (int) $request->character_id;
+
+        // Check not already in pool
+        if (EsiKeyHolder::where('character_id', $characterId)->exists()) {
+            return response()->json(['error' => 'Character already in key pool'], 409);
+        }
+
+        // Resolve name and corp
+        $info = \DB::table('refresh_tokens as rt')
+            ->join('character_affiliations as ca', 'rt.character_id', '=', 'ca.character_id')
+            ->leftJoin('character_infos as ci', 'rt.character_id', '=', 'ci.character_id')
+            ->where('rt.character_id', $characterId)
+            ->whereNull('rt.deleted_at')
+            ->select('ci.name as character_name', 'ca.corporation_id')
+            ->first();
+
+        if (!$info) {
+            return response()->json(['error' => 'Character not found in SeAT'], 404);
+        }
+
+        $keyHolder = EsiKeyHolder::create([
+            'character_id' => $characterId,
+            'corporation_id' => $info->corporation_id,
+            'character_name' => $info->character_name ?? "Character #{$characterId}",
+            'enabled' => true,
+        ]);
+
+        return response()->json(['success' => true, 'key_holder' => $keyHolder]);
+    }
+
+    /**
+     * Toggle a key holder's enabled state.
+     */
+    public function toggleKeyHolder(Request $request, $id)
+    {
+        $keyHolder = EsiKeyHolder::findOrFail($id);
+        $keyHolder->enabled = !$keyHolder->enabled;
+
+        // Reset failure count when re-enabling
+        if ($keyHolder->enabled) {
+            $keyHolder->consecutive_failures = 0;
+            $keyHolder->last_poll_status = null;
+            $keyHolder->last_error = null;
+        }
+
+        $keyHolder->save();
+
+        return response()->json(['success' => true, 'enabled' => $keyHolder->enabled]);
+    }
+
+    /**
+     * Remove a character from the key holder pool.
+     */
+    public function removeKeyHolder($id)
+    {
+        $keyHolder = EsiKeyHolder::findOrFail($id);
+        $keyHolder->delete();
+
+        return response()->json(['success' => true]);
     }
 }

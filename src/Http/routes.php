@@ -257,9 +257,49 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
 
+    Route::post('/diagnostic/notify/esi-poll', [
+        'as'         => 'structure-manager.diagnostic.notify.esi-poll',
+        'uses'       => 'DiagnosticController@runEsiPollNow',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
     Route::post('/diagnostic/notify/test-upwell-alert', [
         'as'         => 'structure-manager.diagnostic.notify.test-upwell-alert',
         'uses'       => 'DiagnosticController@sendTestUpwellAlert',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    // ============================================
+    // ESI Key Holder Management
+    // ============================================
+
+    Route::get('/key-holders', [
+        'as'         => 'structure-manager.key-holders.list',
+        'uses'       => 'SettingsController@getKeyHolders',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::get('/key-holders/eligible', [
+        'as'         => 'structure-manager.key-holders.eligible',
+        'uses'       => 'SettingsController@getEligibleKeyHolders',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/key-holders/add', [
+        'as'         => 'structure-manager.key-holders.add',
+        'uses'       => 'SettingsController@addKeyHolder',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/key-holders/{id}/toggle', [
+        'as'         => 'structure-manager.key-holders.toggle',
+        'uses'       => 'SettingsController@toggleKeyHolder',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::delete('/key-holders/{id}', [
+        'as'         => 'structure-manager.key-holders.remove',
+        'uses'       => 'SettingsController@removeKeyHolder',
         'middleware' => 'can:structure-manager.admin',
     ]);
 

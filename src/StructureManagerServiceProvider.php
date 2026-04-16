@@ -13,6 +13,8 @@ use StructureManager\Console\Commands\NotifyPosFuelCommand;
 use StructureManager\Console\Commands\CreateTestPoses;
 use StructureManager\Console\Commands\SimulateFastConsumption;
 use StructureManager\Console\Commands\NotifyUpwellFuelCommand;
+use StructureManager\Console\Commands\PollStructureNotificationsCommand;
+use StructureManager\Console\Commands\SweepSeatNotificationsCommand;
 use StructureManager\Database\Seeders\ScheduleSeeder;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
@@ -42,6 +44,8 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 CreateTestPoses::class,
                 SimulateFastConsumption::class,
                 NotifyUpwellFuelCommand::class,
+                PollStructureNotificationsCommand::class,
+                SweepSeatNotificationsCommand::class,
             ]);
         }
 
