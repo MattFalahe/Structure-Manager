@@ -45,6 +45,13 @@ return [
                 'permission' => 'structure-manager.view',
             ],
             [
+                'name'  => 'Structure Board',
+                'label' => 'structure-manager::menu.command_board',
+                'icon'  => 'fas fa-chess',
+                'route' => 'structure-manager.command-board.index',
+                'permission' => 'structure-manager.command-board.view',
+            ],
+            [
                 'name'  => 'Notifications',
                 'label' => 'structure-manager::menu.notifications',
                 'icon'  => 'fas fa-bell',

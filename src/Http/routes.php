@@ -269,6 +269,40 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
 
+    // ============================================
+    // Structure Board (v2)
+    // ============================================
+
+    Route::get('/command-board', [
+        'as'         => 'structure-manager.command-board.index',
+        'uses'       => 'StructureBoardController@index',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
+    Route::post('/command-board/op', [
+        'as'         => 'structure-manager.command-board.op.store',
+        'uses'       => 'StructureBoardController@storeManualOp',
+        'middleware' => 'can:structure-manager.command-board.create',
+    ]);
+
+    Route::post('/command-board/{id}/dismiss', [
+        'as'         => 'structure-manager.command-board.dismiss',
+        'uses'       => 'StructureBoardController@dismiss',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ])->where('id', '[0-9]+');
+
+    Route::post('/command-board/{id}/undismiss', [
+        'as'         => 'structure-manager.command-board.undismiss',
+        'uses'       => 'StructureBoardController@undismiss',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ])->where('id', '[0-9]+');
+
+    Route::delete('/command-board/{id}', [
+        'as'         => 'structure-manager.command-board.destroy',
+        'uses'       => 'StructureBoardController@destroy',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ])->where('id', '[0-9]+');
+
     // ESI Key Holder management moved to Manager Core v1.x.
     // When MC is installed, admins manage the shared key pool at
     //   route('manager-core.esi-key-pool.index')

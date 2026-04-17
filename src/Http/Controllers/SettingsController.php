@@ -146,6 +146,11 @@ class SettingsController extends Controller
                 'notify_structure_attack',
                 'notify_structure_lifecycle',
                 'notify_structure_fuel_events',
+                // Structure Board (v2)
+                'command_board_default_window_days',
+                'command_board_default_opsec_role_id',
+                'command_board_retention_days',
+                'command_board_autodismiss_elapsed_hours',
             ];
 
             foreach ($allowedKeys as $key) {
