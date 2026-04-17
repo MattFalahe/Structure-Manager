@@ -887,7 +887,44 @@
                     <i class="fas fa-bell"></i>
                     {{ trans('structure-manager::help.notifications_title') }}
                 </h3>
-                <p>{{ trans('structure-manager::help.notifications_intro') }}</p>
+                <p>{!! trans('structure-manager::help.notifications_intro') !!}</p>
+
+                {{-- v3.1: dedicated Notifications page overview --}}
+                <div class="success-box" style="margin-top:15px;">
+                    <h4 style="margin-top:0;"><i class="fas fa-sparkles"></i> {{ trans('structure-manager::help.v31_redesign_title') }}</h4>
+                    <p>{{ trans('structure-manager::help.v31_redesign_intro') }}</p>
+                    {!! trans('structure-manager::help.v31_redesign_concepts') !!}
+                </div>
+
+                <h4>{{ trans('structure-manager::help.v31_category_namespaces_title') }}</h4>
+                <p>{{ trans('structure-manager::help.v31_category_namespaces_desc') }}</p>
+                {!! trans('structure-manager::help.v31_category_namespaces_list') !!}
+
+                <h4>{{ trans('structure-manager::help.v31_category_list_title') }}</h4>
+                <p>{{ trans('structure-manager::help.v31_category_list_desc') }}</p>
+                {!! trans('structure-manager::help.v31_category_list') !!}
+
+                <h4>{{ trans('structure-manager::help.v31_role_precedence_title') }}</h4>
+                <p>{{ trans('structure-manager::help.v31_role_precedence_desc') }}</p>
+                {!! trans('structure-manager::help.v31_role_precedence_list') !!}
+
+                <h4><i class="fas fa-hashtag"></i> {{ trans('structure-manager::help.v31_role_picker_title') }}</h4>
+                <p>{{ trans('structure-manager::help.v31_role_picker_desc') }}</p>
+                {!! trans('structure-manager::help.v31_role_picker_sources') !!}
+                {!! trans('structure-manager::help.v31_role_picker_behavior') !!}
+
+                <h4><i class="fas fa-bolt"></i> {{ trans('structure-manager::help.esi_events_title') }}</h4>
+                <p>{{ trans('structure-manager::help.esi_events_intro') }}</p>
+                <div class="success-box">
+                    {!! trans('structure-manager::help.esi_events_with_mc') !!}
+                </div>
+                <div class="warning-box">
+                    {!! trans('structure-manager::help.esi_events_standalone') !!}
+                </div>
+                <div class="purple-box">
+                    {!! trans('structure-manager::help.esi_events_how_to_enable') !!}
+                </div>
+                <p style="margin-top:10px;">{!! trans('structure-manager::help.esi_events_detection_mode') !!}</p>
 
                 <h4>{{ trans('structure-manager::help.webhook_features') }}</h4>
                 {!! trans('structure-manager::help.webhook_features_desc') !!}

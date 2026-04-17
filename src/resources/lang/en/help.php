@@ -338,8 +338,90 @@ return [
     
     // Notifications Section
     'notifications_title' => 'Discord & Slack Notifications',
-    'notifications_intro' => 'Configure automated webhook notifications to receive real-time alerts for critical POS fuel levels directly in your Discord or Slack channels.',
-    
+    'notifications_intro' => 'Structure Manager sends real-time alerts to Discord or Slack for POS fuel, Upwell structure fuel, and ESI-driven structure events (attacks, lifecycle, CCP fuel alerts). As of v3.1, notification configuration lives on a dedicated <strong>Notifications</strong> page (sidebar entry between Critical Alerts and Settings) where you manage categories, webhook bindings, and Discord role mentions independently.',
+
+    // v3.1 architecture overview (added April 2026)
+    'v31_redesign_title' => 'v3.1: The Notifications Page',
+    'v31_redesign_intro' => 'Webhook delivery, notification categories, and role mentions are now three separate concerns. This makes multi-corp and multi-channel setups dramatically easier.',
+    'v31_redesign_concepts' => '<ul>
+        <li><strong>Webhooks</strong> are pure delivery endpoints: a URL, an optional corporation filter, a description. Managed in Settings.</li>
+        <li><strong>Notification categories</strong> are master toggles for each alert type (e.g. "Structure Under Attack", "POS Fuel", "Upwell Magmatic Gas"). Each category has its own default Discord role mention.</li>
+        <li><strong>Bindings</strong> connect categories to webhooks. Each binding can override the category\'s default role mention for that specific webhook — so a single "Under Attack" notification can ping <code>@corp-fc</code> in the Corp Discord and <code>@alliance-fc</code> in the Alliance Discord simultaneously.</li>
+    </ul>',
+    'v31_category_namespaces_title' => 'Category Namespaces',
+    'v31_category_namespaces_desc' => 'Categories are grouped into three namespaces for clarity and clean isolation:',
+    'v31_category_namespaces_list' => '<ul>
+        <li><strong>Upwell Structures</strong> — fuel + magmatic gas alerts for citadels, engineering complexes, refineries, Metenox moon drills. Driven by periodic fuel-bay polling.</li>
+        <li><strong>Structure Events (ESI)</strong> — attack alerts, anchoring, ownership transfers, fuel events. Driven by EVE\'s notification stream via Manager Core fast-poll (or SeAT native if MC is absent).</li>
+        <li><strong>POS (Legacy)</strong> — Player Owned Starbases. CCP legacy structures, marked with a LEGACY badge in the UI. Kept isolated so they can be cleanly removed if CCP eventually deprecates them.</li>
+    </ul>',
+    'v31_role_precedence_title' => 'Role Mention Precedence',
+    'v31_role_precedence_desc' => 'When a notification fires, Structure Manager picks the role to ping in this order (first non-empty wins):',
+    'v31_role_precedence_list' => '<ol>
+        <li><strong>Binding role</strong> — the role set on the specific category-to-webhook binding (per-webhook override)</li>
+        <li><strong>Category default role</strong> — the role set on the category itself</li>
+        <li><strong>Webhook legacy role</strong> — the <code>role_mention</code> column on the webhook itself (v3.0 data, kept for backward compatibility)</li>
+        <li>No mention if all three are empty</li>
+    </ol>',
+    'v31_role_picker_title' => 'Discord Role Picker',
+    'v31_role_picker_desc' => 'When one or more Discord role sources are detected on your SeAT install, the Notifications page shows a role picker button next to every role-mention input. Clicking it opens a searchable dropdown populated from every installed source, deduplicated by Discord role ID and tagged with a source badge.',
+    'v31_role_picker_sources' => '<strong>Supported sources (union all installed):</strong>
+        <ul>
+            <li><strong>mattfalahe/seat-discord-pings</strong> — reads the <code>discord_roles</code> table. Curated list with colors and pre-built mention strings. Preferred when roles exist in both sources.</li>
+            <li><strong>warlof/seat-connector</strong> + <strong>warlof/seat-discord-connector</strong> — reads <code>seat_connector_sets</code> rows with <code>connector_type=\'discord\'</code>. Full guild-synced list, no colors.</li>
+            <li><strong>Manual input</strong> — if no source is installed, the role-mention field accepts raw <code>&lt;@&amp;ROLE_ID&gt;</code> or numeric IDs.</li>
+        </ul>',
+    'v31_role_picker_behavior' => '<strong>Picker behavior when multiple sources are installed:</strong>
+        <ul>
+            <li>Both sources contribute roles — nothing is filtered out</li>
+            <li>Roles appearing in both sources are shown once, using the richer source\'s data (color, name) and tagged with a "+N" indicator listing the other sources</li>
+            <li>A source filter dropdown appears inside the picker so you can narrow by provider</li>
+            <li>Picking a role stores the exact mention string from the source — if a source is uninstalled later, previously-picked roles keep working because the string is static</li>
+        </ul>',
+    'v31_category_list_title' => 'Shipped Categories (seeded on install)',
+    'v31_category_list_desc' => 'Migration 000022 seeds these 8 categories. Existing webhooks are bound to every enabled category on install so Day 0 behavior is identical to v3.0 fan-out.',
+    'v31_category_list' => '<table style="width:100%; border-collapse:collapse;">
+        <thead><tr><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Namespace</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Category</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">What triggers it</th></tr></thead>
+        <tbody>
+            <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>fuel</code></td><td style="padding:6px;">Upwell fuel bay below warning/critical/1h thresholds</td></tr>
+            <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>magmatic_gas</code></td><td style="padding:6px;">Metenox gas supply below thresholds</td></tr>
+            <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_attack</code></td><td style="padding:6px;">UnderAttack, LostShields, LostArmor, Destroyed, Skyhook variants</td></tr>
+            <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_lifecycle</code></td><td style="padding:6px;">Anchoring, unanchoring, ownership transferred, skyhook deployed</td></tr>
+            <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_fuel_events</code></td><td style="padding:6px;">Low power, high power restored, services offline, CCP fuel alerts</td></tr>
+            <tr><td style="padding:6px;">pos</td><td style="padding:6px;"><code>fuel</code></td><td style="padding:6px;">POS fuel blocks + sovereignty charter low-alerts</td></tr>
+            <tr><td style="padding:6px;">pos</td><td style="padding:6px;"><code>strontium</code></td><td style="padding:6px;">Strontium clathrate reinforcement alerts</td></tr>
+            <tr><td style="padding:6px;">pos</td><td style="padding:6px;"><code>lifecycle</code></td><td style="padding:6px;">POS state changes (online/offline/reinforced)</td></tr>
+        </tbody>
+    </table>',
+
+    // ESI events + Manager Core
+    'esi_events_title' => 'ESI Events & Manager Core Integration',
+    'esi_events_intro' => 'Structure attack alerts, anchoring notifications, and CCP fuel-alert messages come from EVE\'s ESI notification stream. Structure Manager has two detection paths depending on whether Manager Core is installed.',
+    'esi_events_with_mc' => '<strong>With Manager Core installed (recommended):</strong>
+        <ul>
+            <li>Manager Core fast-polls notifications from director key holders every 2 minutes</li>
+            <li>Detection latency: ~2 minutes from the moment CCP\'s server fires the notification</li>
+            <li>Key holder pool is shared across every Manager Core-aware plugin — configure it once in Manager Core > ESI Key Pool</li>
+            <li>Notifications dispatch to Structure Manager\'s StructureEventHandler which applies your category enabled-toggle and role mentions</li>
+            <li>A fallback sweep of SeAT\'s <code>character_notifications</code> table runs every 10 minutes to catch anything fast-poll missed</li>
+        </ul>',
+    'esi_events_standalone' => '<strong>Without Manager Core (standalone):</strong>
+        <ul>
+            <li>Structure Manager reads from SeAT\'s native <code>character_notifications</code> table every 10 minutes</li>
+            <li>Detection latency: ~20-30 minutes (SeAT\'s notification bucket cadence)</li>
+            <li>Same categories, same role mentions, same webhook routing — just slower</li>
+            <li>No director key holders required</li>
+        </ul>',
+    'esi_events_how_to_enable' => '<strong>Enabling fast-poll:</strong>
+        <ol>
+            <li>Install <a href="https://github.com/MattFalahe/Manager-Core" target="_blank">Manager Core</a> alongside Structure Manager</li>
+            <li>On container restart, Manager Core\'s migrations create its shared tables</li>
+            <li>Navigate to Manager Core > ESI Key Pool (superuser only)</li>
+            <li>Add one or more director characters from the eligible-characters list. More directors = faster rotation + better fault tolerance.</li>
+            <li>Structure Manager automatically detects Manager Core at boot and registers its handler. No configuration needed.</li>
+        </ol>',
+    'esi_events_detection_mode' => '<strong>Checking which mode is active:</strong> Settings > Structure Events tab shows the current detection mode banner. Diagnostics page also reports it with a per-mode health panel (shared key holders, recent notification counts, registered handler status).',
+
     'webhook_features' => 'Webhook Features',
     'webhook_features_desc' => '<ul>
         <li><strong>Discord & Slack Support:</strong> Compatible with both Discord and Slack webhook URLs</li>
@@ -445,15 +527,17 @@ return [
         </ul>',
 
     'multiple_webhooks_title' => 'Multiple Webhook Support',
-    'multiple_webhooks_intro' => 'Structure Manager supports up to 10 concurrent webhooks with per-webhook corporation filtering and role mentions. This is ideal for hosting multiple corporations with separate alert channels.',
+    'multiple_webhooks_intro' => 'Structure Manager supports any number of webhooks with per-webhook corporation filtering. Role mentions and per-category routing are handled through the Notifications page (v3.1+) rather than on the webhook row itself. This makes complex multi-corp, multi-channel setups clean without creating duplicate webhooks for different categories.',
     'multiple_webhooks_features' => '<strong>Features:</strong>
         <ul>
-            <li><strong>Up to 10 webhooks:</strong> Configure multiple Discord or Slack webhook URLs simultaneously</li>
+            <li><strong>Unlimited webhooks:</strong> Configure as many Discord or Slack webhook URLs as you need</li>
             <li><strong>Corporation filtering:</strong> Each webhook can target specific corporations or "all corporations"</li>
-            <li><strong>Independent configuration:</strong> Each webhook has its own enabled/disabled state</li>
-            <li><strong>Per-webhook role mentions:</strong> Different Discord role mentions for each webhook</li>
-            <li><strong>Optional descriptions:</strong> Add notes to identify webhook purpose</li>
-            <li><strong>Individual testing:</strong> Test each webhook separately to verify configuration</li>
+            <li><strong>Independent enable state:</strong> Each webhook has its own master on/off toggle</li>
+            <li><strong>Per-category bindings:</strong> Each webhook receives only the notification categories it\'s bound to (v3.1)</li>
+            <li><strong>Per-binding role mentions:</strong> Override the category default role for a specific webhook (e.g. different roles on corp vs. alliance Discord)</li>
+            <li><strong>Per-binding enable toggle:</strong> Silence a specific category → webhook pairing without deleting it</li>
+            <li><strong>Optional descriptions:</strong> Label each webhook for easier identification</li>
+            <li><strong>Individual testing:</strong> Test each webhook separately from the Settings page</li>
         </ul>',
     'multiple_webhooks_use_cases' => '<strong>Use Cases:</strong>
         <ul>
@@ -487,27 +571,27 @@ return [
                 </ul>
             </li>
         </ul>',
-    'multiple_webhooks_configuration' => '<strong>Configuration:</strong>
+    'multiple_webhooks_configuration' => '<strong>Configuration (v3.1+ workflow):</strong>
         <ol>
-            <li>Navigate to Settings → POS Notifications → Webhook Configuration</li>
-            <li>Click "Add Webhook" button (max 10 webhooks)</li>
-            <li>Enter webhook URL (Discord or Slack)</li>
-            <li>Select corporation filter:
+            <li>Navigate to <strong>Settings > POS Notifications > Webhook Configuration</strong> and add your webhook(s):
                 <ul>
-                    <li>"All Corporations" - Receives alerts for all POSes regardless of corporation</li>
-                    <li>Specific Corporation - Receives alerts only for that corporation\'s POSes</li>
+                    <li>Discord or Slack URL (https only, default port 443, approved hosts)</li>
+                    <li>Corporation filter: "All Corporations" or a specific corp</li>
+                    <li>Description to identify the webhook</li>
+                    <li>Legacy role-mention field (optional, used only as a last-resort fallback — prefer the Notifications page below)</li>
                 </ul>
             </li>
-            <li>Configure Discord role mention (optional):
+            <li>Test the webhook with "Test Webhook" to verify connectivity.</li>
+            <li>Navigate to <strong>Structure Manager > Notifications</strong> (sidebar).</li>
+            <li>For each category you care about:
                 <ul>
-                    <li>Format: <code>&lt;@&amp;ROLE_ID&gt;</code> or just the role ID number</li>
-                    <li>Only triggers for critical and final alerts</li>
-                    <li>Leave empty for no mentions</li>
+                    <li>Toggle the master enable switch</li>
+                    <li>Set a default role mention (picker if a Discord source is installed, manual otherwise)</li>
+                    <li>Pick webhooks from the "Bind Webhook" dropdown and click Add</li>
                 </ul>
             </li>
-            <li>Add description (optional) to identify webhook purpose</li>
-            <li>Test webhook with "Test Webhook" button</li>
-            <li>Enable webhook to start receiving notifications</li>
+            <li>To set a different role mention on a specific webhook binding: edit the role override on that row, then click Save. Leaving it blank inherits the category default.</li>
+            <li>Per-binding enable switches let you temporarily silence one binding without deleting it.</li>
         </ol>',
     'multiple_webhooks_example' => '<strong>Example Multi-Corp Setup:</strong><br>
         <pre>Webhook #1:
