@@ -275,4 +275,44 @@ Route::group([
     // When MC is absent, Structure Manager uses SeAT's native notification path
     // (character_notifications table) — no key holders required.
 
+    // ============================================
+    // Notifications (category/webhook matrix)
+    // ============================================
+
+    Route::get('/settings/notifications', [
+        'as'         => 'structure-manager.notifications.index',
+        'uses'       => 'NotificationController@index',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/settings/notifications/category/{id}', [
+        'as'         => 'structure-manager.notifications.category.update',
+        'uses'       => 'NotificationController@updateCategory',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where('id', '[0-9]+');
+
+    Route::post('/settings/notifications/category/{categoryId}/bind/{webhookId}', [
+        'as'         => 'structure-manager.notifications.binding.upsert',
+        'uses'       => 'NotificationController@upsertBinding',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where(['categoryId' => '[0-9]+', 'webhookId' => '[0-9]+']);
+
+    Route::delete('/settings/notifications/category/{categoryId}/bind/{webhookId}', [
+        'as'         => 'structure-manager.notifications.binding.remove',
+        'uses'       => 'NotificationController@removeBinding',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where(['categoryId' => '[0-9]+', 'webhookId' => '[0-9]+']);
+
+    Route::post('/settings/notifications/category/{categoryId}/bind/{webhookId}/toggle', [
+        'as'         => 'structure-manager.notifications.binding.toggle',
+        'uses'       => 'NotificationController@toggleBinding',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where(['categoryId' => '[0-9]+', 'webhookId' => '[0-9]+']);
+
+    Route::get('/settings/notifications/roles', [
+        'as'         => 'structure-manager.notifications.roles',
+        'uses'       => 'NotificationController@listRoles',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
 });

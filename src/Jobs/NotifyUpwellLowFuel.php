@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureNotificationStatus;
 use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\WebhookConfiguration;
+use StructureManager\Services\WebhookDispatcher;
 use StructureManager\Helpers\FuelCalculator;
 use Carbon\Carbon;
 
@@ -65,11 +66,9 @@ class NotifyUpwellLowFuel implements ShouldQueue
     {
         Log::info('NotifyUpwellLowFuel: Job started');
 
-        // Get all enabled webhooks
-        $webhooks = WebhookConfiguration::getEnabled();
-
-        if ($webhooks->isEmpty()) {
-            Log::debug('NotifyUpwellLowFuel: No enabled webhooks configured');
+        // Early bail-out if the upwell.fuel category itself is disabled.
+        if (!WebhookDispatcher::isCategoryEnabled('upwell', 'fuel')) {
+            Log::debug('NotifyUpwellLowFuel: upwell.fuel category disabled; skipping.');
             return;
         }
 
@@ -82,7 +81,6 @@ class NotifyUpwellLowFuel implements ShouldQueue
             'critical_days' => $criticalDays,
             'warning_days' => $warningDays,
             'interval' => $criticalInterval,
-            'webhooks' => $webhooks->count(),
         ]);
 
         // Get all fueled Upwell structures
@@ -98,9 +96,14 @@ class NotifyUpwellLowFuel implements ShouldQueue
         $byCorp = $structures->groupBy('corporation_id');
 
         foreach ($byCorp as $corpId => $corpStructures) {
-            $corpWebhooks = WebhookConfiguration::getForCorporation($corpId);
+            // Resolve bindings once per corp. upwell.fuel covers standard structures;
+            // upwell.magmatic_gas could also match for Metenox — but for v1 we fan out
+            // all upwell fuel alerts (including Metenox dual-fuel) through upwell.fuel
+            // to keep behavior identical to pre-refactor. Metenox admins can bind the
+            // same webhook to upwell.magmatic_gas as a duplicate channel if desired.
+            $bindings = WebhookDispatcher::resolveBindings('upwell', 'fuel', (int) $corpId);
 
-            if ($corpWebhooks->isEmpty()) {
+            if (empty($bindings)) {
                 continue;
             }
 
@@ -108,7 +111,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 try {
                     $sent = $this->processStructure(
                         $structure,
-                        $corpWebhooks,
+                        $bindings,
                         $criticalDays,
                         $warningDays,
                         $criticalInterval
@@ -126,9 +129,10 @@ class NotifyUpwellLowFuel implements ShouldQueue
     /**
      * Process a single structure: determine status, check triggers, send if needed.
      *
-     * @return int Number of notifications sent (0 or count of webhooks)
+     * @param array<int, array{webhook_id:int, webhook_url:string, role_mention:?string}> $bindings
+     * @return int Number of notifications sent (0 or count of bindings)
      */
-    private function processStructure($structure, $webhooks, $criticalDays, $warningDays, $criticalInterval): int
+    private function processStructure($structure, array $bindings, $criticalDays, $warningDays, $criticalInterval): int
     {
         // Enrich with fuel data
         $fuelData = $this->getStructureFuelData($structure);
@@ -158,18 +162,18 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         Log::info("NotifyUpwellLowFuel: SENDING {$currentStatus} notification for structure {$structure->structure_id}" .
             ($isFinalAlert ? ' (FINAL ALERT)' : '') .
-            " to {$webhooks->count()} webhook(s)");
+            " to " . count($bindings) . " webhook(s)");
 
         // Send to each applicable webhook
         $sent = 0;
-        foreach ($webhooks as $webhook) {
+        foreach ($bindings as $binding) {
             $this->sendNotification(
                 $structure,
                 $fuelData,
-                $webhook->webhook_url,
+                $binding['webhook_url'],
                 $currentStatus,
                 $isFinalAlert,
-                $webhook->role_mention ?? ''
+                $binding['role_mention'] ?? ''
             );
             $sent++;
         }

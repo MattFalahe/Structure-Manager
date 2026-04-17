@@ -1156,8 +1156,9 @@
                 <div class="tab-description">
                     <p>
                         <i class="fas fa-info-circle"></i>
-                        Configure which structure event notifications (attacks, anchoring, destroyed, low power) Structure Manager dispatches to your webhooks,
-                        and how the attack-alert role mention is resolved.
+                        Detection mode for ESI-driven structure events (attacks, anchoring, destroyed, low power).
+                        Category toggles, webhook bindings and role mentions now live on the
+                        <a href="{{ route('structure-manager.notifications.index') }}"><strong>Notifications</strong></a> page.
                     </p>
                 </div>
 
@@ -1194,32 +1195,15 @@
                     @endif
                 </div>
 
-                <!-- Notification Categories -->
+                <!-- Notification categories moved to Notifications page -->
                 <div class="settings-section">
-                    <h4><i class="fas fa-bell"></i> Notification Categories</h4>
-
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="notify_structure_attack" value="1"
-                                {{ \StructureManager\Models\StructureManagerSettings::get('notify_structure_attack', true) ? 'checked' : '' }}>
-                            <strong>Attack Events</strong> &mdash; Structure under attack, shields/armor down, structure destroyed
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="notify_structure_lifecycle" value="1"
-                                {{ \StructureManager\Models\StructureManagerSettings::get('notify_structure_lifecycle', true) ? 'checked' : '' }}>
-                            <strong>Lifecycle Events</strong> &mdash; Anchoring, unanchoring, ownership transferred
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="notify_structure_fuel_events" value="1"
-                                {{ \StructureManager\Models\StructureManagerSettings::get('notify_structure_fuel_events', true) ? 'checked' : '' }}>
-                            <strong>Fuel Events</strong> &mdash; Low power, high power, services offline, CCP fuel alerts
-                        </label>
+                    <h4><i class="fas fa-bell"></i> Notification Categories &amp; Webhooks</h4>
+                    <div class="info-banner mb-3" style="border-left:4px solid #3498db;">
+                        <i class="fas fa-arrow-right"></i>
+                        Moved to
+                        <a href="{{ route('structure-manager.notifications.index') }}"><strong>Notifications</strong></a>.
+                        That page shows per-category master toggles, default role mentions (with dropdown from
+                        seat-connector / seat-discord-connector when installed), and per-webhook role overrides.
                     </div>
                 </div>
 

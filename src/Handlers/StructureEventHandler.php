@@ -5,8 +5,8 @@ namespace StructureManager\Handlers;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\WebhookConfiguration;
+use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
 
 /**
@@ -87,20 +87,23 @@ class StructureEventHandler
 
     /**
      * Build the embed and send to configured webhooks for the notification's corporation.
+     *
+     * Uses WebhookDispatcher to resolve (category, corporation) → bindings with
+     * role-mention precedence: pivot override → category default → webhook legacy.
      */
     private function dispatch($notification): void
     {
-        // Respect per-category opt-outs the admin configured in Structure Manager settings.
         $category = $this->getCategory($notification->type);
-        if (!$this->isCategoryEnabled($category)) {
-            Log::debug("StructureEventHandler: Category {$category} disabled in settings; skipping type {$notification->type}");
+        $categoryKey = $this->categoryToKey($category);
+
+        if ($categoryKey === null) {
             return;
         }
 
-        $webhooks = WebhookConfiguration::getForCorporation($notification->corporation_id);
+        $bindings = WebhookDispatcher::resolveBindings('events', $categoryKey, (int) $notification->corporation_id);
 
-        if ($webhooks->isEmpty()) {
-            Log::debug("StructureEventHandler: No webhooks configured for corp {$notification->corporation_id}");
+        if (empty($bindings)) {
+            Log::debug("StructureEventHandler: No bindings for events.{$categoryKey} / corp {$notification->corporation_id}");
             return;
         }
 
@@ -110,42 +113,33 @@ class StructureEventHandler
             return;
         }
 
-        foreach ($webhooks as $webhook) {
-            if (!WebhookConfiguration::isValidWebhookUrl($webhook->webhook_url)) {
+        foreach ($bindings as $binding) {
+            if (!WebhookConfiguration::isValidWebhookUrl($binding['webhook_url'])) {
                 continue;
             }
 
-            $roleMention = $this->resolveRoleMention($webhook, $category);
-            $finalPayload = $this->injectMention($payload, $roleMention, $category);
+            $finalPayload = $this->injectMention($payload, $binding['role_mention'] ?? '', $category);
 
             try {
-                Http::connectTimeout(5)->timeout(10)->post($webhook->webhook_url, $finalPayload);
+                Http::connectTimeout(5)->timeout(10)->post($binding['webhook_url'], $finalPayload);
             } catch (\Throwable $e) {
                 Log::error("StructureEventHandler: Webhook failed for notification type {$notification->type}: " . $e->getMessage());
             }
         }
     }
 
-    private function isCategoryEnabled(string $category): bool
+    /**
+     * Map internal category name (attack / lifecycle / fuel) to the
+     * notification_categories.category_key value used in the DB.
+     */
+    private function categoryToKey(string $internalCategory): ?string
     {
-        switch ($category) {
-            case 'attack':
-                return (bool) StructureManagerSettings::get('notify_structure_attack', true);
-            case 'lifecycle':
-                return (bool) StructureManagerSettings::get('notify_structure_lifecycle', true);
-            case 'fuel':
-                return (bool) StructureManagerSettings::get('notify_structure_fuel_events', true);
-            default:
-                return false;
-        }
-    }
-
-    private function resolveRoleMention($webhook, string $category): string
-    {
-        if ($category === 'attack') {
-            return StructureManagerSettings::get('esi_attack_role_mention', '') ?: ($webhook->role_mention ?? '');
-        }
-        return $webhook->role_mention ?? '';
+        return match ($internalCategory) {
+            'attack'    => 'structure_attack',
+            'lifecycle' => 'structure_lifecycle',
+            'fuel'      => 'structure_fuel_events',
+            default     => null,
+        };
     }
 
     private function buildPayload($notification): ?array

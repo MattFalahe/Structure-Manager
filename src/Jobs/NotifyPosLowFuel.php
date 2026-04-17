@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\WebhookConfiguration;
+use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -66,22 +67,12 @@ class NotifyPosLowFuel implements ShouldQueue
      */
     public function handle()
     {
-        try {
-            \Log::channel('stack')->info('NotifyPosLowFuel: Job started');
-            
-            // Get all enabled webhooks
-            $webhooks = WebhookConfiguration::getEnabled();
-            
-            if ($webhooks->isEmpty()) {
-                \Log::channel('stack')->debug('NotifyPosLowFuel: No enabled webhooks configured');
-                return;
-            }
-            
-            \Log::channel('stack')->info('NotifyPosLowFuel: Found ' . $webhooks->count() . ' enabled webhook(s)');
-            
-        } catch (\Exception $e) {
-            \Log::channel('stack')->error('NotifyPosLowFuel: Exception in initial setup - ' . $e->getMessage());
-            throw $e;
+        \Log::channel('stack')->info('NotifyPosLowFuel: Job started');
+
+        // Early bail if both pos.* categories are disabled — nothing this job can do.
+        if (!WebhookDispatcher::isCategoryEnabled('pos', 'fuel') && !WebhookDispatcher::isCategoryEnabled('pos', 'strontium')) {
+            \Log::channel('stack')->debug('NotifyPosLowFuel: Both pos.fuel and pos.strontium categories are disabled; skipping.');
+            return;
         }
 
         // Get thresholds from settings
@@ -137,14 +128,15 @@ class NotifyPosLowFuel implements ShouldQueue
         $posesByCorp = $allPoses->groupBy('corporation_id');
 
         foreach ($posesByCorp as $corpId => $corpPoses) {
-            // Get webhooks for this corporation
-            $corpWebhooks = WebhookConfiguration::getForCorporation($corpId);
-            
-            if ($corpWebhooks->isEmpty()) {
-                \Log::channel('stack')->debug("NotifyPosLowFuel: No webhooks configured for corporation {$corpId}");
+            // Resolve category-specific bindings (fuel and strontium fire independently).
+            $fuelBindings      = WebhookDispatcher::resolveBindings('pos', 'fuel', (int) $corpId);
+            $strontiumBindings = WebhookDispatcher::resolveBindings('pos', 'strontium', (int) $corpId);
+
+            if (empty($fuelBindings) && empty($strontiumBindings)) {
+                \Log::channel('stack')->debug("NotifyPosLowFuel: No pos.* bindings for corporation {$corpId}");
                 continue;
             }
-            
+
             foreach ($corpPoses as $pos) {
                 // Get the latest history record for this POS
                 $latest = StarbaseFuelHistory::where('starbase_id', $pos->starbase_id)
@@ -186,20 +178,20 @@ class NotifyPosLowFuel implements ShouldQueue
                 // future drop back into critical can fire a final alert again.
                 $this->resetLatchesOnRecovery($latest, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $strontiumCriticalHours, $strontiumWarningHours);
 
-                // Process fuel/charter notifications
-                if ($this->shouldSendFuelNotification($latest, $fuelCriticalDays, $fuelWarningDays, $fuelCriticalInterval, $charterCriticalDays)) {
-                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING fuel notification for POS ' . $latest->starbase_id . ' to ' . $corpWebhooks->count() . ' webhook(s)');
-                    foreach ($corpWebhooks as $webhook) {
-                        $this->sendFuelNotification($latest, $webhook->webhook_url, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $webhook->role_mention ?? '');
+                // Process fuel/charter notifications (pos.fuel category)
+                if (!empty($fuelBindings) && $this->shouldSendFuelNotification($latest, $fuelCriticalDays, $fuelWarningDays, $fuelCriticalInterval, $charterCriticalDays)) {
+                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING pos.fuel notification for POS ' . $latest->starbase_id . ' to ' . count($fuelBindings) . ' webhook(s)');
+                    foreach ($fuelBindings as $binding) {
+                        $this->sendFuelNotification($latest, $binding['webhook_url'], $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $binding['role_mention'] ?? '');
                         $notificationsSent++;
                     }
                 }
 
-                // Process strontium notifications
-                if ($this->shouldSendStrontiumNotification($latest, $strontiumCriticalHours, $strontiumWarningHours, $strontiumCriticalInterval, $strontiumZeroNotifyOnce, $strontiumZeroGracePeriod)) {
-                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING strontium notification for POS ' . $latest->starbase_id . ' to ' . $corpWebhooks->count() . ' webhook(s)');
-                    foreach ($corpWebhooks as $webhook) {
-                        $this->sendStrontiumNotification($latest, $webhook->webhook_url, $strontiumCriticalHours, $strontiumWarningHours, $webhook->role_mention ?? '');
+                // Process strontium notifications (pos.strontium category)
+                if (!empty($strontiumBindings) && $this->shouldSendStrontiumNotification($latest, $strontiumCriticalHours, $strontiumWarningHours, $strontiumCriticalInterval, $strontiumZeroNotifyOnce, $strontiumZeroGracePeriod)) {
+                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING pos.strontium notification for POS ' . $latest->starbase_id . ' to ' . count($strontiumBindings) . ' webhook(s)');
+                    foreach ($strontiumBindings as $binding) {
+                        $this->sendStrontiumNotification($latest, $binding['webhook_url'], $strontiumCriticalHours, $strontiumWarningHours, $binding['role_mention'] ?? '');
                         $notificationsSent++;
                     }
                 }

@@ -3,11 +3,17 @@
 namespace StructureManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Model for webhook configurations
- * 
- * Allows multiple webhooks with corporation filtering
+ *
+ * Allows multiple webhooks with corporation filtering.
+ *
+ * Since v3.1 the role_mention column here is a LEGACY FALLBACK only.
+ * Primary role mention resolution happens in NotificationCategory (category
+ * default) and structure_manager_category_webhook.role_mention (per-binding
+ * override). See WebhookDispatcher::resolveBindings for the precedence rules.
  */
 class WebhookConfiguration extends Model
 {
@@ -25,7 +31,21 @@ class WebhookConfiguration extends Model
         'corporation_id' => 'integer',
         'enabled' => 'boolean',
     ];
-    
+
+    /**
+     * Notification categories this webhook is bound to (via the category_webhook pivot).
+     */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            NotificationCategory::class,
+            'structure_manager_category_webhook',
+            'webhook_id',
+            'category_id'
+        )->withPivot(['id', 'enabled', 'role_mention', 'role_source', 'role_id'])
+         ->withTimestamps();
+    }
+
     /**
      * Get all enabled webhooks
      * 

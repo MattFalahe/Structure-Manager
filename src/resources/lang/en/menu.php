@@ -7,6 +7,7 @@ return [
     'fuel_reserves' => 'Fuel Reserves',
     'logistics_report' => 'Logistics Report',
     'critical_alerts' => 'Critical Alerts',
+    'notifications' => 'Notifications',
     'settings' => 'Settings',
     'diagnostics' => 'Diagnostics',
     'help' => 'Help & Documentation',

@@ -45,6 +45,13 @@ return [
                 'permission' => 'structure-manager.view',
             ],
             [
+                'name'  => 'Notifications',
+                'label' => 'structure-manager::menu.notifications',
+                'icon'  => 'fas fa-bell',
+                'route' => 'structure-manager.notifications.index',
+                'permission' => 'structure-manager.admin',
+            ],
+            [
                 'name'  => 'Settings',
                 'label' => 'structure-manager::menu.settings',
                 'icon'  => 'fas fa-cog',
