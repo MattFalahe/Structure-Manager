@@ -230,13 +230,15 @@
         @if($roleProviderAvailable)
             <i class="fas fa-check-circle" style="color:#28a745;"></i>
             <strong>Discord role provider detected:</strong> {{ $roleProviderLabel }}.
-            You can pick roles from a dropdown; manual entry still works as a fallback.
+            Pick roles from the <i class="fas fa-hashtag"></i> button next to any role-mention input. Manual entry still works as a fallback.
         @else
             <i class="fas fa-info-circle" style="color:#ffc107;"></i>
-            <strong>No Discord connector installed.</strong> Role mentions are entered manually as <code>&lt;@&amp;ROLE_ID&gt;</code> or raw role ID.
-            Install <a href="https://github.com/zenobio93/seat-connector" target="_blank" rel="noopener">seat-connector</a>
-            or <a href="https://github.com/warlof/seat-discord-connector" target="_blank" rel="noopener">seat-discord-connector</a>
-            to enable role pickers.
+            <strong>No Discord role source detected.</strong> Role mentions are entered manually as <code>&lt;@&amp;ROLE_ID&gt;</code> or raw role ID.
+            Install
+            <a href="https://github.com/MattFalahe/seat-discord-pings" target="_blank" rel="noopener">seat-discord-pings</a>
+            (curated list with colors) or
+            <a href="https://github.com/warlof/seat-discord-connector" target="_blank" rel="noopener">warlof/seat-discord-connector</a>
+            to enable the role picker.
         @endif
     </div>
 

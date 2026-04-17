@@ -15,12 +15,20 @@ use Illuminate\Support\Facades\Schema;
  * without all its classes being autoloadable under our namespace resolution.
  * If the table is present and has rows, the dropdown works.
  *
- * Priority order (first match wins):
- *   1. 'discord-roles-table' — the standalone `discord_roles` table with
- *      pre-built mention_format + color. Richest data source.
- *   2. 'seat-connector'     — zenobio93's `seat_connector_sets` with
- *      connector_type='discord'. Role ID only; mention string built client-side.
- *   3. 'warlof-discord'     — legacy warlof/seat-discord-connector tables.
+ * Known providers and their ownership (confirmed on a real install):
+ *   - discord_roles table            → mattfalahe/seat-discord-pings
+ *     Curated role registry that the Pings plugin uses. Columns include
+ *     mention_format and color — richest UX for a role picker. Always
+ *     preferred when present.
+ *
+ *   - seat_connector_sets            → warlof/seat-connector (framework)
+ *     + warlof/seat-discord-connector (Discord driver)
+ *     Rows with connector_type='discord' are Discord roles synced from a
+ *     guild. Has no color or description fields, but covers the full guild.
+ *
+ *   - warlof_discord_connector_roles → older warlof-only install (legacy)
+ *
+ * Priority order: discord_roles → seat_connector_sets → warlof legacy → null.
  *
  * Returns [] from listRoles() when no provider is detected, so the UI falls
  * back to a plain text input.
@@ -89,9 +97,9 @@ class DiscordRoleResolver
     public static function providerLabel(): string
     {
         return match (self::detectProvider()) {
-            self::PROVIDER_DISCORD_ROLES_TABLE => 'Discord roles (local registry with colors)',
-            self::PROVIDER_SEAT_CONNECTOR      => 'SeAT Connector (zenobio93) — Discord sets',
-            self::PROVIDER_WARLOF_DISCORD      => 'SeAT Discord Connector (warlof)',
+            self::PROVIDER_DISCORD_ROLES_TABLE => 'SeAT Discord Pings (mattfalahe) — curated role list',
+            self::PROVIDER_SEAT_CONNECTOR      => 'SeAT Connector (warlof) — Discord sets',
+            self::PROVIDER_WARLOF_DISCORD      => 'SeAT Discord Connector (warlof, legacy tables)',
             default                            => 'Manual input only',
         };
     }
