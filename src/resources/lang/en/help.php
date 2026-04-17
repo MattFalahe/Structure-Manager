@@ -41,11 +41,13 @@ return [
     'whats_new_v2_title' => 'What\'s New in v2',
     'whats_new_v2_intro' => 'Highlights for anyone upgrading from v1. Look for the <span class="v2-badge">NEW in v2</span> badge throughout this documentation to find detailed sections.',
     'whats_new_v2_list' => '<ul>
+        <li><strong>Upwell Structure Notifications</strong> — proactive polling-based alerts for citadels, engineering complexes, refineries, and Metenox moon drills with dual-fuel intelligence. <a href="#upwell-notifications">Full guide →</a></li>
+        <li><strong>Manager Core companion plugin</strong> — a recommended-but-not-required upgrade that adds a central event bus and shared ESI fast-poll. <a href="#manager-core">Learn more →</a></li>
         <li><strong>Dedicated Notifications page</strong> — webhooks, categories, and role mentions are three separate concerns. Sidebar entry: <em>Structure Manager &gt; Notifications</em>.</li>
         <li><strong>Category-based routing</strong> — 8 shipped categories across 3 namespaces (Upwell / Structure Events / POS Legacy). Toggle categories independently; bind each to any number of webhooks.</li>
         <li><strong>Per-binding role mentions</strong> — the same notification can ping different Discord roles when it fires to different webhooks (corp vs. alliance server, etc.).</li>
         <li><strong>Discord role picker</strong> — multi-source union from <code>mattfalahe/seat-discord-pings</code> + <code>warlof/seat-connector</code>. Searchable, deduped, with source badges.</li>
-        <li><strong>Manager Core integration</strong> — optional. When MC is installed, structure attack alerts arrive in ~2 minutes instead of SeAT\'s native 20&ndash;30 minute bucket.</li>
+        <li><strong>~2-minute ESI attack detection</strong> — when Manager Core is installed, structure attack alerts arrive in ~2 minutes instead of SeAT\'s native 20&ndash;30 minute bucket.</li>
         <li><strong>POS namespace isolation</strong> — POS categories marked as legacy and kept separate so CCP\'s eventual POS removal is a clean uninstall path.</li>
         <li><strong>Improved diagnostics</strong> — MC-aware detection-mode panel, registered handler status, per-source notification counts.</li>
         <li><strong>Role-mention precedence</strong> — binding override &rarr; category default &rarr; webhook legacy &rarr; none. Existing v1 webhook role_mention values stay valid as fallback.</li>
@@ -410,6 +412,59 @@ return [
         </tbody>
     </table>',
 
+    // ============================================================
+    // Manager Core — overview (what it is, why install it, optional)
+    // ============================================================
+    'mc_overview_title' => 'Manager Core — Recommended Companion',
+    'mc_overview_positioning' => '<strong>Important upgrade, not a hard requirement.</strong> Structure Manager v2 works perfectly on its own. Installing <a href="https://github.com/MattFalahe/Manager-Core" target="_blank" rel="noopener">Manager Core</a> alongside it unlocks faster detection, cross-plugin event broadcasting, and shared infrastructure that becomes more valuable as you add other Structure Manager-ecosystem plugins.',
+
+    'mc_what_it_is_title' => 'What Manager Core Is',
+    'mc_what_it_is_desc' => 'Manager Core is a foundational plugin for the Structure Manager ecosystem. Think of it as two things bundled together:',
+    'mc_what_it_is_list' => '<ul>
+        <li><strong>A central Event Bus</strong> — a pub/sub system plugins use to announce things (a structure got attacked, prices updated, a notification was received) and react to announcements from other plugins. With this, plugins stop having to integrate pairwise and instead integrate through one shared channel.</li>
+        <li><strong>A shared ESI tool layer</strong> — fast-polling infrastructure, a director key holder pool, an ESI notification registry, pricing/appraisal/SDE services. Multiple plugins use these without each having to implement their own version.</li>
+    </ul>',
+
+    'mc_benefits_for_sm_title' => 'What Manager Core Gives Structure Manager',
+    'mc_benefits_for_sm_list' => '<ul>
+        <li><strong>~2-minute ESI attack detection</strong> via the shared fast-poll (vs. SeAT\'s native 20&ndash;30 minute bucket). Shield-down / armor-down / destroyed alerts land 10&ndash;15x faster.</li>
+        <li><strong>Shared director key pool</strong> — add your directors to Manager Core once; every MC-aware plugin uses the same pool. Adding a second or third plugin doesn\'t require reconfiguring directors.</li>
+        <li><strong>Cross-plugin events</strong> — Structure Manager can publish notification events; other plugins (Discord Pings, future Corp Wallet, future HR Manager) subscribe and react. This unlocks features like automated FC pings at T-24h before a structure reinforces.</li>
+        <li><strong>Better diagnostics</strong> — Structure Manager\'s diagnostic page queries MC\'s shared tables to show you the combined health picture (shared pool status, notification counts by source, registered handlers).</li>
+        <li><strong>Future-proofing</strong> — as Structure Manager adds features like the Command Board (planned), the event-bus integration becomes the conduit for Discord Pings calendar sync and other cross-plugin coordination.</li>
+    </ul>',
+
+    'mc_without_title' => 'If You Don\'t Install Manager Core',
+    'mc_without_desc' => 'Structure Manager still does everything it documents:
+        <ul>
+            <li>Full POS + Upwell fuel tracking</li>
+            <li>All notification categories fire to all configured webhooks</li>
+            <li>Critical alerts, logistics reports, fuel reserves, Metenox dual-fuel — unchanged</li>
+            <li>ESI attack notifications still detected via SeAT\'s native <code>character_notifications</code> sweep (20&ndash;30 min cadence)</li>
+        </ul>
+        The only thing you lose is <strong>fast-poll speed</strong> and the <strong>future cross-plugin integrations</strong> that will ride on MC\'s event bus. Nothing breaks, no data is lost, every current feature keeps working.',
+
+    'mc_install_title' => 'Installing Manager Core',
+    'mc_install_steps' => '<ol>
+        <li>Add the composer package to your SeAT instance:
+            <pre style="margin:4px 0;">docker compose exec front composer require mattfalahe/manager-core</pre>
+        </li>
+        <li>Restart the SeAT stack. Manager Core\'s migrations run automatically on container boot.</li>
+        <li>Structure Manager detects Manager Core at boot and registers its notification handler automatically — no configuration needed in Structure Manager.</li>
+        <li>Navigate to <code>Manager Core &gt; ESI Key Pool</code> (superuser only) and add one or more director characters. More directors = faster rotation + better fault tolerance.</li>
+        <li>(Optional) Check <code>Structure Manager &gt; Diagnostics</code> — the ESI Notification Path panel should now show "Fast-poll via Manager Core" and confirm Structure Manager is registered.</li>
+    </ol>',
+
+    'mc_ecosystem_title' => 'The Broader Ecosystem',
+    'mc_ecosystem_desc' => 'Manager Core is designed to serve multiple plugins, not just Structure Manager. Each plugin that integrates contributes different capabilities to the shared bus:',
+    'mc_ecosystem_list' => '<ul>
+        <li><strong>Structure Manager</strong> — publishes fuel events, attack notifications, lifecycle events; consumes pricing service (for logistics valuations)</li>
+        <li><strong>SeAT Discord Pings</strong> (future MC-aware version) — subscribes to Structure Manager events, sends calendar entries and lead-time FC pings</li>
+        <li><strong>Mining Manager</strong> (future) — publishes moon pop + mining op events, consumes the same shared key pool for its own fast-poll needs</li>
+        <li><strong>Corp Wallet / HR Manager</strong> (future) — react to cross-plugin events (member joined, ISK transferred, structure reinforced)</li>
+    </ul>
+    <p style="margin-top:8px;">You don\'t need to install every plugin to benefit from Manager Core. Even for a solo Structure Manager install, MC gives you the ESI fast-poll. As you add more plugins, the event bus value multiplies.</p>',
+
     // ESI events + Manager Core
     'esi_events_title' => 'ESI Events & Manager Core Integration',
     'esi_events_intro' => 'Structure attack alerts, anchoring notifications, and CCP fuel-alert messages come from EVE\'s ESI notification stream. Structure Manager has two detection paths depending on whether Manager Core is installed.',
@@ -692,6 +747,169 @@ Webhook #3:
     
     'upwell_notifications_note' => 'Upwell Structure Notifications',
     'upwell_notifications_desc' => 'Discord/Slack webhook notifications are available for both POSes and Upwell structures (Citadels, Refineries, Engineering Complexes, Metenox Moon Drills). Upwell alerts use proactive polling every 10 minutes with configurable thresholds (independent from POS settings). Notifications fire on status transitions (good/warning/critical) with an automatic final alert at 1 hour remaining. Metenox structures show dual-fuel intelligence (fuel blocks + magmatic gas) with limiting factor highlighting. Configure Upwell thresholds in Settings > Upwell Structures. Both POS and Upwell alerts share the same webhook configurations.',
+
+    // ============================================================
+    // Upwell Structure Notifications (detailed, v2)
+    // ============================================================
+    'upwell_detailed_title' => 'Upwell Structure Notifications — Detailed Guide',
+    'upwell_detailed_intro' => 'Upwell notifications are Structure Manager\'s polling-based alert system for Citadels, Engineering Complexes, Refineries, and Metenox Moon Drills. Unlike CCP\'s reactive <code>StructureFuelAlert</code> (which fires only once, ~48 hours before empty), Structure Manager proactively polls fuel bays every 10 minutes and fires multi-stage alerts as your fuel crosses configurable thresholds.',
+
+    'upwell_what_tracked_title' => 'Structures Covered',
+    'upwell_what_tracked_list' => '<ul>
+        <li><strong>Citadels</strong> — Astrahus, Fortizar, Keepstar</li>
+        <li><strong>Engineering Complexes</strong> — Raitaru, Azbel, Sotiyo</li>
+        <li><strong>Refineries</strong> — Athanor, Tatara (fuel bonuses applied automatically when service has the bonus)</li>
+        <li><strong>Observatories</strong> — Tenebrex Cyno Jammer (type ID 37534)</li>
+        <li><strong>Flex Structures</strong> — Ansiblex Jump Gates, Pharolux Cyno Beacons</li>
+        <li><strong>Metenox Moon Drills</strong> — tracked with dual-fuel logic (fuel blocks + magmatic gas)</li>
+    </ul>
+    <p style="margin-top:8px;">Any structure with a fuel bay that SeAT can read via ESI is covered. Structures that CCP marks as "unfueled" (NULL <code>fuel_expires</code>) are ignored.</p>',
+
+    'upwell_detection_title' => 'How Detection Works',
+    'upwell_detection_list' => '<ol>
+        <li><strong>Every 10 minutes</strong>, the <code>structure-manager:notify-upwell-fuel</code> job dispatches (cron <code>*/10 * * * *</code>)</li>
+        <li>The job reads all <code>corporation_structures</code> rows where <code>fuel_expires IS NOT NULL</code></li>
+        <li>For each structure it loads:
+            <ul>
+                <li>Current fuel block count from <code>corporation_assets</code> (location_id = structure_id, location_flag = StructureFuel)</li>
+                <li>Time remaining via <code>fuel_expires - NOW()</code></li>
+                <li>Active service count from <code>corporation_structure_services</code> (state = \'online\')</li>
+                <li>Consumption rate via <code>FuelCalculator::getFuelRequirement()</code> (handles refinery bonuses)</li>
+            </ul>
+        </li>
+        <li>For Metenox: also loads magmatic gas from the same fuel bay (type ID 81143) and computes effective days as <code>min(fuel_days, gas_days)</code></li>
+        <li>Status is determined against your configured thresholds and stored in <code>structure_notification_status</code> (one row per structure)</li>
+        <li>Notifications fire on status transitions, plus a latched final alert at 1 hour remaining</li>
+    </ol>',
+
+    'upwell_status_flow_title' => 'Status Flow',
+    'upwell_status_flow_desc' => 'Each structure has a status that transitions through four states. Notifications fire on <strong>transitions</strong>, not on every poll, to prevent spam.',
+    'upwell_status_flow_table' => '<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead><tr>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Status</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Trigger</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Fires Notification?</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Color</th>
+        </tr></thead>
+        <tbody>
+            <tr>
+                <td style="padding:8px;"><strong>good</strong></td>
+                <td style="padding:8px;">days_remaining &ge; warning_days</td>
+                <td style="padding:8px;">No (baseline)</td>
+                <td style="padding:8px;">—</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;"><strong>warning</strong></td>
+                <td style="padding:8px;">critical_days &le; days_remaining &lt; warning_days</td>
+                <td style="padding:8px;">Yes, on entry (good &rarr; warning)</td>
+                <td style="padding:8px; color:#ffc107;">Yellow</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;"><strong>critical</strong></td>
+                <td style="padding:8px;">days_remaining &lt; critical_days</td>
+                <td style="padding:8px;">Yes, on entry + optional interval reminders</td>
+                <td style="padding:8px; color:#dc3545;">Red</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;"><strong>final</strong></td>
+                <td style="padding:8px;">hours_remaining &le; 1 AND &gt; 0</td>
+                <td style="padding:8px;">Yes, latched (fires once; re-arms on recovery)</td>
+                <td style="padding:8px; color:#8b0000;">Dark red</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="margin-top:8px;"><strong>Recovery behavior:</strong> when a structure\'s status returns above critical (usually after refueling), Structure Manager resets the <code>fuel_final_alert_sent</code> latch. A future drop back to the 1-hour mark will fire a fresh final alert rather than staying silent.</p>',
+
+    'upwell_metenox_dual_fuel_title' => 'Metenox Dual-Fuel Logic',
+    'upwell_metenox_dual_fuel_desc' => 'Metenox Moon Drills consume both fuel blocks AND magmatic gas simultaneously. If either resource runs out, the structure stops working — so the alert uses whichever runs out first.',
+    'upwell_metenox_dual_fuel_math' => '<ul>
+        <li><strong>Consumption rates:</strong> 5 blocks/hour + 200 gas/hour (120 blocks/day + 4,800 gas/day)</li>
+        <li><strong>Effective days remaining:</strong> <code>min(fuel_days, gas_days)</code></li>
+        <li><strong>Limiting factor:</strong> the resource with fewer days left — shown prominently in the embed with a <code>[LIMITING]</code> badge</li>
+        <li><strong>Weekly requirement:</strong> 840 blocks + 33,600 gas per Metenox</li>
+        <li><strong>No refinery bonus:</strong> Metenox drills do NOT receive Athanor/Tatara bonuses (CCP-intended design)</li>
+    </ul>
+    <p style="margin-top:8px;">Example: a Metenox with 100 fuel blocks (~20 hours) and 48,000 gas (10 days) shows <strong>fuel blocks as limiting</strong>. The alert prioritizes fuel-block hauling even though gas reserves look fine.</p>',
+
+    'upwell_config_title' => 'Configuration',
+    'upwell_config_thresholds' => '<strong>Thresholds (Settings &gt; Upwell Structures):</strong>
+        <ul>
+            <li><code>upwell_fuel_critical_days</code> — default 7, drops to critical below this many days remaining</li>
+            <li><code>upwell_fuel_warning_days</code> — default 14, drops to warning below this many days remaining</li>
+            <li><code>upwell_fuel_notification_interval</code> — hours between reminder pings during critical stage (0 = disabled, only status transitions fire)</li>
+        </ul>
+        <p style="margin-top:6px;">Thresholds are independent from POS thresholds. You can set different sensitivities per structure class (e.g. tight for Keepstars, relaxed for high-sec Raitarus).</p>',
+    'upwell_config_webhooks' => '<strong>Webhooks &amp; Role Mentions (Notifications page, v3.1+):</strong>
+        <ol>
+            <li>Add your webhook URL(s) in <code>Settings &gt; POS Notifications &gt; Webhook Configuration</code></li>
+            <li>Go to <code>Structure Manager &gt; Notifications</code></li>
+            <li>Enable the <code>upwell.fuel</code> category (and <code>upwell.magmatic_gas</code> for Metenox gas alerts)</li>
+            <li>Bind the webhook(s) you want to receive Upwell alerts</li>
+            <li>Set a default role mention on the category, or per-binding for fine control</li>
+        </ol>',
+
+    'upwell_vs_pos_title' => 'Upwell vs POS — Key Differences',
+    'upwell_vs_pos_table' => '<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead><tr>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Aspect</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Upwell (v2)</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">POS (legacy)</th>
+        </tr></thead>
+        <tbody>
+            <tr>
+                <td style="padding:8px;">Fuel detection source</td>
+                <td style="padding:8px;">ESI <code>fuel_expires</code> + fuel bay polling</td>
+                <td style="padding:8px;">ESI <code>assets</code> + SDE control-tower-resource math</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Reinforcement timer</td>
+                <td style="padding:8px;">Via ESI notifications (StructureUnderAttack, etc.)</td>
+                <td style="padding:8px;">Strontium clathrate hours (state=3 reinforced)</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Dual fuel?</td>
+                <td style="padding:8px;">Metenox only (blocks + gas)</td>
+                <td style="padding:8px;">No (just blocks + charter in high-sec)</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Status tracking table</td>
+                <td style="padding:8px;"><code>structure_notification_status</code></td>
+                <td style="padding:8px;">Columns on <code>starbase_fuel_history</code> latest row</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Notification categories (v3.1)</td>
+                <td style="padding:8px;"><code>upwell.fuel</code>, <code>upwell.magmatic_gas</code></td>
+                <td style="padding:8px;"><code>pos.fuel</code>, <code>pos.strontium</code>, <code>pos.lifecycle</code></td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Poll cadence</td>
+                <td style="padding:8px;">Every 10 minutes</td>
+                <td style="padding:8px;">Every 10 minutes</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Final alert latch</td>
+                <td style="padding:8px;">1 hour remaining</td>
+                <td style="padding:8px;">1 hour (fuel) / 30 min (strontium)</td>
+            </tr>
+        </tbody>
+    </table>',
+
+    'upwell_embed_example_title' => 'Example Discord Embed',
+    'upwell_embed_example' => '<pre>CRITICAL: Upwell Structure Low Fuel &mdash; 1 structure needs attention
+&lt;@&amp;123456789&gt;
+
+FINAL ALERT: "3-FKCZ Fortizar"
+📍 Location: 3-FKCZ (-0.07)
+Structure Type: Fortizar
+⏰ Last Update: just now
+GOING OFFLINE IN: 47 minutes
+
+Fuel Blocks: 47 blocks remaining
+Consumption Rate: 40.0 blocks/hour
+Active Services: 4 service(s) online
+Weekly Requirement: 6,720 blocks
+
+SeAT Structure Manager | Structure ID: 1042938412345</pre>',
 
     // Pages Guide
     'pages_intro' => 'Structure Manager consists of several pages, each designed for specific aspects of fuel management.',

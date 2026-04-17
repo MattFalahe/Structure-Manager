@@ -548,6 +548,16 @@
                 <i class="fas fa-satellite-dish"></i>
                 {{ trans('structure-manager::help.pos_management') }}
             </a>
+            <a href="#" class="nav-link" data-section="upwell-notifications">
+                <i class="fas fa-building"></i>
+                Upwell Notifications
+                <span class="v2-badge v2-badge-nav">{{ trans('structure-manager::help.v2_badge') }}</span>
+            </a>
+            <a href="#" class="nav-link" data-section="manager-core">
+                <i class="fas fa-calculator"></i>
+                Manager Core
+                <span class="v2-badge v2-badge-nav">{{ trans('structure-manager::help.v2_badge') }}</span>
+            </a>
             <a href="#" class="nav-link" data-section="notifications">
                 <i class="fas fa-bell"></i>
                 {{ trans('structure-manager::help.notifications') }}
@@ -934,6 +944,80 @@
                     <strong>Smart Notifications:</strong>
                     Separate cooldowns for fuel (6 hours) and strontium (2 hours) prevent alert fatigue while ensuring critical issues aren't missed.
                 </div>
+            </div>
+        </div>
+
+        {{-- Upwell Notifications — detailed section (v2) --}}
+        <div id="upwell-notifications" class="help-section">
+            <div class="help-card">
+                <h3>
+                    <i class="fas fa-building"></i>
+                    {{ trans('structure-manager::help.upwell_detailed_title') }}
+                    <span class="v2-badge">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h3>
+                <p>{!! trans('structure-manager::help.upwell_detailed_intro') !!}</p>
+
+                <h4>{{ trans('structure-manager::help.upwell_what_tracked_title') }}</h4>
+                {!! trans('structure-manager::help.upwell_what_tracked_list') !!}
+
+                <h4>{{ trans('structure-manager::help.upwell_detection_title') }}</h4>
+                {!! trans('structure-manager::help.upwell_detection_list') !!}
+
+                <h4>{{ trans('structure-manager::help.upwell_status_flow_title') }}</h4>
+                <p>{!! trans('structure-manager::help.upwell_status_flow_desc') !!}</p>
+                {!! trans('structure-manager::help.upwell_status_flow_table') !!}
+
+                <h4><i class="fas fa-moon"></i> {{ trans('structure-manager::help.upwell_metenox_dual_fuel_title') }}</h4>
+                <p>{{ trans('structure-manager::help.upwell_metenox_dual_fuel_desc') }}</p>
+                {!! trans('structure-manager::help.upwell_metenox_dual_fuel_math') !!}
+
+                <h4>{{ trans('structure-manager::help.upwell_config_title') }}</h4>
+                <div class="info-box">
+                    {!! trans('structure-manager::help.upwell_config_thresholds') !!}
+                </div>
+                <div class="purple-box">
+                    {!! trans('structure-manager::help.upwell_config_webhooks') !!}
+                </div>
+
+                <h4>{{ trans('structure-manager::help.upwell_vs_pos_title') }}</h4>
+                {!! trans('structure-manager::help.upwell_vs_pos_table') !!}
+
+                <h4>{{ trans('structure-manager::help.upwell_embed_example_title') }}</h4>
+                {!! trans('structure-manager::help.upwell_embed_example') !!}
+            </div>
+        </div>
+
+        {{-- Manager Core — overview section (v2) --}}
+        <div id="manager-core" class="help-section">
+            <div class="help-card">
+                <h3>
+                    <i class="fas fa-calculator"></i>
+                    {{ trans('structure-manager::help.mc_overview_title') }}
+                    <span class="v2-badge">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h3>
+
+                <div class="success-box">
+                    {!! trans('structure-manager::help.mc_overview_positioning') !!}
+                </div>
+
+                <h4>{{ trans('structure-manager::help.mc_what_it_is_title') }}</h4>
+                <p>{{ trans('structure-manager::help.mc_what_it_is_desc') }}</p>
+                {!! trans('structure-manager::help.mc_what_it_is_list') !!}
+
+                <h4>{{ trans('structure-manager::help.mc_benefits_for_sm_title') }}</h4>
+                {!! trans('structure-manager::help.mc_benefits_for_sm_list') !!}
+
+                <h4>{{ trans('structure-manager::help.mc_without_title') }}</h4>
+                <div class="info-box">
+                    {!! trans('structure-manager::help.mc_without_desc') !!}
+                </div>
+
+                <h4>{{ trans('structure-manager::help.mc_install_title') }}</h4>
+                {!! trans('structure-manager::help.mc_install_steps') !!}
+
+                <h4>{{ trans('structure-manager::help.mc_ecosystem_title') }}</h4>
+                <p>{{ trans('structure-manager::help.mc_ecosystem_desc') }}</p>
+                {!! trans('structure-manager::help.mc_ecosystem_list') !!}
             </div>
         </div>
 
