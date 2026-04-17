@@ -36,6 +36,22 @@ return [
         <li>🌟 Share with other SeAT users</li>
     </ul>',
 
+    // v2 release highlights
+    'v2_badge' => 'NEW in v2',
+    'whats_new_v2_title' => 'What\'s New in v2',
+    'whats_new_v2_intro' => 'Highlights for anyone upgrading from v1. Look for the <span class="v2-badge">NEW in v2</span> badge throughout this documentation to find detailed sections.',
+    'whats_new_v2_list' => '<ul>
+        <li><strong>Dedicated Notifications page</strong> — webhooks, categories, and role mentions are three separate concerns. Sidebar entry: <em>Structure Manager &gt; Notifications</em>.</li>
+        <li><strong>Category-based routing</strong> — 8 shipped categories across 3 namespaces (Upwell / Structure Events / POS Legacy). Toggle categories independently; bind each to any number of webhooks.</li>
+        <li><strong>Per-binding role mentions</strong> — the same notification can ping different Discord roles when it fires to different webhooks (corp vs. alliance server, etc.).</li>
+        <li><strong>Discord role picker</strong> — multi-source union from <code>mattfalahe/seat-discord-pings</code> + <code>warlof/seat-connector</code>. Searchable, deduped, with source badges.</li>
+        <li><strong>Manager Core integration</strong> — optional. When MC is installed, structure attack alerts arrive in ~2 minutes instead of SeAT\'s native 20&ndash;30 minute bucket.</li>
+        <li><strong>POS namespace isolation</strong> — POS categories marked as legacy and kept separate so CCP\'s eventual POS removal is a clean uninstall path.</li>
+        <li><strong>Improved diagnostics</strong> — MC-aware detection-mode panel, registered handler status, per-source notification counts.</li>
+        <li><strong>Role-mention precedence</strong> — binding override &rarr; category default &rarr; webhook legacy &rarr; none. Existing v1 webhook role_mention values stay valid as fallback.</li>
+    </ul>',
+    'whats_new_v2_upgrade_note' => 'Upgrading is seamless: migration 000022 seeds categories from your existing notify_* settings and binds every existing webhook to every enabled category so Day 0 behavior is identical to v1.',
+
     // Overview
     'welcome_title' => 'Welcome to Structure Manager',
     'welcome_desc' => 'Your comprehensive fuel management and monitoring system for EVE Online corporation structures.',

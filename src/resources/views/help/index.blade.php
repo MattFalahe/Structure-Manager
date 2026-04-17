@@ -466,6 +466,51 @@
         text-decoration: none;
         transform: translateX(5px);
     }
+
+    /* v2 feature badges — highlight what's new for users upgrading from v1 */
+    .v2-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: #fff;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 2px 7px;
+        border-radius: 10px;
+        vertical-align: middle;
+        margin-left: 8px;
+        text-transform: uppercase;
+        box-shadow: 0 1px 3px rgba(40, 167, 69, 0.3);
+    }
+    .v2-badge-inline {
+        /* Smaller variant for inside text */
+        font-size: 0.55rem;
+        padding: 1px 5px;
+        margin-left: 4px;
+    }
+    .v2-badge-nav {
+        /* Smallest variant for sidebar nav links */
+        font-size: 0.52rem;
+        padding: 1px 4px;
+        margin-left: 6px;
+        box-shadow: none;
+    }
+
+    .whats-new-box {
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.08) 0%, rgba(32, 201, 151, 0.06) 100%);
+        border: 1px solid rgba(40, 167, 69, 0.3);
+        border-left: 4px solid #28a745;
+        border-radius: 6px;
+        padding: 14px 18px;
+        margin: 16px 0;
+    }
+    .whats-new-box h4 {
+        margin-top: 0;
+        color: #28a745;
+    }
+    .whats-new-box ul {
+        margin-bottom: 0;
+    }
 </style>
 @endpush
 
@@ -506,6 +551,7 @@
             <a href="#" class="nav-link" data-section="notifications">
                 <i class="fas fa-bell"></i>
                 {{ trans('structure-manager::help.notifications') }}
+                <span class="v2-badge v2-badge-nav">{{ trans('structure-manager::help.v2_badge') }}</span>
             </a>
             <a href="#" class="nav-link" data-section="settings">
                 <i class="fas fa-cog"></i>
@@ -582,6 +628,17 @@
                     {{ trans('structure-manager::help.welcome_title') }}
                 </h3>
                 <p class="lead">{{ trans('structure-manager::help.welcome_desc') }}</p>
+            </div>
+
+            {{-- v2 upgrade highlights --}}
+            <div class="whats-new-box">
+                <h4><i class="fas fa-sparkles"></i> {{ trans('structure-manager::help.whats_new_v2_title') }}</h4>
+                <p>{!! trans('structure-manager::help.whats_new_v2_intro') !!}</p>
+                {!! trans('structure-manager::help.whats_new_v2_list') !!}
+                <p style="margin-top:12px; margin-bottom:0; font-size:0.88rem; color:#8b95a5;">
+                    <i class="fas fa-info-circle"></i>
+                    {{ trans('structure-manager::help.whats_new_v2_upgrade_note') }}
+                </p>
             </div>
 
             <div class="help-card">
@@ -891,29 +948,50 @@
 
                 {{-- v3.1: dedicated Notifications page overview --}}
                 <div class="success-box" style="margin-top:15px;">
-                    <h4 style="margin-top:0;"><i class="fas fa-sparkles"></i> {{ trans('structure-manager::help.v31_redesign_title') }}</h4>
+                    <h4 style="margin-top:0;">
+                        <i class="fas fa-sparkles"></i>
+                        {{ trans('structure-manager::help.v31_redesign_title') }}
+                        <span class="v2-badge">{{ trans('structure-manager::help.v2_badge') }}</span>
+                    </h4>
                     <p>{{ trans('structure-manager::help.v31_redesign_intro') }}</p>
                     {!! trans('structure-manager::help.v31_redesign_concepts') !!}
                 </div>
 
-                <h4>{{ trans('structure-manager::help.v31_category_namespaces_title') }}</h4>
+                <h4>
+                    {{ trans('structure-manager::help.v31_category_namespaces_title') }}
+                    <span class="v2-badge v2-badge-inline">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h4>
                 <p>{{ trans('structure-manager::help.v31_category_namespaces_desc') }}</p>
                 {!! trans('structure-manager::help.v31_category_namespaces_list') !!}
 
-                <h4>{{ trans('structure-manager::help.v31_category_list_title') }}</h4>
+                <h4>
+                    {{ trans('structure-manager::help.v31_category_list_title') }}
+                    <span class="v2-badge v2-badge-inline">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h4>
                 <p>{{ trans('structure-manager::help.v31_category_list_desc') }}</p>
                 {!! trans('structure-manager::help.v31_category_list') !!}
 
-                <h4>{{ trans('structure-manager::help.v31_role_precedence_title') }}</h4>
+                <h4>
+                    {{ trans('structure-manager::help.v31_role_precedence_title') }}
+                    <span class="v2-badge v2-badge-inline">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h4>
                 <p>{{ trans('structure-manager::help.v31_role_precedence_desc') }}</p>
                 {!! trans('structure-manager::help.v31_role_precedence_list') !!}
 
-                <h4><i class="fas fa-hashtag"></i> {{ trans('structure-manager::help.v31_role_picker_title') }}</h4>
+                <h4>
+                    <i class="fas fa-hashtag"></i>
+                    {{ trans('structure-manager::help.v31_role_picker_title') }}
+                    <span class="v2-badge v2-badge-inline">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h4>
                 <p>{{ trans('structure-manager::help.v31_role_picker_desc') }}</p>
                 {!! trans('structure-manager::help.v31_role_picker_sources') !!}
                 {!! trans('structure-manager::help.v31_role_picker_behavior') !!}
 
-                <h4><i class="fas fa-bolt"></i> {{ trans('structure-manager::help.esi_events_title') }}</h4>
+                <h4>
+                    <i class="fas fa-bolt"></i>
+                    {{ trans('structure-manager::help.esi_events_title') }}
+                    <span class="v2-badge v2-badge-inline">{{ trans('structure-manager::help.v2_badge') }}</span>
+                </h4>
                 <p>{{ trans('structure-manager::help.esi_events_intro') }}</p>
                 <div class="success-box">
                     {!! trans('structure-manager::help.esi_events_with_mc') !!}
