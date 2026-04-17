@@ -44,10 +44,11 @@ class NotificationController extends Controller
             ->get()
             ->groupBy('category_id');
 
-        // Role provider detection
-        $roleProvider      = DiscordRoleResolver::detectProvider();
-        $roleProviderLabel = DiscordRoleResolver::providerLabel();
-        $roleProviderAvailable = $roleProvider !== null;
+        // Role provider detection (may return multiple — we union them)
+        $roleProviders          = DiscordRoleResolver::detectAvailableProviders();
+        $roleProviderLabel      = DiscordRoleResolver::providerLabel();
+        $roleProviderAvailable  = !empty($roleProviders);
+        $roleProvider           = $roleProviders[0] ?? null; // primary for legacy checks
 
         // Namespace display metadata (order + labels + legacy hint)
         $namespaces = [
@@ -74,6 +75,7 @@ class NotificationController extends Controller
             'bindings'              => $bindings,
             'namespaces'            => $namespaces,
             'roleProvider'          => $roleProvider,
+            'roleProviders'         => $roleProviders,
             'roleProviderLabel'     => $roleProviderLabel,
             'roleProviderAvailable' => $roleProviderAvailable,
         ]);

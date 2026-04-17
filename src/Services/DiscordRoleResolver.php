@@ -13,22 +13,25 @@ use Illuminate\Support\Facades\Schema;
  * Detection is TABLE-based (not class_exists) because SeAT plugins ship
  * differently (composer, tarball, manual), and a package may be installed
  * without all its classes being autoloadable under our namespace resolution.
- * If the table is present and has rows, the dropdown works.
+ * If the table is present, its roles contribute to the picker.
  *
  * Known providers and their ownership (confirmed on a real install):
  *   - discord_roles table            → mattfalahe/seat-discord-pings
- *     Curated role registry that the Pings plugin uses. Columns include
- *     mention_format and color — richest UX for a role picker. Always
- *     preferred when present.
+ *     Curated role registry with mention_format, color, is_active.
+ *     Richest UX; treat as the "curated" source.
  *
  *   - seat_connector_sets            → warlof/seat-connector (framework)
  *     + warlof/seat-discord-connector (Discord driver)
- *     Rows with connector_type='discord' are Discord roles synced from a
- *     guild. Has no color or description fields, but covers the full guild.
+ *     Rows with connector_type='discord' are Discord roles synced from
+ *     the guild. No color, but covers the full live guild.
  *
  *   - warlof_discord_connector_roles → older warlof-only install (legacy)
  *
- * Priority order: discord_roles → seat_connector_sets → warlof legacy → null.
+ * UNION BEHAVIOR: When multiple providers are installed (common on larger
+ * SeAT installs), we query all of them and merge. Roles that appear in
+ * multiple sources are DEDUPED by Discord snowflake, keeping the entry
+ * from the richest source (curated > synced > legacy) but recording
+ * every source the role appeared in for UI display.
  *
  * Returns [] from listRoles() when no provider is detected, so the UI falls
  * back to a plain text input.
@@ -40,75 +43,159 @@ class DiscordRoleResolver
     public const PROVIDER_WARLOF_DISCORD      = 'warlof-discord';
 
     /**
-     * Detect which Discord role source is available.
+     * Source priority when deduping: richer first.
+     * Lower index wins when the same Discord snowflake appears in multiple sources.
      */
-    public static function detectProvider(): ?string
+    private const SOURCE_PRIORITY = [
+        self::PROVIDER_DISCORD_ROLES_TABLE, // curated, has color, has mention_format
+        self::PROVIDER_SEAT_CONNECTOR,      // synced from live guild
+        self::PROVIDER_WARLOF_DISCORD,      // legacy
+    ];
+
+    /**
+     * Return every provider whose table is present. Order matches SOURCE_PRIORITY.
+     *
+     * @return array<int, string>
+     */
+    public static function detectAvailableProviders(): array
     {
+        $providers = [];
+
         if (Schema::hasTable('discord_roles') && Schema::hasColumn('discord_roles', 'role_id')) {
-            return self::PROVIDER_DISCORD_ROLES_TABLE;
+            $providers[] = self::PROVIDER_DISCORD_ROLES_TABLE;
         }
 
         if (Schema::hasTable('seat_connector_sets')) {
-            return self::PROVIDER_SEAT_CONNECTOR;
+            $providers[] = self::PROVIDER_SEAT_CONNECTOR;
         }
 
         foreach (['warlof_discord_connector_roles', 'discord_connector_roles'] as $t) {
             if (Schema::hasTable($t)) {
-                return self::PROVIDER_WARLOF_DISCORD;
+                $providers[] = self::PROVIDER_WARLOF_DISCORD;
+                break;
             }
         }
 
-        return null;
+        return $providers;
+    }
+
+    /**
+     * Backward-compat: return the top-priority provider, or null if none.
+     * Used by callers that only want a single label string.
+     */
+    public static function detectProvider(): ?string
+    {
+        $all = self::detectAvailableProviders();
+        return $all[0] ?? null;
     }
 
     public static function isAvailable(): bool
     {
-        return self::detectProvider() !== null;
+        return !empty(self::detectAvailableProviders());
     }
 
     /**
-     * Return Discord roles for the picker.
+     * Return Discord roles from ALL installed providers, merged and deduped.
      *
-     * Shape:
+     * Shape per role:
      *   [
-     *     'id'             => '1227722401236652123',   // Discord role snowflake
+     *     'id'             => '1227722401236652123',
      *     'name'           => 'Corp Member',
-     *     'mention_format' => '<@&1227722401236652123>', // exact string to store
+     *     'mention_format' => '<@&1227722401236652123>',
      *     'color'          => '#2ecc71' | null,
+     *     'source'         => 'discord-roles-table',        // primary (richest) source
+     *     'sources'        => ['discord-roles-table', 'seat-connector'], // every source the role was found in
      *   ]
+     *
+     * Roles appear once per Discord snowflake (deduplicated across providers).
      */
     public static function listRoles(): array
     {
-        $provider = self::detectProvider();
-
-        try {
-            return match ($provider) {
-                self::PROVIDER_DISCORD_ROLES_TABLE => self::rolesFromDiscordRolesTable(),
-                self::PROVIDER_SEAT_CONNECTOR      => self::rolesFromSeatConnector(),
-                self::PROVIDER_WARLOF_DISCORD      => self::rolesFromWarlof(),
-                default                            => [],
-            };
-        } catch (\Throwable $e) {
-            Log::warning('[Structure Manager] DiscordRoleResolver: failed listing roles from ' . ($provider ?? 'unknown') . ': ' . $e->getMessage());
+        $providers = self::detectAvailableProviders();
+        if (empty($providers)) {
             return [];
         }
+
+        $merged = [];      // keyed by Discord snowflake string
+
+        foreach ($providers as $provider) {
+            try {
+                $rows = match ($provider) {
+                    self::PROVIDER_DISCORD_ROLES_TABLE => self::rolesFromDiscordRolesTable(),
+                    self::PROVIDER_SEAT_CONNECTOR      => self::rolesFromSeatConnector(),
+                    self::PROVIDER_WARLOF_DISCORD      => self::rolesFromWarlof(),
+                    default                            => [],
+                };
+            } catch (\Throwable $e) {
+                Log::warning('[Structure Manager] DiscordRoleResolver: failed listing roles from ' . $provider . ': ' . $e->getMessage());
+                continue;
+            }
+
+            foreach ($rows as $row) {
+                $id = $row['id'];
+                if (!$id) {
+                    continue;
+                }
+
+                if (!isset($merged[$id])) {
+                    // First sighting — take everything and tag the primary source
+                    $row['source']  = $provider;
+                    $row['sources'] = [$provider];
+                    $merged[$id] = $row;
+                } else {
+                    // Duplicate snowflake — this source is lower priority (providers
+                    // array is already priority-ordered). Just record that it also
+                    // appeared here; do not overwrite data.
+                    $merged[$id]['sources'][] = $provider;
+
+                    // Fill in data only if the primary source was missing it and
+                    // this source has it (e.g. name from seat-connector when
+                    // discord_roles has a null or empty name — unlikely but safe).
+                    if (empty($merged[$id]['color']) && !empty($row['color'])) {
+                        $merged[$id]['color'] = $row['color'];
+                    }
+                }
+            }
+        }
+
+        // Sort by name for display
+        $result = array_values($merged);
+        usort($result, fn($a, $b) => strcasecmp($a['name'] ?? '', $b['name'] ?? ''));
+
+        return $result;
     }
 
+    /**
+     * Aggregate label for UI banner ("Discord Pings + SeAT Connector").
+     */
     public static function providerLabel(): string
     {
-        return match (self::detectProvider()) {
-            self::PROVIDER_DISCORD_ROLES_TABLE => 'SeAT Discord Pings (mattfalahe) — curated role list',
-            self::PROVIDER_SEAT_CONNECTOR      => 'SeAT Connector (warlof) — Discord sets',
-            self::PROVIDER_WARLOF_DISCORD      => 'SeAT Discord Connector (warlof, legacy tables)',
-            default                            => 'Manual input only',
+        $providers = self::detectAvailableProviders();
+        if (empty($providers)) {
+            return 'Manual input only';
+        }
+
+        $labels = array_map(fn($p) => self::providerShortLabel($p), $providers);
+        return implode(' + ', $labels);
+    }
+
+    /**
+     * Short human label for a single provider (used in source badges).
+     */
+    public static function providerShortLabel(string $provider): string
+    {
+        return match ($provider) {
+            self::PROVIDER_DISCORD_ROLES_TABLE => 'Discord Pings (curated)',
+            self::PROVIDER_SEAT_CONNECTOR      => 'SeAT Connector (warlof)',
+            self::PROVIDER_WARLOF_DISCORD      => 'Warlof Discord (legacy)',
+            default                            => $provider,
         };
     }
 
     // ---- Provider-specific queries ----
 
     /**
-     * Primary source when available. Columns:
-     *   id, name, role_id (snowflake), mention_format, color, is_active, ...
+     * mattfalahe/seat-discord-pings — discord_roles table.
      */
     private static function rolesFromDiscordRolesTable(): array
     {
@@ -128,11 +215,7 @@ class DiscordRoleResolver
     }
 
     /**
-     * zenobio93/seat-connector. Schema:
-     *   id, connector_type, connector_id, name, is_public
-     *
-     * Discord roles are rows where connector_type='discord'.
-     * connector_id is the Discord role snowflake.
+     * warlof/seat-connector — Discord rows from seat_connector_sets.
      */
     private static function rolesFromSeatConnector(): array
     {
@@ -152,8 +235,8 @@ class DiscordRoleResolver
     }
 
     /**
-     * warlof/seat-discord-connector legacy tables. Best-effort query;
-     * adjust the column names if a future install uses a different schema.
+     * Legacy warlof/seat-discord-connector tables.
+     * Best-effort query — adjusts to whatever schema exists.
      */
     private static function rolesFromWarlof(): array
     {
