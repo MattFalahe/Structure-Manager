@@ -38,7 +38,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index('last_fuel_notification_status');
+            $table->index('last_fuel_notification_status', 'sns_fuel_status_idx');
         });
     }
 
