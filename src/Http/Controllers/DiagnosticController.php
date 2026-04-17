@@ -47,7 +47,7 @@ class DiagnosticController extends Controller
     private const PLUGIN_TABLES = [
         'structure_fuel_history',
         'structure_fuel_reserves',
-        'structure_manager_notification_status',
+        'structure_notification_status',
         'structure_manager_esi_notifications',
         'starbase_fuel_history',
         'starbase_fuel_reserves',
@@ -720,7 +720,7 @@ class DiagnosticController extends Controller
      */
     private function checkUpwellNotificationState(): array
     {
-        if (!Schema::hasTable('structure_manager_notification_status') || !Schema::hasTable('corporation_structures')) {
+        if (!Schema::hasTable('structure_notification_status') || !Schema::hasTable('corporation_structures')) {
             return [
                 'status'  => 'info',
                 'message' => 'Upwell notification table not yet created (run migrations).',
@@ -754,7 +754,7 @@ class DiagnosticController extends Controller
             ->count();
 
         // More accurate: join to find stuck latches
-        $stuckLatches = DB::table('structure_manager_notification_status as sns')
+        $stuckLatches = DB::table('structure_notification_status as sns')
             ->join('corporation_structures as cs', 'sns.structure_id', '=', 'cs.structure_id')
             ->where('sns.fuel_final_alert_sent', true)
             ->whereNotNull('cs.fuel_expires')

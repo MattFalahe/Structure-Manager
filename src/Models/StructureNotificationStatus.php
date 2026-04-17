@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class StructureNotificationStatus extends Model
 {
-    protected $table = 'structure_manager_notification_status';
+    protected $table = 'structure_notification_status';
 
     protected $fillable = [
         'structure_id',

@@ -15,7 +15,7 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('structure_manager_notification_status', function (Blueprint $table) {
+        Schema::create('structure_notification_status', function (Blueprint $table) {
             $table->id();
             $table->bigInteger('structure_id')->unique()
                 ->comment('Upwell structure ID from corporation_structures');
@@ -44,6 +44,6 @@ return new class extends Migration
 
     public function down()
     {
-        Schema::dropIfExists('structure_manager_notification_status');
+        Schema::dropIfExists('structure_notification_status');
     }
 };
