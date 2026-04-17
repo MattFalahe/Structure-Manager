@@ -14,8 +14,8 @@ use StructureManager\Helpers\PosFuelCalculator;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StructureNotificationStatus;
-use StructureManager\Models\EsiKeyHolder;
 use StructureManager\Models\EsiNotification;
+use StructureManager\Integrations\ManagerCoreIntegration;
 
 /**
  * Admin-only diagnostic page for Structure Manager.
@@ -27,19 +27,18 @@ use StructureManager\Models\EsiNotification;
 class DiagnosticController extends Controller
 {
     /**
-     * The six artisan commands the plugin registers into SeAT's scheduler.
+     * The artisan commands the plugin registers into SeAT's scheduler.
      * Each paired with its expected cron expression (source of truth = our seeder).
      */
     private const EXPECTED_SCHEDULES = [
-        'structure-manager:track-fuel'             => '15 * * * *',
-        'structure-manager:analyze-consumption'    => '30 * * * *',
-        'structure-manager:track-poses-fuel'       => '*/10 * * * *',
+        'structure-manager:track-fuel'              => '15 * * * *',
+        'structure-manager:analyze-consumption'     => '30 * * * *',
+        'structure-manager:track-poses-fuel'        => '*/10 * * * *',
         'structure-manager:analyze-pos-consumption' => '0 1 * * *',
-        'structure-manager:notify-pos-fuel'        => '*/10 * * * *',
+        'structure-manager:notify-pos-fuel'         => '*/10 * * * *',
         'structure-manager:notify-upwell-fuel'      => '*/10 * * * *',
-        'structure-manager:poll-structure-notifications' => '*/2 * * * *',
-        'structure-manager:sweep-seat-notifications'     => '*/10 * * * *',
-        'structure-manager:cleanup-history'        => '0 3 * * *',
+        'structure-manager:process-notifications'   => '*/10 * * * *',
+        'structure-manager:cleanup-history'         => '0 3 * * *',
     ];
 
     /**
@@ -48,9 +47,8 @@ class DiagnosticController extends Controller
     private const PLUGIN_TABLES = [
         'structure_fuel_history',
         'structure_fuel_reserves',
-        'structure_notification_status',
+        'structure_manager_notification_status',
         'structure_manager_esi_notifications',
-        'structure_manager_esi_key_holders',
         'starbase_fuel_history',
         'starbase_fuel_reserves',
         'starbase_fuel_consumption',
@@ -722,7 +720,7 @@ class DiagnosticController extends Controller
      */
     private function checkUpwellNotificationState(): array
     {
-        if (!Schema::hasTable('structure_notification_status') || !Schema::hasTable('corporation_structures')) {
+        if (!Schema::hasTable('structure_manager_notification_status') || !Schema::hasTable('corporation_structures')) {
             return [
                 'status'  => 'info',
                 'message' => 'Upwell notification table not yet created (run migrations).',
@@ -756,7 +754,7 @@ class DiagnosticController extends Controller
             ->count();
 
         // More accurate: join to find stuck latches
-        $stuckLatches = DB::table('structure_notification_status as sns')
+        $stuckLatches = DB::table('structure_manager_notification_status as sns')
             ->join('corporation_structures as cs', 'sns.structure_id', '=', 'cs.structure_id')
             ->where('sns.fuel_final_alert_sent', true)
             ->whereNotNull('cs.fuel_expires')
@@ -787,66 +785,124 @@ class DiagnosticController extends Controller
     }
 
     /**
-     * ESI fast-polling health: key holder pool status, recent polls, notification
-     * counts, fast-poll vs fallback ratio.
+     * ESI notification path health.
+     *
+     * When Manager Core is installed, show the shared key pool status + recent
+     * fast-poll counts (by querying MC's tables read-only — we never write).
+     *
+     * When Manager Core is absent, show Structure Manager's local dedup table
+     * state (how many notifications the fallback job processed recently).
      */
     private function checkEsiPollingState(): array
     {
-        if (!Schema::hasTable('structure_manager_esi_key_holders')) {
-            return [
-                'status'  => 'info',
-                'message' => 'ESI key holders table not yet created (run migrations).',
-                'details' => [],
-            ];
+        $mcAvailable = ManagerCoreIntegration::isAvailable();
+
+        if ($mcAvailable) {
+            return $this->checkEsiPollingStateWithManagerCore();
         }
 
-        $enabled = \StructureManager\Models\StructureManagerSettings::get('esi_polling_enabled', true);
-        $totalKeyHolders = EsiKeyHolder::count();
-        $enabledKeyHolders = EsiKeyHolder::where('enabled', true)->count();
-        $healthyKeyHolders = EsiKeyHolder::where('enabled', true)
-            ->where('last_poll_status', 'success')
-            ->count();
-        $suspendedKeyHolders = EsiKeyHolder::where('consecutive_failures', '>=', 5)->count();
+        return $this->checkEsiPollingStateStandalone();
+    }
 
-        // Recent notification stats
-        $lastHourNotifications = 0;
-        $fastPollCount = 0;
-        $fallbackCount = 0;
-        if (Schema::hasTable('structure_manager_esi_notifications')) {
-            $lastHourNotifications = EsiNotification::where('created_at', '>=', \Carbon\Carbon::now()->subHour())->count();
-            $fastPollCount = EsiNotification::where('source', 'fast_poll')->count();
-            $fallbackCount = EsiNotification::where('source', 'seat_fallback')->count();
-        }
-
+    /**
+     * MC-installed path: read MC's shared tables for key pool + notification stats.
+     */
+    private function checkEsiPollingStateWithManagerCore(): array
+    {
         $details = [
-            'ESI polling enabled'          => $enabled ? 'yes' : 'NO (disabled)',
-            'Key holders in pool'          => $totalKeyHolders,
-            'Enabled key holders'          => $enabledKeyHolders,
-            'Healthy (last poll OK)'       => $healthyKeyHolders,
-            'Suspended (5+ failures)'      => $suspendedKeyHolders,
-            'Notifications (last hour)'    => $lastHourNotifications,
-            'Total via fast-poll'          => $fastPollCount,
-            'Total via SeAT fallback'      => $fallbackCount,
+            'Detection mode' => 'Fast-poll via Manager Core (~2 min)',
         ];
 
+        if (Schema::hasTable('manager_core_esi_key_holders')) {
+            $totalKeyHolders = DB::table('manager_core_esi_key_holders')->count();
+            $enabledKeyHolders = DB::table('manager_core_esi_key_holders')->where('enabled', true)->count();
+            $healthyKeyHolders = DB::table('manager_core_esi_key_holders')
+                ->where('enabled', true)
+                ->where('last_poll_status', 'success')
+                ->count();
+            $suspendedKeyHolders = DB::table('manager_core_esi_key_holders')
+                ->where('consecutive_failures', '>=', 5)
+                ->count();
+
+            $details['Shared key holders in pool'] = $totalKeyHolders;
+            $details['Enabled key holders']       = $enabledKeyHolders;
+            $details['Healthy (last poll OK)']    = $healthyKeyHolders;
+            $details['Suspended (5+ failures)']   = $suspendedKeyHolders;
+        } else {
+            $totalKeyHolders = 0;
+            $enabledKeyHolders = 0;
+            $healthyKeyHolders = 0;
+            $suspendedKeyHolders = 0;
+            $details['Shared key holders in pool'] = 'table missing';
+        }
+
+        if (Schema::hasTable('manager_core_esi_notifications')) {
+            $sinceHour = \Carbon\Carbon::now()->subHour();
+            $details['Notifications (last hour)'] = DB::table('manager_core_esi_notifications')
+                ->where('created_at', '>=', $sinceHour)->count();
+            $details['Total via fast-poll']       = DB::table('manager_core_esi_notifications')
+                ->where('source', 'fast_poll')->count();
+            $details['Total via SeAT fallback']   = DB::table('manager_core_esi_notifications')
+                ->where('source', 'seat_fallback')->count();
+        }
+
+        // Is SM registered with MC's notification registry?
+        $registered = false;
+        try {
+            $registry = app('\ManagerCore\Services\ESI\EsiNotificationRegistry');
+            $registered = $registry->hasHandlersForType('StructureUnderAttack');
+        } catch (\Throwable $e) {
+            // MC present but registry unavailable — treat as unregistered
+        }
+        $details['Structure Manager registered with MC'] = $registered ? 'yes' : 'no';
+
         $status = 'ok';
-        if (!$enabled) {
-            $status = 'warn';
+        if (!$registered) {
+            $status = 'error';
+            $message = 'Manager Core is installed but Structure Manager has not registered its handler. Check logs for boot errors.';
         } elseif ($totalKeyHolders === 0) {
             $status = 'warn';
-        } elseif ($suspendedKeyHolders > 0) {
-            $status = 'warn';
+            $message = 'No key holders in Manager Core\'s shared pool. Add directors in Manager Core > ESI Key Pool.';
         } elseif ($enabledKeyHolders === 0) {
             $status = 'error';
+            $message = 'All key holders are disabled — no fast-polling will happen.';
+        } elseif ($suspendedKeyHolders > 0) {
+            $status = 'warn';
+            $message = "{$enabledKeyHolders} enabled, {$healthyKeyHolders} healthy, {$suspendedKeyHolders} suspended.";
+        } else {
+            $message = "{$enabledKeyHolders} enabled director(s) in shared pool, {$healthyKeyHolders} healthy.";
         }
 
+        return [
+            'status'  => $status,
+            'message' => $message,
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Standalone path: no MC installed. Report on SM's local dedup table only.
+     */
+    private function checkEsiPollingStateStandalone(): array
+    {
+        $enabled = \StructureManager\Models\StructureManagerSettings::get('esi_polling_enabled', true);
+
+        $details = [
+            'Detection mode'       => 'SeAT native (~20-30 min bucket)',
+            'Notification gate'    => $enabled ? 'enabled' : 'NO (disabled in settings)',
+            'Install Manager Core' => 'for 2-min detection + shared key pool',
+        ];
+
+        if (Schema::hasTable('structure_manager_esi_notifications')) {
+            $sinceHour = \Carbon\Carbon::now()->subHour();
+            $details['Local dedup rows (last hour)'] = EsiNotification::where('created_at', '>=', $sinceHour)->count();
+            $details['Local dedup rows (total)']     = EsiNotification::count();
+        }
+
+        $status = $enabled ? 'info' : 'warn';
         $message = $enabled
-            ? "{$enabledKeyHolders} key holder(s) active, {$healthyKeyHolders} healthy."
-            : 'ESI fast-polling is disabled. Only SeAT fallback sweep is active.';
-
-        if ($totalKeyHolders === 0 && $enabled) {
-            $message = 'No key holders assigned. Go to Settings > Structure Events to add directors.';
-        }
+            ? 'Standalone mode: Structure Manager reads from SeAT\'s character_notifications every 10 minutes. Install Manager Core for fast-poll.'
+            : 'Notification gate is disabled in Settings > Structure Events.';
 
         return [
             'status'  => $status,
@@ -1207,7 +1263,10 @@ class DiagnosticController extends Controller
     }
 
     /**
-     * Dispatch the ESI polling job to poll key holders immediately.
+     * Dispatch the appropriate notification job.
+     *
+     * - If Manager Core is installed: dispatch MC's fast-poll (polls shared key pool).
+     * - If Manager Core is absent: dispatch SM's fallback (reads SeAT's native table).
      */
     public function runEsiPollNow(Request $request)
     {
@@ -1216,12 +1275,18 @@ class DiagnosticController extends Controller
         }
 
         try {
-            Artisan::call('structure-manager:poll-structure-notifications');
-            Log::info('Structure Manager diagnostic: dispatched ESI poll');
-            return back()->with('success', 'ESI polling job dispatched. Key holders are being polled now.');
+            if (ManagerCoreIntegration::isAvailable()) {
+                Artisan::call('manager-core:poll-esi-notifications');
+                Log::info('Structure Manager diagnostic: dispatched MC fast-poll');
+                return back()->with('success', 'Manager Core fast-poll dispatched. Shared key holders are being polled now.');
+            }
+
+            Artisan::call('structure-manager:process-notifications');
+            Log::info('Structure Manager diagnostic: dispatched SM fallback notification processor');
+            return back()->with('success', 'Fallback notification processor dispatched. Install Manager Core for faster fast-poll.');
         } catch (\Throwable $e) {
-            Log::error('Structure Manager diagnostic: ESI poll failed - ' . $e->getMessage());
-            return back()->with('error', 'ESI poll failed: ' . $e->getMessage());
+            Log::error('Structure Manager diagnostic: notification job failed - ' . $e->getMessage());
+            return back()->with('error', 'Notification job failed: ' . $e->getMessage());
         }
     }
 

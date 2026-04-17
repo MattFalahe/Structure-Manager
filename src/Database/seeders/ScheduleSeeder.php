@@ -65,19 +65,14 @@ class ScheduleSeeder extends AbstractScheduleSeeder
                 'ping_after' => null,
             ],
 
-            // Fast ESI Polling for Structure Events (attacks, anchoring, etc.)
+            // Structure Event Notifications.
+            // When Manager Core is installed, MC's fast-poll (every 2 min) and
+            // sweep (every 10 min) handle discovery + dispatch — this command
+            // detects MC and becomes a no-op.
+            // When Manager Core is NOT installed, this job reads from SeAT's
+            // native character_notifications table and dispatches webhooks.
             [
-                'command' => 'structure-manager:poll-structure-notifications',
-                'expression' => '*/2 * * * *', // Run every 2 minutes
-                'allow_overlap' => false,
-                'allow_maintenance' => false,
-                'ping_before' => null,
-                'ping_after' => null,
-            ],
-
-            // SeAT Notification Sweep (fallback for missed fast-poll)
-            [
-                'command' => 'structure-manager:sweep-seat-notifications',
+                'command' => 'structure-manager:process-notifications',
                 'expression' => '*/10 * * * *', // Run every 10 minutes
                 'allow_overlap' => false,
                 'allow_maintenance' => false,
@@ -100,10 +95,16 @@ class ScheduleSeeder extends AbstractScheduleSeeder
     /**
      * Returns a list of commands to remove from the schedule.
      *
+     * Removed in v3.1: the fast-poll + sweep moved to Manager Core. Structure
+     * Manager now uses a single fallback command that defers to MC when present.
+     *
      * @return array
      */
     public function getDeprecatedSchedules(): array
     {
-        return [];
+        return [
+            'structure-manager:poll-structure-notifications',
+            'structure-manager:sweep-seat-notifications',
+        ];
     }
 }

@@ -269,38 +269,10 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
 
-    // ============================================
-    // ESI Key Holder Management
-    // ============================================
-
-    Route::get('/key-holders', [
-        'as'         => 'structure-manager.key-holders.list',
-        'uses'       => 'SettingsController@getKeyHolders',
-        'middleware' => 'can:structure-manager.admin',
-    ]);
-
-    Route::get('/key-holders/eligible', [
-        'as'         => 'structure-manager.key-holders.eligible',
-        'uses'       => 'SettingsController@getEligibleKeyHolders',
-        'middleware' => 'can:structure-manager.admin',
-    ]);
-
-    Route::post('/key-holders/add', [
-        'as'         => 'structure-manager.key-holders.add',
-        'uses'       => 'SettingsController@addKeyHolder',
-        'middleware' => 'can:structure-manager.admin',
-    ]);
-
-    Route::post('/key-holders/{id}/toggle', [
-        'as'         => 'structure-manager.key-holders.toggle',
-        'uses'       => 'SettingsController@toggleKeyHolder',
-        'middleware' => 'can:structure-manager.admin',
-    ]);
-
-    Route::delete('/key-holders/{id}', [
-        'as'         => 'structure-manager.key-holders.remove',
-        'uses'       => 'SettingsController@removeKeyHolder',
-        'middleware' => 'can:structure-manager.admin',
-    ]);
+    // ESI Key Holder management moved to Manager Core v1.x.
+    // When MC is installed, admins manage the shared key pool at
+    //   route('manager-core.esi-key-pool.index')
+    // When MC is absent, Structure Manager uses SeAT's native notification path
+    // (character_notifications table) — no key holders required.
 
 });

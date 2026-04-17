@@ -13,9 +13,9 @@ use StructureManager\Console\Commands\NotifyPosFuelCommand;
 use StructureManager\Console\Commands\CreateTestPoses;
 use StructureManager\Console\Commands\SimulateFastConsumption;
 use StructureManager\Console\Commands\NotifyUpwellFuelCommand;
-use StructureManager\Console\Commands\PollStructureNotificationsCommand;
-use StructureManager\Console\Commands\SweepSeatNotificationsCommand;
+use StructureManager\Console\Commands\ProcessStructureNotificationsCommand;
 use StructureManager\Database\Seeders\ScheduleSeeder;
+use StructureManager\Integrations\ManagerCoreIntegration;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
 {
@@ -44,10 +44,12 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 CreateTestPoses::class,
                 SimulateFastConsumption::class,
                 NotifyUpwellFuelCommand::class,
-                PollStructureNotificationsCommand::class,
-                SweepSeatNotificationsCommand::class,
+                ProcessStructureNotificationsCommand::class,
             ]);
         }
+
+        // Opt into Manager Core's shared ESI fast-poll if available. No-op if MC is absent.
+        ManagerCoreIntegration::registerStructureEventHandler();
 
         // Add publications
         $this->add_publications();
