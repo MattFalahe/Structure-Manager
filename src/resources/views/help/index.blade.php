@@ -153,112 +153,61 @@
         font-size: 1.1rem;
     }
     
-    .info-box {
-        background: rgba(23, 162, 184, 0.15);
-        border-left: 4px solid #17a2b8;
+    /* Callout boxes — ported from Mining Manager's pattern so icons render
+       in their box's accent color and content flows beside the icon via flex,
+       instead of the icon inheriting text color and content wrapping under it. */
+    .info-box,
+    .warning-box,
+    .success-box,
+    .purple-box {
         padding: 15px;
         margin: 15px 0;
         border-radius: 5px;
-        color: #d1d5db;
+        color: #d1d5db !important;
         line-height: 1.6;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        flex-wrap: wrap;
         word-wrap: break-word;
         overflow-wrap: break-word;
-    }
-    
-    .info-box i {
-        margin-right: 8px;
-        vertical-align: middle;
-    }
-    
-    .info-box strong {
-        display: inline-block;
-        margin-right: 4px;
-    }
-    
-    .info-box br {
-        display: block;
-        margin-top: 8px;
-    }
-    
-    .warning-box {
-        background: rgba(255, 193, 7, 0.15);
-        border-left: 4px solid #ffc107;
-        padding: 15px;
-        margin: 15px 0;
-        border-radius: 5px;
-        color: #d1d5db;
-        line-height: 1.6;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
-    
-    .warning-box i {
-        margin-right: 8px;
-        vertical-align: middle;
-    }
-    
-    .warning-box strong {
-        display: inline-block;
-        margin-right: 4px;
-    }
-    
-    .warning-box br {
-        display: block;
-        margin-top: 8px;
-    }
-    
-    .success-box {
-        background: rgba(28, 200, 138, 0.15);
-        border-left: 4px solid #1cc88a;
-        padding: 15px;
-        margin: 15px 0;
-        border-radius: 5px;
-        color: #d1d5db;
-        line-height: 1.6;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
-    
-    .success-box i {
-        margin-right: 8px;
-        vertical-align: middle;
-    }
-    
-    .success-box strong {
-        display: inline-block;
-        margin-right: 4px;
-    }
-    
-    .success-box br {
-        display: block;
-        margin-top: 8px;
     }
 
-    .purple-box {
-        background: rgba(156, 39, 176, 0.15);
-        border-left: 4px solid #9c27b0;
-        padding: 15px;
-        margin: 15px 0;
-        border-radius: 5px;
-        color: #d1d5db;
-        line-height: 1.6;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
+    .info-box    { background: rgba(23, 162, 184, 0.15); border-left: 4px solid #17a2b8; }
+    .warning-box { background: rgba(255, 193, 7, 0.15);  border-left: 4px solid #ffc107; }
+    .success-box { background: rgba(28, 200, 138, 0.15); border-left: 4px solid #1cc88a; }
+    .purple-box  { background: rgba(156, 39, 176, 0.15); border-left: 4px solid #9c27b0; }
+
+    .info-box > i,
+    .warning-box > i,
+    .success-box > i,
+    .purple-box > i {
+        margin-top: 3px;
+        flex-shrink: 0;
     }
-    
-    .purple-box i {
-        margin-right: 8px;
-        vertical-align: middle;
+
+    .info-box > i    { color: #17a2b8; }
+    .warning-box > i { color: #ffc107; }
+    .success-box > i { color: #1cc88a; }
+    .purple-box > i  { color: #9c27b0; }
+
+    /* Give the remaining content a flexible width so tables/pre blocks
+       inside the box use the full horizontal space rather than squeezing
+       into the implicit shrink-to-fit sibling of the icon. */
+    .info-box > *:not(i),
+    .warning-box > *:not(i),
+    .success-box > *:not(i),
+    .purple-box > *:not(i) {
+        flex: 1 1 0;
+        min-width: 0;
     }
-    
+
+    .info-box strong,
+    .warning-box strong,
+    .success-box strong,
     .purple-box strong {
         display: inline-block;
         margin-right: 4px;
-    }
-    
-    .purple-box br {
-        display: block;
-        margin-top: 8px;
     }
     
     .feature-grid {
