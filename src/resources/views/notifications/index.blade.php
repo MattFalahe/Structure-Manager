@@ -347,10 +347,17 @@
                                         <td>{{ $wh->description ?: 'Webhook #' . $wh->id }}</td>
                                         <td>{{ $wh->corporation_id ? $wh->getCorporationLabel() : 'All corps' }}</td>
                                         <td class="binding-role-cell">
-                                            <input type="text"
-                                                   class="js-binding-role"
-                                                   value="{{ $b->role_mention }}"
-                                                   placeholder="(uses category default)">
+                                            <div style="display:flex; gap:4px;">
+                                                <input type="text"
+                                                       class="js-binding-role"
+                                                       value="{{ $b->role_mention }}"
+                                                       placeholder="(uses category default)">
+                                                @if($roleProviderAvailable)
+                                                    <button type="button" class="btn btn-xs btn-secondary js-pick-role-binding" title="Pick from Discord">
+                                                        <i class="fas fa-hashtag"></i>
+                                                    </button>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td class="binding-actions">
                                             <button type="button" class="btn btn-xs btn-info js-save-binding" title="Save role override">
@@ -591,6 +598,13 @@
         openRolePicker();
     });
 
+    // Per-binding role override picker
+    $(document).on('click', '.js-pick-role-binding', function () {
+        const $tr = $(this).closest('tr');
+        activeRoleTarget = $tr.find('.js-binding-role');
+        openRolePicker();
+    });
+
     function openRolePicker() {
         const $modal = $('#rolePickerModal');
         if (!$modal.length) {
@@ -603,15 +617,33 @@
 
         $.getJSON(ROUTES.listRoles, function (res) {
             if (!res.roles || res.roles.length === 0) {
-                $body.html('<div class="alert alert-warning">No roles available from the connector. Enter the mention manually.</div>');
+                $body.html(`
+                    <div class="alert alert-warning">
+                        <strong>No roles returned from ${res.label}.</strong><br>
+                        Enter the mention manually as <code>&lt;@&amp;ROLE_ID&gt;</code> or raw role ID.
+                    </div>`);
                 return;
             }
-            let html = '<div style="max-height:400px; overflow-y:auto;">';
-            html += '<input type="text" id="roleFilter" class="form-control" placeholder="Search..." style="margin-bottom:0.8rem; background:#1e222b; border:1px solid #454d55; color:#fff;">';
-            html += '<div id="roleList">';
+
+            let html = '<div style="max-height:420px; overflow-y:auto;">';
+            html += '<div style="font-size:0.78rem; color:#8b95a5; margin-bottom:0.5rem;">';
+            html += `Source: <code>${res.label || res.provider || ''}</code> &middot; ${res.roles.length} role(s)`;
+            html += '</div>';
+            html += '<input type="text" id="roleFilter" class="form-control" placeholder="Search roles..." style="margin-bottom:0.8rem; background:#1e222b; border:1px solid #454d55; color:#fff;">';
+            html += '<div id="roleList" style="display:flex; flex-wrap:wrap; gap:4px;">';
             res.roles.forEach(function (r) {
-                html += `<button type="button" class="btn btn-sm btn-outline-primary js-role-pick-btn" data-role-id="${r.id}" data-role-name="${r.name}" style="margin:3px; text-align:left;">
-                    ${r.name} <small style="opacity:0.7;">#${r.id}</small>
+                const hex = r.color && /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : '';
+                const dot = hex
+                    ? `<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${hex}; margin-right:6px; vertical-align:middle;"></span>`
+                    : '';
+                const format = (r.mention_format || ('<@&' + r.id + '>')).replace(/"/g, '&quot;');
+                html += `<button type="button" class="btn btn-sm btn-outline-primary js-role-pick-btn"
+                    data-role-id="${r.id}"
+                    data-role-name="${r.name}"
+                    data-mention-format="${format}"
+                    style="text-align:left;">
+                    ${dot}${r.name}
+                    <small style="opacity:0.6; margin-left:4px;">#${r.id.slice(-6)}</small>
                 </button>`;
             });
             html += '</div></div>';
@@ -625,14 +657,14 @@
                 });
             });
         }).fail(function () {
-            $body.html('<div class="alert alert-danger">Failed to load roles from connector.</div>');
+            $body.html('<div class="alert alert-danger">Failed to load roles from Discord provider.</div>');
         });
     }
 
     $(document).on('click', '.js-role-pick-btn', function () {
-        const roleId = $(this).data('role-id');
+        const mentionFormat = $(this).data('mention-format') || ('<@&' + $(this).data('role-id') + '>');
         if (activeRoleTarget) {
-            activeRoleTarget.val('<@&' + roleId + '>').trigger('blur');
+            activeRoleTarget.val(mentionFormat).trigger('blur');
         }
         $('#rolePickerModal').modal('hide');
     });
