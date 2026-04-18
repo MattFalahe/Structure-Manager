@@ -170,4 +170,51 @@ class ManagerCoreIntegration
 
         return $data;
     }
+
+    /**
+     * Dispatch Manager Core's ESI fast-poll job immediately.
+     *
+     * Called from the diagnostic page's "Run Now" button. Dispatches the
+     * job directly via Laravel's queue rather than going through
+     * Artisan::call('manager-core:poll-esi-notifications'), because MC's
+     * ServiceProvider registers its commands inside a
+     * `$this->app->runningInConsole()` guard — so those commands don't
+     * exist in Artisan's registry during HTTP requests.
+     *
+     * Dispatching the job directly works in both CLI and HTTP contexts.
+     *
+     * @return bool true if dispatched, false if MC is not available
+     */
+    public static function triggerFastPoll(): bool
+    {
+        if (!self::isAvailable()) {
+            return false;
+        }
+        if (!class_exists('\ManagerCore\Jobs\ESI\PollEsiNotifications')) {
+            return false;
+        }
+
+        dispatch(new \ManagerCore\Jobs\ESI\PollEsiNotifications());
+        return true;
+    }
+
+    /**
+     * Dispatch Manager Core's SeAT-notification sweep job.
+     *
+     * Same rationale as triggerFastPoll — avoid Artisan::call from HTTP.
+     *
+     * @return bool true if dispatched, false if MC is not available
+     */
+    public static function triggerSweep(): bool
+    {
+        if (!self::isAvailable()) {
+            return false;
+        }
+        if (!class_exists('\ManagerCore\Jobs\ESI\SweepSeatNotifications')) {
+            return false;
+        }
+
+        dispatch(new \ManagerCore\Jobs\ESI\SweepSeatNotifications());
+        return true;
+    }
 }

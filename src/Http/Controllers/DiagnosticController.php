@@ -1263,8 +1263,13 @@ class DiagnosticController extends Controller
     /**
      * Dispatch the appropriate notification job.
      *
-     * - If Manager Core is installed: dispatch MC's fast-poll (polls shared key pool).
-     * - If Manager Core is absent: dispatch SM's fallback (reads SeAT's native table).
+     * - If Manager Core is installed: dispatch MC's fast-poll job directly
+     *   (via ManagerCoreIntegration::triggerFastPoll). Uses direct dispatch
+     *   instead of Artisan::call because MC's ServiceProvider only registers
+     *   commands during CLI runs — Artisan::call from HTTP context would
+     *   fail with "command does not exist".
+     * - If Manager Core is absent: dispatch SM's fallback job directly too
+     *   for consistency.
      */
     public function runEsiPollNow(Request $request)
     {
@@ -1274,12 +1279,17 @@ class DiagnosticController extends Controller
 
         try {
             if (ManagerCoreIntegration::isAvailable()) {
-                Artisan::call('manager-core:poll-esi-notifications');
-                Log::info('Structure Manager diagnostic: dispatched MC fast-poll');
+                $dispatched = ManagerCoreIntegration::triggerFastPoll();
+                if (!$dispatched) {
+                    Log::error('Structure Manager diagnostic: MC detected but fast-poll job class not found');
+                    return back()->with('error', 'Manager Core detected but its fast-poll job class could not be loaded. Check MC version.');
+                }
+                Log::info('Structure Manager diagnostic: dispatched MC fast-poll job');
                 return back()->with('success', 'Manager Core fast-poll dispatched. Shared key holders are being polled now.');
             }
 
-            Artisan::call('structure-manager:process-notifications');
+            // Standalone mode — dispatch SM's own fallback job directly
+            dispatch(new \StructureManager\Jobs\ProcessStructureNotifications());
             Log::info('Structure Manager diagnostic: dispatched SM fallback notification processor');
             return back()->with('success', 'Fallback notification processor dispatched. Install Manager Core for faster fast-poll.');
         } catch (\Throwable $e) {
