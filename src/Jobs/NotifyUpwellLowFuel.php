@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureNotificationStatus;
 use StructureManager\Models\StructureManagerSettings;
+use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
 use StructureManager\Helpers\FuelCalculator;
@@ -152,6 +153,12 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         // Reset latches on recovery (above critical threshold)
         $this->resetLatchesOnRecovery($status, $currentStatus);
+
+        // Upsert a Structure Board timer row so the board reflects this
+        // structure's pending fuel expiry. Always called — on recovery to
+        // 'good' the row is soft-dismissed (board hides it) but kept for
+        // audit; fresh drop re-creates.
+        $this->upsertBoardTimer($structure, $fuelData, $currentStatus);
 
         // Check if notification should fire
         if (!$this->shouldSendNotification($status, $currentStatus, $fuelData, $criticalInterval)) {
@@ -381,6 +388,57 @@ class NotifyUpwellLowFuel implements ShouldQueue
         }
 
         return false;
+    }
+
+    /**
+     * Upsert a Structure Board timer row for this structure's fuel expiry.
+     *
+     * Dedup key is "fuel:{structure_id}" — the same row evolves as status
+     * transitions (warning → critical → final). Row is soft-dismissed when
+     * status recovers to 'good', kept for audit.
+     */
+    private function upsertBoardTimer($structure, array $fuelData, string $currentStatus): void
+    {
+        $isFinalAlert = $fuelData['hours_remaining'] > 0 && $fuelData['hours_remaining'] <= 1;
+        $eventType = $isFinalAlert ? 'fuel_final'
+            : ($currentStatus === 'critical' ? 'fuel_critical'
+                : ($currentStatus === 'warning' ? 'fuel_warning' : null));
+
+        // Resolve owner corp name (cached lookup OK — small set)
+        $ownerName = \DB::table('corporation_infos')
+            ->where('corporation_id', $structure->corporation_id)
+            ->value('name');
+
+        if ($currentStatus === 'good' && $eventType === null) {
+            // Recovered — soft-dismiss any existing row for this structure
+            Timer::where('source_reference', "fuel:{$structure->structure_id}")
+                ->whereNull('dismissed_at')
+                ->update(['dismissed_at' => Carbon::now()]);
+            return;
+        }
+
+        if ($eventType === null) {
+            return;
+        }
+
+        Timer::upsertAuto([
+            'source'                 => 'auto_fuel',
+            'event_type'             => $eventType,
+            'severity'               => $isFinalAlert || $currentStatus === 'critical' ? 'critical' : 'warning',
+            'structure_id'           => $structure->structure_id,
+            'structure_name'         => $fuelData['structure_name'] ?? null,
+            'structure_type'         => $fuelData['structure_type'] ?? null,
+            'structure_type_id'      => $structure->type_id ?? null,
+            'system_id'              => $structure->system_id ?? null,
+            'system_name'            => $fuelData['system_name'] ?? null,
+            'system_security'        => $fuelData['system_security'] ?? null,
+            'corporation_id'         => $structure->corporation_id,
+            'owner_corporation_name' => $ownerName,
+            'eve_time'               => Carbon::parse($fuelData['fuel_expires']),
+            'source_reference'       => "fuel:{$structure->structure_id}",
+            // On re-fuel+redrop, clear dismissed_at so the row reappears
+            'dismissed_at'           => null,
+        ]);
     }
 
     /**

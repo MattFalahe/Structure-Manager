@@ -5,6 +5,7 @@ namespace StructureManager\Handlers;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
@@ -100,6 +101,10 @@ class StructureEventHandler
             return;
         }
 
+        // Upsert a Structure Board timer row regardless of webhook bindings —
+        // the board should show the event even if no webhook is configured.
+        $this->upsertBoardTimer($notification, $category);
+
         $bindings = WebhookDispatcher::resolveBindings('events', $categoryKey, (int) $notification->corporation_id);
 
         if (empty($bindings)) {
@@ -126,6 +131,126 @@ class StructureEventHandler
                 Log::error("StructureEventHandler: Webhook failed for notification type {$notification->type}: " . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Upsert a Structure Board timer row for this ESI notification.
+     *
+     * Maps CCP notification types to board event_types:
+     *   StructureUnderAttack  → reinforce_shield (timer = notification.timestamp, i.e. now)
+     *   StructureLostShields  → reinforce_armor  (timer = state_timer_end from corporation_structures)
+     *   StructureLostArmor    → reinforce_hull   (timer = state_timer_end)
+     *   StructureDestroyed    → reinforce_hull   (timer = now, severity=critical)
+     *   StructureAnchoring    → anchor_start     (timer = now + 24h approx)
+     *   StructureUnanchoring  → unanchor_start   (timer = now + 7d approx)
+     *   OwnershipTransferred  → ownership_transferred (timer = now)
+     *
+     * source_reference is keyed on notification_id so each CCP notification
+     * produces exactly one row (and re-dispatch is idempotent).
+     */
+    private function upsertBoardTimer($notification, string $internalCategory): void
+    {
+        $eventType = $this->notificationTypeToBoardEvent($notification->type);
+        if ($eventType === null) {
+            return;
+        }
+
+        $data = $notification->parsed_data ?? [];
+        $meta = $this->resolveStructureMeta($data);
+
+        // Resolve the actual reinforce timer from the corporation_structures
+        // row if present. Falls back to the notification timestamp for
+        // non-reinforce events or when the structure isn't in our DB.
+        $eveTime = $this->resolveEveTimeForEvent($notification, $eventType, $data);
+
+        $severity = match (true) {
+            str_starts_with($eventType, 'reinforce_') => 'critical',
+            $eventType === 'anchor_start' || $eventType === 'unanchor_start' => 'warning',
+            default => 'info',
+        };
+
+        // Identify structure_type_id for image rendering
+        $structureTypeId = $data['structureShowInfoData'][1] ?? null;
+
+        // Owner corp = our corp for attack events, same for anchor/unanchor
+        $ownerName = DB::table('corporation_infos')
+            ->where('corporation_id', $notification->corporation_id)
+            ->value('name');
+
+        // Attacker corp name — only present on reinforce events
+        $attackerName = $data['corpName'] ?? null;
+
+        try {
+            Timer::upsertAuto([
+                'source'                    => $this->sourceForNotificationType($notification->type),
+                'event_type'                => $eventType,
+                'severity'                  => $severity,
+                'structure_id'              => $data['structureID'] ?? null,
+                'structure_name'            => $meta['name'],
+                'structure_type'            => $meta['type'],
+                'structure_type_id'         => $structureTypeId,
+                'system_id'                 => $data['solarsystemID'] ?? null,
+                'system_name'               => $meta['system'],
+                'corporation_id'            => $notification->corporation_id,
+                'owner_corporation_name'    => $ownerName,
+                'attacker_corporation_name' => $attackerName,
+                'eve_time'                  => $eveTime,
+                'source_reference'          => "esi-notif:{$notification->notification_id}",
+                'dismissed_at'              => null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("StructureEventHandler: Failed to upsert board timer for notification #{$notification->notification_id}: " . $e->getMessage());
+        }
+    }
+
+    private function notificationTypeToBoardEvent(string $type): ?string
+    {
+        return match ($type) {
+            'StructureUnderAttack', 'SkyhookUnderAttack'  => 'reinforce_shield',
+            'StructureLostShields', 'SkyhookLostShields'  => 'reinforce_armor',
+            'StructureLostArmor'                          => 'reinforce_hull',
+            'StructureDestroyed', 'SkyhookDestroyed'      => 'reinforce_hull',
+            'StructureAnchoring', 'AllAnchoringMsg', 'SkyhookDeployed' => 'anchor_start',
+            'StructureUnanchoring'                        => 'unanchor_start',
+            'OwnershipTransferred'                        => 'ownership_transferred',
+            default                                       => null,
+        };
+    }
+
+    private function sourceForNotificationType(string $type): string
+    {
+        return match (true) {
+            str_contains($type, 'UnderAttack') || str_contains($type, 'LostShields') || str_contains($type, 'LostArmor') || str_contains($type, 'Destroyed')
+                => 'auto_reinforce',
+            str_contains($type, 'Anchoring') || $type === 'SkyhookDeployed'
+                => 'auto_anchor',
+            str_contains($type, 'Unanchoring')
+                => 'auto_unanchor',
+            default => 'auto_reinforce',
+        };
+    }
+
+    /**
+     * Pick the best eve_time for the board row given the event type + data.
+     *
+     * Reinforce progression timers live on corporation_structures.state_timer_end.
+     * Anchor/unanchor lack a reliable duration field in the notification YAML;
+     * we use now() as a placeholder so the event appears on the board
+     * immediately. (A future pass can enrich from ESI if needed.)
+     */
+    private function resolveEveTimeForEvent($notification, string $eventType, array $data): Carbon
+    {
+        // For reinforce progression, prefer the state_timer_end on the structure
+        if (in_array($eventType, ['reinforce_armor', 'reinforce_hull'], true) && !empty($data['structureID'])) {
+            $timerEnd = DB::table('corporation_structures')
+                ->where('structure_id', $data['structureID'])
+                ->value('state_timer_end');
+            if ($timerEnd) {
+                return Carbon::parse($timerEnd);
+            }
+        }
+
+        return Carbon::parse($notification->timestamp);
     }
 
     /**

@@ -280,15 +280,36 @@ class Timer extends Model
     // ============================================================
 
     /**
-     * Upsert an auto-generated timer. Uses the unique dedup key
-     * (source, event_type, structure_id, eve_time) so repeated calls
-     * don't create duplicate rows.
+     * Upsert an auto-generated timer. Prefers matching on source_reference
+     * (stable across status transitions — the same row evolves as a fuel
+     * warning escalates to critical to final). Falls back to the unique
+     * index key (source, event_type, structure_id, eve_time) for callers
+     * that don't supply source_reference.
      *
-     * @param array $attrs fillable fields
+     * Example source_reference conventions:
+     *   "fuel:{structure_id}"                 — single row per structure;
+     *                                           event_type evolves warning →
+     *                                           critical → final in place
+     *   "reinforce-armor:{notification_id}"   — one row per ESI notification
+     *   "anchor-start:{structure_id}"         — one row per anchor cycle
+     *
+     * @param array $attrs fillable fields; MUST include source, event_type,
+     *                     eve_time at minimum
      * @return self
      */
     public static function upsertAuto(array $attrs): self
     {
+        // 1. Try to match an existing row by source_reference (preferred path)
+        if (!empty($attrs['source_reference'])) {
+            $existing = self::where('source_reference', $attrs['source_reference'])->first();
+            if ($existing) {
+                $existing->fill($attrs);
+                $existing->save();
+                return $existing;
+            }
+        }
+
+        // 2. Fall back to unique-index dedup
         $dedupKey = [
             'source'       => $attrs['source'],
             'event_type'   => $attrs['event_type'],
@@ -296,7 +317,19 @@ class Timer extends Model
             'eve_time'     => $attrs['eve_time'],
         ];
 
-        return self::updateOrCreate($dedupKey, $attrs);
+        try {
+            return self::updateOrCreate($dedupKey, $attrs);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Duplicate key race between two dispatchers — reload + update
+            if (str_contains($e->getMessage(), 'Duplicate entry') || str_contains($e->getMessage(), 'UNIQUE constraint')) {
+                $row = self::where($dedupKey)->first();
+                if ($row) {
+                    $row->fill($attrs)->save();
+                    return $row;
+                }
+            }
+            throw $e;
+        }
     }
 
     /**

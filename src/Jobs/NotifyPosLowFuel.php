@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StructureManagerSettings;
+use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
@@ -178,6 +179,11 @@ class NotifyPosLowFuel implements ShouldQueue
                 // future drop back into critical can fire a final alert again.
                 $this->resetLatchesOnRecovery($latest, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $strontiumCriticalHours, $strontiumWarningHours);
 
+                // Always upsert POS Structure Board timers regardless of
+                // webhook binding state — the board shows pending events
+                // even if no webhook is configured to ping them.
+                $this->upsertPosBoardTimers($latest, $fuelCriticalDays, $fuelWarningDays, $strontiumCriticalHours, $strontiumWarningHours, $charterCriticalDays);
+
                 // Process fuel/charter notifications (pos.fuel category)
                 if (!empty($fuelBindings) && $this->shouldSendFuelNotification($latest, $fuelCriticalDays, $fuelWarningDays, $fuelCriticalInterval, $charterCriticalDays)) {
                     \Log::channel('stack')->info('NotifyPosLowFuel: SENDING pos.fuel notification for POS ' . $latest->starbase_id . ' to ' . count($fuelBindings) . ' webhook(s)');
@@ -199,6 +205,85 @@ class NotifyPosLowFuel implements ShouldQueue
         }
 
         \Log::channel('stack')->info("NotifyPosLowFuel: Job completed, sent {$notificationsSent} notifications");
+    }
+
+    /**
+     * Upsert Structure Board timer rows for this POS's fuel + strontium state.
+     *
+     * One row per sub-event per POS (dedup via source_reference):
+     *   - "pos-fuel:{starbase_id}"      for fuel/charter timing
+     *   - "pos-strontium:{starbase_id}" for strontium timing
+     *
+     * Rows evolve in place across status transitions; soft-dismissed on
+     * recovery to 'good'.
+     */
+    private function upsertPosBoardTimers($history, $fuelCriticalDays, $fuelWarningDays, $strontiumCriticalHours, $strontiumWarningHours, $charterCriticalDays): void
+    {
+        $fuelStatus = $this->determineFuelStatus($history, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays);
+        $strStatus  = $this->determineStrontiumStatus($history, $strontiumCriticalHours, $strontiumWarningHours);
+
+        $ownerName = DB::table('corporation_infos')
+            ->where('corporation_id', $history->corporation_id)
+            ->value('name');
+
+        $systemName = $history->metadata['system_name'] ?? null;
+
+        // --- Fuel/charter row ---
+        $fuelEventType = $fuelStatus === 'critical' ? 'fuel_critical'
+            : ($fuelStatus === 'warning' ? 'fuel_warning' : null);
+
+        // When does the POS actually go offline?
+        $actualDays = $history->actual_days_remaining ?? $history->fuel_days_remaining ?? 0;
+        $fuelExpires = Carbon::now()->addHours(max(0, $actualDays * 24));
+
+        if ($fuelEventType === null) {
+            Timer::where('source_reference', "pos-fuel:{$history->starbase_id}")
+                ->whereNull('dismissed_at')
+                ->update(['dismissed_at' => Carbon::now()]);
+        } else {
+            Timer::upsertAuto([
+                'source'                 => 'auto_fuel',
+                'event_type'             => $actualDays * 24 <= 1 ? 'fuel_final' : $fuelEventType,
+                'severity'               => $fuelStatus === 'critical' ? 'critical' : 'warning',
+                'structure_id'           => $history->starbase_id,
+                'structure_name'         => $history->starbase_name ?? 'Unnamed POS',
+                'structure_type'         => $history->metadata['tower_type'] ?? 'Control Tower',
+                'system_name'            => $systemName,
+                'corporation_id'         => $history->corporation_id,
+                'owner_corporation_name' => $ownerName,
+                'eve_time'               => $fuelExpires,
+                'source_reference'       => "pos-fuel:{$history->starbase_id}",
+                'dismissed_at'           => null,
+            ]);
+        }
+
+        // --- Strontium row ---
+        $strEventType = $strStatus === 'critical' ? 'fuel_critical'
+            : ($strStatus === 'warning' ? 'fuel_warning' : null);
+
+        $strHoursRemaining = $history->strontium_hours_available ?? 0;
+        $strExpires = Carbon::now()->addHours(max(0, $strHoursRemaining));
+
+        if ($strEventType === null) {
+            Timer::where('source_reference', "pos-strontium:{$history->starbase_id}")
+                ->whereNull('dismissed_at')
+                ->update(['dismissed_at' => Carbon::now()]);
+        } else {
+            Timer::upsertAuto([
+                'source'                 => 'auto_fuel',
+                'event_type'             => ($strHoursRemaining > 0 && $strHoursRemaining <= 0.5) ? 'fuel_final' : $strEventType,
+                'severity'               => $strStatus === 'critical' ? 'critical' : 'warning',
+                'structure_id'           => $history->starbase_id,
+                'structure_name'         => ($history->starbase_name ?? 'Unnamed POS') . ' — Strontium',
+                'structure_type'         => $history->metadata['tower_type'] ?? 'Control Tower',
+                'system_name'            => $systemName,
+                'corporation_id'         => $history->corporation_id,
+                'owner_corporation_name' => $ownerName,
+                'eve_time'               => $strExpires,
+                'source_reference'       => "pos-strontium:{$history->starbase_id}",
+                'dismissed_at'           => null,
+            ]);
+        }
     }
 
     /**
