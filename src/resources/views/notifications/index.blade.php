@@ -396,7 +396,8 @@
         </div>
         <div class="notif-section-desc">
             Destinations that receive category notifications. Add or remove webhooks from the
-            <a href="{{ route('structure-manager.settings') }}#tab-webhooks">Settings page</a>.
+            <a href="{{ route('structure-manager.settings') }}#webhooks"><strong>Webhook Configuration</strong></a>
+            tab in Settings (first tab on that page).
             The legacy <code>role_mention</code> column on each webhook is still honored as a final
             fallback when neither the category nor the binding supplies one.
         </div>

@@ -619,7 +619,12 @@
         <!-- Tabs Navigation -->
         <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
             <li class="nav-item">
-                <a class="nav-link active" id="pos-tab" data-toggle="tab" href="#pos" role="tab">
+                <a class="nav-link active" id="webhooks-tab" data-toggle="tab" href="#webhooks" role="tab">
+                    <i class="fas fa-plug"></i> Webhook Configuration
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="pos-tab" data-toggle="tab" href="#pos" role="tab">
                     <i class="fas fa-broadcast-tower"></i> POS Settings
                 </a>
             </li>
@@ -642,27 +647,32 @@
         
         <!-- Tabs Content -->
         <div class="tab-content" id="settingsTabContent">
-            
-            <!-- POS Settings Tab -->
-            <div class="tab-pane fade show active" id="pos" role="tabpanel">
+
+            <!-- Webhook Configuration Tab (NEW — shared across POS/Upwell/Events) -->
+            <div class="tab-pane fade show active" id="webhooks" role="tabpanel">
                 <div class="tab-description">
                     <p>
                         <i class="fas fa-info-circle"></i>
-                        Configure settings for Player Owned Starbases (Control Towers). These settings control notifications, 
-                        alert thresholds, and monitoring for legacy POS structures.
+                        Central webhook registry. Add as many Discord or Slack webhook destinations as you need.
+                        Each webhook is a <strong>delivery endpoint</strong> — where notifications are sent.
+                        <strong>What</strong> gets sent to which webhook is controlled on the
+                        <a href="{{ route('structure-manager.notifications.index') }}">Notifications page</a>,
+                        where notification categories (POS Fuel, Structure Under Attack, Upwell Fuel, etc.) are bound to
+                        specific webhooks with optional per-binding role mention overrides.
                     </p>
                 </div>
-                
-                <!-- POS Notification Webhooks Section -->
+
                 <div class="settings-section">
-                    <h4><i class="fas fa-bell"></i> POS Notification Webhooks</h4>
-                    
+                    <h4><i class="fas fa-plug"></i> Configured Webhooks</h4>
+
                     <div class="info-banner">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Multiple Webhooks:</strong> Configure up to 10 Discord or Slack webhooks with optional corporation filtering. 
-                        Notifications will be sent to all enabled webhooks that match the corporation filter.
+                        <strong>Shared delivery endpoints:</strong> These webhooks serve every notification category in Structure Manager —
+                        POS fuel/strontium/lifecycle alerts, Upwell fuel alerts, and ESI-driven structure events (attacks, anchoring, etc.).
+                        Corporation filter scopes a webhook to a single corp (or leave as "All Corporations" for cross-corp delivery).
+                        Role mention on a webhook row is a <em>legacy fallback</em> — prefer setting role mentions per notification category on the Notifications page.
                     </div>
-                    
+
                     <!-- Existing Webhooks List -->
                     @if($webhooks->count() > 0)
                     <div class="webhook-list mb-4">
@@ -673,10 +683,7 @@
                                     <span class="webhook-status {{ $webhook->enabled ? 'enabled' : 'disabled' }}">
                                         <i class="fas fa-circle"></i>
                                     </span>
-                                    <strong>Webhook #{{ $loop->iteration }}</strong>
-                                    @if($webhook->description)
-                                        <span class="text-muted">- {{ $webhook->description }}</span>
-                                    @endif
+                                    <strong>{{ $webhook->description ?: 'Webhook #' . $webhook->id }}</strong>
                                 </div>
                                 <div class="webhook-actions">
                                     <button type="button" class="btn btn-sm btn-info" onclick="testWebhook({{ $webhook->id }})">
@@ -690,7 +697,7 @@
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <div class="webhook-details">
                                 <div class="row">
                                     <div class="col-md-12 mb-2">
@@ -702,11 +709,12 @@
                                         <strong>{{ $webhook->getCorporationLabel() }}</strong>
                                     </div>
                                     <div class="col-md-6">
-                                        <small class="text-muted">Role Mention:</small>
+                                        <small class="text-muted">Legacy Role Mention:</small>
                                         @if($webhook->role_mention)
                                             <code>{{ $webhook->role_mention }}</code>
+                                            <span class="text-muted" style="font-size:0.78rem;"> (fallback — prefer category-level)</span>
                                         @else
-                                            <span class="text-muted">None</span>
+                                            <span class="text-muted">None — uses category-level role from Notifications page</span>
                                         @endif
                                     </div>
                                 </div>
@@ -720,18 +728,45 @@
                         No webhooks configured. Add at least one webhook to receive notifications.
                     </div>
                     @endif
-                    
-                    <!-- Add New Webhook Button -->
-                    @if($webhooks->count() < 10)
+
+                    <!-- Add New Webhook Button — no artificial cap, admins decide -->
                     <button type="button" class="btn btn-success" onclick="showAddWebhookModal()">
-                        <i class="fas fa-plus"></i> Add Webhook ({{ $webhooks->count() }}/10)
+                        <i class="fas fa-plus"></i> Add Webhook ({{ $webhooks->count() }} configured)
                     </button>
-                    @else
-                    <div class="alert alert-info">
+                </div>
+
+                <div class="settings-section">
+                    <h4><i class="fas fa-arrow-right"></i> Next Step: Route Categories to Webhooks</h4>
+                    <p>
+                        After adding a webhook, go to the <a href="{{ route('structure-manager.notifications.index') }}"><strong>Notifications page</strong></a>
+                        to bind notification categories (POS Fuel, Structure Under Attack, etc.) to this webhook. That\'s where the master toggle, role
+                        mention, and per-binding role overrides live.
+                    </p>
+                </div>
+            </div>
+
+            <!-- POS Settings Tab -->
+            <div class="tab-pane fade" id="pos" role="tabpanel">
+                <div class="tab-description">
+                    <p>
                         <i class="fas fa-info-circle"></i>
-                        Maximum of 10 webhooks reached.
+                        Configure settings for Player Owned Starbases (Control Towers). These settings control notifications,
+                        alert thresholds, and monitoring for legacy POS structures.
+                    </p>
+                </div>
+
+                <!-- POS Webhooks: Pointer to the dedicated Webhook Configuration tab -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-bell"></i> POS Notification Webhooks</h4>
+
+                    <div class="info-banner" style="border-left:4px solid #3498db;">
+                        <i class="fas fa-arrow-left"></i>
+                        <strong>Moved:</strong> Webhooks are now managed on the
+                        <a href="#webhooks" data-toggle="tab" onclick="document.getElementById('webhooks-tab').click(); return false;"><strong>Webhook Configuration</strong></a>
+                        tab (first tab on this page). They\'re shared across POS, Upwell, and Structure Events — no longer POS-specific.
+                        Choose <em>which</em> categories hit which webhooks on the
+                        <a href="{{ route('structure-manager.notifications.index') }}"><strong>Notifications page</strong></a>.
                     </div>
-                    @endif
                 </div>
 
                 <!-- Additional Notification Settings -->
@@ -1130,9 +1165,10 @@
 
                     <div class="info-banner">
                         <i class="fas fa-link"></i>
-                        <strong>Shared webhooks:</strong> Upwell notifications use the same webhooks configured in the
-                        <strong>POS Notifications</strong> tab. Each webhook's corporation filter and role mention settings
-                        apply to both POS and Upwell alerts automatically.
+                        <strong>Shared webhooks:</strong> Upwell notifications use the same webhooks configured on the
+                        <a href="#webhooks" data-toggle="tab" onclick="document.getElementById('webhooks-tab').click(); return false;"><strong>Webhook Configuration</strong></a>
+                        tab. Bind the <code>upwell.fuel</code> / <code>upwell.magmatic_gas</code> categories to those webhooks on the
+                        <a href="{{ route('structure-manager.notifications.index') }}"><strong>Notifications page</strong></a>.
                     </div>
                 </div>
 
@@ -1228,9 +1264,11 @@
 
                 <div class="info-banner">
                     <i class="fas fa-link"></i>
-                    <strong>Shared webhooks:</strong> Structure event notifications use the same webhooks configured in the
-                    <strong>POS Notifications</strong> tab. Each webhook's corporation filter applies. Attack alerts use
-                    the dedicated role mention above (if set), otherwise fall back to each webhook's own role mention.
+                    <strong>Shared webhooks:</strong> Structure event notifications use the same webhooks configured on the
+                    <a href="#webhooks" data-toggle="tab" onclick="document.getElementById('webhooks-tab').click(); return false;"><strong>Webhook Configuration</strong></a>
+                    tab. Bind the <code>events.*</code> categories to those webhooks on the
+                    <a href="{{ route('structure-manager.notifications.index') }}"><strong>Notifications page</strong></a>,
+                    where per-category role mentions override any legacy webhook role.
                 </div>
             </div>
 

@@ -187,14 +187,11 @@ class SettingsController extends Controller
                 'role_mention' => 'nullable|string|max:100',
             ]);
             
-            // Check webhook limit
-            $webhookCount = WebhookConfiguration::count();
-            if ($webhookCount >= 10) {
-                return redirect()
-                    ->back()
-                    ->with('error', 'Maximum of 10 webhooks allowed');
-            }
-            
+            // No artificial cap — admins decide how many webhooks they need.
+            // Each webhook is a cheap DB row; the cost is in the delivery side
+            // (Discord/Slack rate limits), which is addressed by category binding
+            // on the Notifications page so only relevant categories hit each webhook.
+
             // Validate webhook URL format
             if (!WebhookConfiguration::isValidWebhookUrl($request->webhook_url)) {
                 return redirect()
