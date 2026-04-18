@@ -748,12 +748,10 @@ class DiagnosticController extends Controller
             ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), fuel_expires) BETWEEN ? AND ?', [$criticalDays * 24, $warningDays * 24])
             ->count();
 
-        // Stuck latches: latch set true but structure is above warning threshold
-        $stuckLatches = StructureNotificationStatus::where('fuel_final_alert_sent', true)
-            ->whereHas(null) // can't use relationship here, just count via join
-            ->count();
-
-        // More accurate: join to find stuck latches
+        // Stuck latches: latch set true but structure is above warning threshold.
+        // Computed via a direct join (StructureNotificationStatus doesn't have
+        // a Laravel relation to corporation_structures — the IDs share the
+        // same structure_id column but there's no defined belongsTo).
         $stuckLatches = DB::table('structure_notification_status as sns')
             ->join('corporation_structures as cs', 'sns.structure_id', '=', 'cs.structure_id')
             ->where('sns.fuel_final_alert_sent', true)

@@ -153,9 +153,13 @@
         font-size: 1.1rem;
     }
     
-    /* Callout boxes — ported from Mining Manager's pattern so icons render
-       in their box's accent color and content flows beside the icon via flex,
-       instead of the icon inheriting text color and content wrapping under it. */
+    /* Callout boxes — matches Mining Manager's pattern exactly: flex with
+       wrap, accent-colored icons, no forced flex-grow on children. This
+       lets the 'icon + <strong>Label:</strong> text...' pattern render as
+       three side-by-side auto-sized flex items that wrap naturally.
+
+       DO NOT add `flex: 1 1 0` on children — it stretches <strong> to the
+       full remaining width and pushes the trailing text to a wrapped row. */
     .info-box,
     .warning-box,
     .success-box,
@@ -190,17 +194,6 @@
     .warning-box > i { color: #ffc107; }
     .success-box > i { color: #1cc88a; }
     .purple-box > i  { color: #9c27b0; }
-
-    /* Give the remaining content a flexible width so tables/pre blocks
-       inside the box use the full horizontal space rather than squeezing
-       into the implicit shrink-to-fit sibling of the icon. */
-    .info-box > *:not(i),
-    .warning-box > *:not(i),
-    .success-box > *:not(i),
-    .purple-box > *:not(i) {
-        flex: 1 1 0;
-        min-width: 0;
-    }
 
     .info-box strong,
     .warning-box strong,
