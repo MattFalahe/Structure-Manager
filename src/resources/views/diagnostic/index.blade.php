@@ -6,6 +6,59 @@
 @push('head')
 <link rel="stylesheet" href="{{ asset('vendor/structure-manager/css/structure-manager.css') }}">
 <style>
+/* Diagnostic page tabs */
+.structure-manager-wrapper.diagnostic-page .diag-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #454d55;
+    margin: 1.5rem 0 1.5rem 0;
+    padding: 0;
+    list-style: none;
+    flex-wrap: wrap;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab {
+    padding: 0.6rem 1.2rem;
+    color: #8b95a5;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab:hover {
+    color: #c2c7d0;
+    border-bottom-color: #3a4049;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab.active {
+    color: #17a2b8;
+    border-bottom-color: #17a2b8;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab.danger.active {
+    color: #e57373;
+    border-bottom-color: #e57373;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab .diag-tab-count {
+    font-size: 0.72rem;
+    background: #454d55;
+    color: #c2c7d0;
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab.active .diag-tab-count {
+    background: rgba(23, 162, 184, 0.25);
+    color: #17a2b8;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab-pane {
+    display: none;
+}
+.structure-manager-wrapper.diagnostic-page .diag-tab-pane.active {
+    display: block;
+}
+
 .structure-manager-wrapper.diagnostic-page .diag-section {
     background: #2a2f3a;
     border: 1px solid #454d55;
@@ -184,6 +237,26 @@
         </p>
     </div>
 
+    {{-- Diagnostic tab navigation --}}
+    <ul class="diag-tabs" role="tablist">
+        <li class="diag-tab active" data-diag-target="health">
+            <i class="fas fa-heartbeat"></i> Health Checks
+        </li>
+        <li class="diag-tab" data-diag-target="type-ids">
+            <i class="fas fa-database"></i> Type IDs (SDE)
+        </li>
+        <li class="diag-tab" data-diag-target="notification-testing">
+            <i class="fas fa-paper-plane"></i> Notification Testing
+        </li>
+        <li class="diag-tab danger" data-diag-target="test-data">
+            <i class="fas fa-flask"></i> Test Data
+            <span class="diag-tab-count">DEV</span>
+        </li>
+    </ul>
+
+    {{-- ============ HEALTH CHECKS TAB ============ --}}
+    <div class="diag-tab-pane active" data-diag-pane="health">
+
     {{-- =================== CHECK: Environment =================== --}}
     @php $c = $checks['environment']; @endphp
     <div class="diag-section">
@@ -263,6 +336,11 @@
         </div>
     </div>
 
+    {{-- Close HEALTH tab pane (Type IDs moves to its own tab below) --}}
+    </div>
+    {{-- ============ TYPE IDs (SDE) TAB ============ --}}
+    <div class="diag-tab-pane" data-diag-pane="type-ids">
+
     {{-- =================== CHECK: Type IDs (headline check) =================== --}}
     @php $c = $checks['type_ids']; @endphp
     <div class="diag-section">
@@ -316,6 +394,13 @@
             @endforeach
         </div>
     </div>
+
+    {{-- Close TYPE-IDS tab pane, reopen HEALTH tab pane (continuation).
+         The JS tab switcher toggles EVERY pane with data-diag-pane="health"
+         as a group, so the two health panes before/after Type IDs behave
+         as one logical tab. --}}
+    </div>
+    <div class="diag-tab-pane" data-diag-pane="health" style="display:none;">
 
     {{-- =================== CHECK: Schedules =================== --}}
     @php $c = $checks['schedules']; @endphp
@@ -548,6 +633,11 @@
         </div>
     </div>
 
+    {{-- Close HEALTH tab pane (second/continuation pane) --}}
+    </div>
+    {{-- ============ NOTIFICATION TESTING TAB ============ --}}
+    <div class="diag-tab-pane" data-diag-pane="notification-testing">
+
     {{-- =================================================================== --}}
     {{-- NOTIFICATION TESTING                                                 --}}
     {{-- =================================================================== --}}
@@ -656,6 +746,11 @@
             </div>
         </div>
     </div>
+
+    {{-- Close NOTIFICATION TESTING tab pane --}}
+    </div>
+    {{-- ============ TEST DATA TAB ============ --}}
+    <div class="diag-tab-pane" data-diag-pane="test-data">
 
     {{-- =================================================================== --}}
     {{-- DEV-ONLY DANGER ZONE: test data generation                           --}}
@@ -772,5 +867,54 @@
         </div>
     </div>
 
+    {{-- Close TEST DATA tab pane --}}
+    </div>
+
 </div>
+
+@push('javascript')
+<script>
+(function ($) {
+    'use strict';
+
+    const STORAGE_KEY = 'sm_diag_active_tab';
+    const $tabs  = $('.diag-tab');
+    const $panes = $('.diag-tab-pane');
+
+    function setActive(target) {
+        $tabs.removeClass('active');
+        $tabs.filter('[data-diag-target="' + target + '"]').addClass('active');
+
+        // Hide every pane first, then show every pane matching the target.
+        // The health tab has TWO panes (split around Type IDs) that should
+        // both show when active.
+        $panes.removeClass('active').hide();
+        $panes.filter('[data-diag-pane="' + target + '"]').addClass('active').show();
+
+        try {
+            localStorage.setItem(STORAGE_KEY, target);
+        } catch (e) {}
+    }
+
+    $tabs.on('click', function () {
+        const target = $(this).data('diag-target');
+        if (target) setActive(target);
+    });
+
+    // Restore last-active tab on page load
+    let saved = null;
+    try {
+        saved = localStorage.getItem(STORAGE_KEY);
+    } catch (e) {}
+
+    const validTargets = $tabs.map(function () { return $(this).data('diag-target'); }).get();
+    if (saved && validTargets.includes(saved)) {
+        setActive(saved);
+    } else {
+        setActive('health');
+    }
+})(jQuery);
+</script>
+@endpush
+
 @endsection
