@@ -50,8 +50,13 @@ class NotifyPosLowFuel implements ShouldQueue
     /**
      * Max seconds the job is allowed to run before the worker kills it.
      * Webhook POSTs are bounded separately via Http::timeout below.
+     *
+     * MUST be less than queue.connections.redis.retry_after (960s default
+     * in SeAT) — otherwise the queue worker reclaims the job and runs it
+     * again in parallel, causing duplicate webhook dispatches. 600s gives
+     * comfortable headroom for slow ESI + multi-corp SeAT installs.
      */
-    public $timeout = 300;
+    public $timeout = 600;
 
     /**
      * How many times the job is retried if it throws.

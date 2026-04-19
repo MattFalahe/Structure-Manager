@@ -3,6 +3,7 @@
 namespace StructureManager\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use StructureManager\Models\NotificationCategory;
 use StructureManager\Models\WebhookConfiguration;
 
@@ -114,7 +115,10 @@ class WebhookDispatcher
             return ["<@&{$mention}> ", ['parse' => [], 'users' => [], 'roles' => [$mention]]];
         }
 
-        // Unrecognized format — don't mention anything, return empty prefix to avoid abuse
+        // Unrecognized format — drop silently to prevent XSS / crafted-payload
+        // injection, but log so admins can see why their role mention isn't
+        // firing (would otherwise be a very confusing debugging experience).
+        Log::warning('StructureManager\\WebhookDispatcher: dropping malformed role mention string "' . $mention . '". Expected <@&ROLE_ID>, <@USER_ID>, or numeric role ID.');
         return ['', $allowedMentions];
     }
 }

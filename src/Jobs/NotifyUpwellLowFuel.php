@@ -41,7 +41,11 @@ class NotifyUpwellLowFuel implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
 
-    public $timeout = 300;
+    // $timeout must be LESS than queue.connections.redis.retry_after (960s
+    // default in SeAT) to avoid the worker killing the job while Laravel
+    // still considers it in-flight — which would cause duplicate webhooks
+    // on retry. 600s gives headroom for slow ESI + hundreds of structures.
+    public $timeout = 600;
     public $tries = 3;
     public $backoff = [60, 300, 900];
 

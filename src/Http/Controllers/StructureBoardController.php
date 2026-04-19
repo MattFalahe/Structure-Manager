@@ -157,8 +157,24 @@ class StructureBoardController extends Controller
             }
         }
 
-        // Determine visibility corps from scope
-        $corpIds = $this->resolveVisibilityCorps($data['visibility_scope'], $data['specific_corp_id'] ?? null, $user, $isBoardAdmin);
+        // Determine visibility corps from scope — with privilege enforcement.
+        // Non-admins may ONLY scope to their own corps; global broadcast and
+        // targeting arbitrary corps are admin-only to prevent a user with
+        // command-board.create from creating timers visible to corps they
+        // have no character in.
+        $corpIds = $this->resolveVisibilityCorps(
+            $data['visibility_scope'],
+            $data['specific_corp_id'] ?? null,
+            $user,
+            $isBoardAdmin
+        );
+
+        if ($corpIds === null) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', 'You are not permitted to scope a timer to that corporation or to all corps. Pick one of your own corps or ask an admin.');
+        }
 
         $baseAttrs = [
             'source'                    => $data['event_type'] === 'hostile_op' ? 'manual_offense' : 'manual_defense',
@@ -273,26 +289,66 @@ class StructureBoardController extends Controller
 
     /**
      * Resolve which corp_ids a new manual-op timer should be created for,
-     * based on the admin's chosen visibility scope.
+     * based on the chosen visibility scope.
      *
-     * @return array<int> of corp_ids, or [null] for global
+     * Privilege rules:
+     *   - 'global'       — admin only (creates a null-corp broadcast)
+     *   - 'specific'     — admin may target any corp; non-admin must target
+     *                      a corp they have a character in
+     *   - 'all_my_corps' — any user; fans out to their own corp memberships
+     *   - 'my_corp'      — any user; targets their main corp
+     *
+     * @return array<int|null>|null array of corp_ids (null = global) if the
+     *                              scope is permitted; returns null if the
+     *                              caller is not authorized for the chosen
+     *                              scope (caller should redirect with error)
      */
-    private function resolveVisibilityCorps(string $scope, ?int $specificCorpId, $user, bool $isAdmin): array
+    private function resolveVisibilityCorps(string $scope, ?int $specificCorpId, $user, bool $isAdmin): ?array
     {
         $userCorps = Timer::getUserCorpIds($user);
 
-        return match ($scope) {
-            'global'       => [null],
-            'all_my_corps' => !empty($userCorps) ? $userCorps : [null],
-            'specific'     => $specificCorpId !== null ? [$specificCorpId] : [null],
-            'my_corp'      => [$this->mainCorpId($user) ?? ($userCorps[0] ?? null)],
-            default        => [$userCorps[0] ?? null],
-        };
+        switch ($scope) {
+            case 'global':
+                // Only admins can broadcast to all corps on the SeAT install
+                return $isAdmin ? [null] : null;
+
+            case 'specific':
+                if ($specificCorpId === null) {
+                    return null;
+                }
+                // Admins can target any corp
+                if ($isAdmin) {
+                    return [$specificCorpId];
+                }
+                // Non-admins must target a corp they belong to
+                return in_array($specificCorpId, $userCorps, true)
+                    ? [$specificCorpId]
+                    : null;
+
+            case 'all_my_corps':
+                return !empty($userCorps) ? $userCorps : [null];
+
+            case 'my_corp':
+                $main = $this->mainCorpId($user) ?? ($userCorps[0] ?? null);
+                // If user has no corp affiliation at all, refuse rather than
+                // silently defaulting to null (= global)
+                return $main !== null ? [$main] : null;
+
+            default:
+                return null;
+        }
     }
 
     /**
      * Resolve the user's "main" corp ID — prefers main_character_id's corp,
-     * else the first corp from their refresh tokens.
+     * else the first corp from their refresh tokens. Returns null if the
+     * user has no resolvable corp affiliation at all (e.g. only deleted
+     * characters, or main_character_id points at a row that no longer
+     * exists in character_affiliations).
+     *
+     * Callers must handle null — resolveVisibilityCorps rejects 'my_corp'
+     * scope when this returns null rather than silently creating a global
+     * (null-corp) timer.
      */
     private function mainCorpId($user): ?int
     {
@@ -304,6 +360,8 @@ class StructureBoardController extends Controller
                 return (int) $corpId;
             }
         }
-        return null;
+        // Fallback: first corp from user's refresh tokens
+        $first = Timer::getUserCorpIds($user);
+        return !empty($first) ? (int) $first[0] : null;
     }
 }
