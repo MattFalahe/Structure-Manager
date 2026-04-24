@@ -3,7 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Seat\Services\Models\Schedule;
 
-return new class extends Migration
+class AddStructureManagerSchedules extends Migration
 {
     /**
      * Run the migrations.
@@ -52,4 +52,4 @@ return new class extends Migration
         Schedule::where('command', 'structure-manager:cleanup-history')->delete();
         Schedule::where('command', 'structure-manager:analyze-consumption')->delete();
     }
-};
+}

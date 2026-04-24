@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
 // structure-related notification the plugin has seen (from either fast-poll
 // or SeAT fallback), deduplicates by CCP's unique notification_id, and
 // tracks whether a webhook dispatch has been sent.
-return new class extends Migration
+class CreateStructureManagerEsiNotificationsTable extends Migration
 {
     public function up()
     {
@@ -54,4 +54,4 @@ return new class extends Migration
     {
         Schema::dropIfExists('structure_manager_esi_notifications');
     }
-};
+}

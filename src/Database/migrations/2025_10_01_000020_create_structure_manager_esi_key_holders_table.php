@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 // job round-robins through enabled key holders, skipping any with expired
 // tokens or recent failures. The more characters in the pool, the faster
 // detection AND the more fault-tolerant the system.
-return new class extends Migration
+class CreateStructureManagerEsiKeyHoldersTable extends Migration
 {
     public function up()
     {
@@ -49,4 +49,4 @@ return new class extends Migration
     {
         Schema::dropIfExists('structure_manager_esi_key_holders');
     }
-};
+}

@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Schema;
  *   create duplicate fuel_warning entries for the same structure at the
  *   same threshold-crossing moment.
  */
-return new class extends Migration {
+class CreateStructureManagerTimersTable extends Migration {
     public function up(): void
     {
         Schema::create('structure_manager_timers', function (Blueprint $table) {
@@ -103,4 +103,4 @@ return new class extends Migration {
     {
         Schema::dropIfExists('structure_manager_timers');
     }
-};
+}

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 // stores one row per fueled structure. This design is immune to history
 // cleanup/pruning and avoids the latch-propagation fragility that caused
 // bugs in the POS notification flow.
-return new class extends Migration
+class CreateStructureNotificationStatusTable extends Migration
 {
     public function up()
     {
@@ -46,4 +46,4 @@ return new class extends Migration
     {
         Schema::dropIfExists('structure_notification_status');
     }
-};
+}

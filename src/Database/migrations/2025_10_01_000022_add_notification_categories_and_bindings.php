@@ -34,7 +34,7 @@ use Illuminate\Support\Facades\Schema;
  *    3. webhook.role_mention (legacy fallback)
  *    4. no mention
  */
-return new class extends Migration {
+class AddNotificationCategoriesAndBindings extends Migration {
     public function up(): void
     {
         // --- 1. Categories table ---
@@ -159,4 +159,4 @@ return new class extends Migration {
         Schema::dropIfExists('structure_manager_category_webhook');
         Schema::dropIfExists('structure_manager_notification_categories');
     }
-};
+}

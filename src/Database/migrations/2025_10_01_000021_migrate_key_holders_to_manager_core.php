@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
  * Manager Core, their historical data is still there (though SM v3.1 will no
  * longer use it — there is no rollback path back to SM-local polling).
  */
-return new class extends Migration {
+class MigrateKeyHoldersToManagerCore extends Migration {
     public function up(): void
     {
         if (!Schema::hasTable('manager_core_esi_key_holders')) {
@@ -73,4 +73,4 @@ return new class extends Migration {
         // Not reversible — copied rows would need a source marker to unwind cleanly,
         // and we explicitly avoid tracking that so the admin's edits in MC survive.
     }
-};
+}
