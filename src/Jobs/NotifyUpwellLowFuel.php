@@ -197,7 +197,90 @@ class NotifyUpwellLowFuel implements ShouldQueue
         }
         $status->save();
 
+        // Cross-plugin: publish a `structure.alert.fuel_critical` event
+        // through Manager Core's EventBus when this is a refinery with an
+        // active moon extraction. Mining Manager subscribes and fires its
+        // own extraction_at_risk notification (dedicated channel, mining-
+        // domain embed, capital-safety language). No-op if MC is missing
+        // or the refinery isn't mining right now.
+        $this->publishRefineryAtRiskEvent($structure, $fuelData, $currentStatus);
+
         return $sent;
+    }
+
+    /**
+     * Publish a `structure.alert.fuel_critical` event on Manager Core's
+     * EventBus when:
+     *   - structure is an Athanor (35835) or Tatara (35836)
+     *   - current fuel status is 'critical'
+     *   - an active moon extraction exists (Mining Manager owns this check)
+     *   - Manager Core is installed (EventBus class exists)
+     *
+     * Mining Manager subscribes to the `structure.alert.*` wildcard and
+     * filters this into its extraction_at_risk notification pipeline.
+     *
+     * This is the FIRST piece of SM's future `structure.alert.*` family —
+     * shield_reinforced, armor_reinforced, hull_reinforced, destroyed
+     * will follow. See memory doc
+     * project_structure_manager_destruction_detection.md for the full design.
+     *
+     * @pending-sm-work Extend with shield/armor/hull/destroyed event flavors
+     *                  in a future SM session. Mining Manager is already
+     *                  subscribed to the wildcard pattern, so adding more
+     *                  publish calls from SM automatically activates them.
+     *
+     * @param object $structure
+     * @param array  $fuelData
+     * @param string $currentStatus
+     * @return void
+     */
+    private function publishRefineryAtRiskEvent($structure, array $fuelData, string $currentStatus): void
+    {
+        // Refinery check — Athanor 35835, Tatara 35836
+        if (!in_array((int) $structure->type_id, [35835, 35836], true)) {
+            return;
+        }
+
+        // Only fire on the critical transition — warning is too noisy
+        if ($currentStatus !== 'critical') {
+            return;
+        }
+
+        // MC not installed — nothing to publish to
+        if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
+            return;
+        }
+
+        // MM-owned check — is this refinery actually mining right now?
+        // If not, SM's existing low-fuel webhook already covers the
+        // operator; no need to also spam MM's mining-specific channel.
+        if (!FuelCalculator::hasActiveMoonExtraction((int) $structure->structure_id)) {
+            return;
+        }
+
+        try {
+            app(\ManagerCore\Services\EventBus::class)->publish(
+                'structure.alert.fuel_critical',
+                'structure-manager',
+                [
+                    'structure_id'    => (int) $structure->structure_id,
+                    'corporation_id'  => (int) $structure->corporation_id,
+                    'type_id'         => (int) $structure->type_id,
+                    'structure_name'  => $fuelData['structure_name'] ?? null,
+                    'system_name'     => $fuelData['system_name'] ?? null,
+                    'system_security' => $fuelData['system_security'] ?? null,
+                    'days_remaining'  => (float) ($fuelData['days_remaining'] ?? 0),
+                    'hours_remaining' => (float) ($fuelData['hours_remaining'] ?? 0),
+                    'fuel_expires'    => $fuelData['fuel_expires'] ?? null,
+                    'hourly_rate'     => (float) ($fuelData['hourly_rate'] ?? 0),
+                    'severity'        => $currentStatus,
+                ]
+            );
+
+            Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_critical for refinery {$structure->structure_id} (active extraction + critical fuel)");
+        } catch (\Throwable $e) {
+            Log::warning("NotifyUpwellLowFuel: refinery_at_risk event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
+        }
     }
 
     /**

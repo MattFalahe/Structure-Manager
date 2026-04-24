@@ -556,6 +556,74 @@ class FuelCalculator
     }
     
     /**
+     * =========================================================================
+     * CROSS-PLUGIN INTEGRATION (Manager Core + Mining Manager)
+     * =========================================================================
+     * Added 2026-04-24 to support Mining Manager's extraction_at_risk
+     * notification — MM subscribes to `structure.alert.*` events on MC's
+     * EventBus and uses this helper to confirm the alerting refinery has
+     * an active moon extraction worth warning about.
+     *
+     * @pending-sm-work  This is the FIRST piece of a larger cross-plugin
+     *                   integration. Next pieces (same plugin):
+     *
+     *   1. ✅ hasActiveMoonExtraction() helper — this method (ships now)
+     *   2. ✅ structure.alert.fuel_critical publish from NotifyUpwellLowFuel
+     *          (see publishRefineryAtRiskEvent() in that Job)
+     *   3. ⏳ Progressive combat events: structure.alert.shield_reinforced,
+     *          structure.alert.armor_reinforced, structure.alert.hull_reinforced
+     *          — scan character_notifications for StructureLostShields /
+     *          StructureLostArmor / StructureUnderAttack types.
+     *   4. ⏳ structure.alert.destroyed — requires disappearance-detection
+     *          tracking table + StructureDestroyed notification scan.
+     *          Full design in memory:
+     *          project_structure_manager_destruction_detection.md
+     *
+     * Mining Manager already subscribes to the full `structure.alert.*`
+     * wildcard pattern, so every new flavor published from SM starts
+     * working on MM's side with no MM-side changes.
+     * =========================================================================
+     */
+
+    /**
+     * Check if a refinery (Athanor/Tatara) has an active moon extraction
+     * running right now. Used by NotifyUpwellLowFuel to scope the
+     * `structure.alert.fuel_critical` event to refineries where a low-fuel
+     * state has real operational consequences beyond "structure goes
+     * offline" — a lost chunk is material ISK.
+     *
+     * Returns false (and does NOT throw) when Mining Manager isn't
+     * installed, so Structure Manager can call this unconditionally
+     * without class_exists guards at every callsite.
+     *
+     * @param int $structureId
+     * @return bool
+     */
+    public static function hasActiveMoonExtraction(int $structureId): bool
+    {
+        // Mining Manager not installed — safe no-op
+        if (!class_exists('MiningManager\\Models\\MoonExtraction')) {
+            return false;
+        }
+
+        try {
+            return \MiningManager\Models\MoonExtraction::query()
+                ->where('structure_id', $structureId)
+                ->whereNotIn('status', ['cancelled', 'expired'])
+                // Plugin lifecycle max ~55h after chunk_arrival. Same window
+                // MM uses internally for "active extraction" queries.
+                ->where('chunk_arrival_time', '>', \Carbon\Carbon::now()->subHours(55))
+                ->exists();
+        } catch (\Throwable $e) {
+            // Defensive — if MM tables aren't yet migrated or the query
+            // blows up for any reason, fall back to "no active extraction"
+            // so we don't surface a false SM error for a transient issue.
+            \Log::debug("[SM] hasActiveMoonExtraction check failed for structure {$structureId}: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Parse fuel notification YAML text (unchanged)
      */
     public static function parseFuelNotification($yamlText)
