@@ -105,6 +105,13 @@ class StructureEventHandler
         // the board should show the event even if no webhook is configured.
         $this->upsertBoardTimer($notification, $category);
 
+        // Publish structure.alert.* event on Manager Core's EventBus for
+        // cross-plugin subscribers (Mining Manager subscribes to the wildcard
+        // and fires extraction_at_risk for moon-mining refineries). No-op if
+        // MC is not installed or this notification type doesn't map to an
+        // alert flavor.
+        $this->publishStructureAlertEvent($notification);
+
         $bindings = WebhookDispatcher::resolveBindings('events', $categoryKey, (int) $notification->corporation_id);
 
         if (empty($bindings)) {
@@ -228,6 +235,120 @@ class StructureEventHandler
                 => 'auto_unanchor',
             default => 'auto_reinforce',
         };
+    }
+
+    /**
+     * Publish a structure.alert.* event on Manager Core's EventBus when the
+     * incoming notification represents an actionable threat. Cross-plugin
+     * subscribers (Mining Manager fires extraction_at_risk; future plugins
+     * can subscribe similarly) react to these.
+     *
+     * Mapping (matches the contract in
+     * project_structure_manager_destruction_detection.md and the existing
+     * NotifyUpwellLowFuel::publishRefineryAtRiskEvent for fuel_critical):
+     *
+     *   StructureLostShields / SkyhookLostShields → structure.alert.shield_reinforced
+     *   StructureLostArmor                        → structure.alert.armor_reinforced
+     *
+     * Other reinforce flavors (hull_reinforced, destroyed) ship in later SM
+     * work — see project_structure_manager_destruction_detection.md.
+     *
+     * No-op if Manager Core is not installed (class_exists guard). No filter
+     * by structure type — SM publishes broadly so future subscribers can use
+     * the signal for their own purposes; subscribers do their own filtering.
+     */
+    private function publishStructureAlertEvent($notification): void
+    {
+        $alertFlavor = match ($notification->type) {
+            'StructureLostShields', 'SkyhookLostShields' => 'shield_reinforced',
+            'StructureLostArmor'                         => 'armor_reinforced',
+            default                                       => null,
+        };
+
+        if ($alertFlavor === null) {
+            return;
+        }
+
+        if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
+            return;
+        }
+
+        $data = $notification->parsed_data ?? [];
+        $meta = $this->resolveStructureMeta($data);
+
+        $structureId = isset($data['structureID']) ? (int) $data['structureID'] : null;
+        if ($structureId === null) {
+            // Without a structure ID downstream subscribers can't act — drop
+            // rather than publish a malformed event
+            return;
+        }
+
+        // Resolve the reinforcement timer end from corporation_structures.
+        // For LostShields the next timer is armor_reinforce; for LostArmor it
+        // is hull_reinforce. Either way state_timer_end on the structure row
+        // is the authoritative end time.
+        $timerEndsAt = null;
+        $typeId = null;
+        $structureRow = DB::table('corporation_structures')
+            ->where('structure_id', $structureId)
+            ->select('state_timer_end', 'type_id')
+            ->first();
+        if ($structureRow) {
+            $timerEndsAt = $structureRow->state_timer_end
+                ? Carbon::parse($structureRow->state_timer_end)->toIso8601String()
+                : null;
+            $typeId = (int) $structureRow->type_id;
+        }
+        // Fallback: type_id from notification YAML if structure row missing
+        if ($typeId === null && isset($data['structureShowInfoData'][1])) {
+            $typeId = (int) $data['structureShowInfoData'][1];
+        }
+
+        // Strip security to a float (resolveStructureMeta formats it for display)
+        $systemSecurity = null;
+        if (isset($data['solarsystemID'])) {
+            $sec = DB::table('mapDenormalize')
+                ->where('itemID', $data['solarsystemID'])
+                ->value('security');
+            if ($sec !== null) {
+                $systemSecurity = (float) $sec;
+            }
+        }
+
+        // Optional attacker info from the notification YAML
+        $attackerCorporation = $data['corpName'] ?? null;
+        $attackerAlliance    = $data['allianceName'] ?? null;
+        $attackerSummary     = $attackerCorporation
+            ? trim($attackerCorporation . ($attackerAlliance ? " ({$attackerAlliance})" : ''))
+            : null;
+
+        $payload = [
+            'structure_id'        => $structureId,
+            'corporation_id'      => (int) $notification->corporation_id,
+            'type_id'             => $typeId,
+            'structure_name'      => $meta['name'],
+            'system_id'           => isset($data['solarsystemID']) ? (int) $data['solarsystemID'] : null,
+            'system_name'         => $meta['system'] ? preg_replace('/\s*\([^)]*\)\s*$/', '', $meta['system']) : null,
+            'system_security'     => $systemSecurity,
+            'timer_ends_at'       => $timerEndsAt,
+            'attacker_summary'    => $attackerSummary,
+            'attacker_corp'       => $attackerCorporation,
+            'attacker_alliance'   => $attackerAlliance,
+            'severity'            => 'critical',
+            'notification_id'     => $notification->notification_id ?? null,
+            'notification_type'   => $notification->type,
+        ];
+
+        try {
+            app(\ManagerCore\Services\EventBus::class)->publish(
+                'structure.alert.' . $alertFlavor,
+                'structure-manager',
+                $payload
+            );
+            Log::info("StructureEventHandler: published structure.alert.{$alertFlavor} for structure {$structureId} (notification #{$notification->notification_id})");
+        } catch (\Throwable $e) {
+            Log::warning("StructureEventHandler: failed to publish structure.alert.{$alertFlavor} for structure {$structureId}: " . $e->getMessage());
+        }
     }
 
     /**
