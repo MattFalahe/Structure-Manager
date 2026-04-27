@@ -58,11 +58,26 @@ class StructureEventHandler
     const FUEL_EVENT_TYPES = [
         'StructureWentLowPower',
         'StructureWentHighPower',
-        'StructureServicesOffline',
         'StructureFuelAlert',
         'StructureLowReagentsAlert',
         'StructureNoReagentsAlert',
         'SkyhookOnline',
+    ];
+
+    // Services-offline events get their own category (events.services_offline)
+    // for routing to industry-team channels. Migration 000025 seeds the
+    // category and backfills bindings from events.structure_fuel_events.
+    const SERVICES_OFFLINE_TYPES = [
+        'StructureServicesOffline',
+    ];
+
+    // Sovereignty events get their own category (events.sovereignty) for
+    // routing to sov-ops channels. Migration 000025 seeds + backfills.
+    const SOVEREIGNTY_TYPES = [
+        'EntosisCaptureStarted',
+        'SovStructureReinforced',
+        'SovStructureDestroyed',
+        'SovCommandNodeEventStarted',
     ];
 
     /**
@@ -82,7 +97,9 @@ class StructureEventHandler
         return array_merge(
             self::ATTACK_TYPES,
             self::LIFECYCLE_TYPES,
-            self::FUEL_EVENT_TYPES
+            self::FUEL_EVENT_TYPES,
+            self::SERVICES_OFFLINE_TYPES,
+            self::SOVEREIGNTY_TYPES
         );
     }
 
@@ -413,10 +430,12 @@ class StructureEventHandler
     private function categoryToKey(string $internalCategory): ?string
     {
         return match ($internalCategory) {
-            'attack'    => 'structure_attack',
-            'lifecycle' => 'structure_lifecycle',
-            'fuel'      => 'structure_fuel_events',
-            default     => null,
+            'attack'           => 'structure_attack',
+            'lifecycle'        => 'structure_lifecycle',
+            'fuel'             => 'structure_fuel_events',
+            'services_offline' => 'services_offline',
+            'sovereignty'      => 'sovereignty',
+            default            => null,
         };
     }
 
@@ -435,6 +454,10 @@ class StructureEventHandler
                 return $this->buildLifecyclePayload($notification, $data, $meta);
             case 'fuel':
                 return $this->buildFuelEventPayload($notification, $data, $meta);
+            case 'services_offline':
+                return $this->buildServicesOfflinePayload($notification, $data, $meta);
+            case 'sovereignty':
+                return $this->buildSovereigntyPayload($notification, $data, $meta);
             default:
                 return null;
         }
@@ -476,6 +499,30 @@ class StructureEventHandler
         $reinforceTimerField = $this->resolveReinforceTimerField($notification, $data);
         if ($reinforceTimerField !== null) {
             $fields[] = $reinforceTimerField;
+        }
+
+        // Attacker pilot enrichment — CCP YAML carries `charID` for the attacking
+        // character. Look up the cached name from SeAT's character_infos table
+        // (populated whenever SeAT pulls public character info). If not cached,
+        // show the ID as a fallback rather than skip the field — operators can
+        // verify externally and the field is the cue that an attacker existed.
+        if (!empty($data['charID']) && is_numeric($data['charID'])) {
+            $charId = (int) $data['charID'];
+            $pilotName = null;
+            try {
+                $pilotName = DB::table('character_infos')
+                    ->where('character_id', $charId)
+                    ->value('name');
+            } catch (\Throwable $e) {
+                // character_infos may not exist on bare-bones SeAT installs
+            }
+            $fields[] = [
+                'name'   => "\u{1F464} Attacker Pilot",
+                'value'  => $pilotName
+                    ? "[{$pilotName}](https://zkillboard.com/character/{$charId}/)"
+                    : "Pilot ID #{$charId} *(name not cached)*",
+                'inline' => true,
+            ];
         }
 
         if (isset($data['corpName'])) {
@@ -719,6 +766,285 @@ class StructureEventHandler
         ];
     }
 
+    /**
+     * StructureServicesOffline embed — enriched over SeAT core's bare module list.
+     *
+     * CCP YAML for this notification carries `listOfServiceModuleIDs` (array of
+     * service module typeIDs). SeAT core renders these as raw type names with
+     * no impact context. SM resolves each module name and categorizes it
+     * (Industry / Market / Cloning / Research / Mining / Logistics / Other),
+     * then highlights the highest-impact category — operators reading the
+     * embed know whether this is "manufacturing went down" (route to industry)
+     * vs "market went down" (route to traders) etc.
+     *
+     * Severity reflects the highest-impact category lost:
+     *   industry / market = critical
+     *   cloning / mining  = high
+     *   science / logistics = medium
+     *   other             = low
+     */
+    private function buildServicesOfflinePayload($notification, array $data, array $meta): array
+    {
+        $moduleIds = $data['listOfServiceModuleIDs'] ?? [];
+        if (!is_array($moduleIds)) {
+            $moduleIds = [];
+        }
+
+        // Resolve and categorize each module
+        $modules = [];                          // [['name' => ..., 'category' => ..., 'impact' => ...]]
+        $highestImpact = 'low';
+        $impactRank = ['low' => 0, 'medium' => 1, 'high' => 2, 'critical' => 3];
+
+        foreach ($moduleIds as $typeId) {
+            if (!is_numeric($typeId) || (int) $typeId <= 0) {
+                continue;
+            }
+            $info = $this->resolveServiceModuleImpact((int) $typeId);
+            $modules[] = $info;
+            if ($impactRank[$info['impact']] > $impactRank[$highestImpact]) {
+                $highestImpact = $info['impact'];
+            }
+        }
+
+        // Color by highest impact
+        $color = match ($highestImpact) {
+            'critical' => 15158332, // red
+            'high'     => 16753920, // orange
+            'medium'   => 16776960, // yellow
+            default    => 9807270,  // grey
+        };
+
+        $fields = [];
+        $fields[] = ['name' => "\u{1F4CD} Location",   'value' => $meta['system'] ?? 'Unknown',                          'inline' => true];
+        $fields[] = ['name' => 'Structure Type',       'value' => $meta['type'] ?? 'Unknown',                            'inline' => true];
+        $fields[] = ['name' => "\u{23F0} Last Update", 'value' => Carbon::parse($notification->timestamp)->diffForHumans(), 'inline' => true];
+
+        if (empty($modules)) {
+            $fields[] = [
+                'name'   => "\u{26A0}\u{FE0F} Services Offline",
+                'value'  => '*(no module list in notification — refuel + services should auto-recover)*',
+                'inline' => false,
+            ];
+        } else {
+            // Group by category for cleaner display
+            $byCategory = [];
+            foreach ($modules as $m) {
+                $byCategory[$m['category']][] = $m['name'];
+            }
+
+            $categoryLabels = [
+                'industry'   => "\u{1F3ED} Industry",
+                'market'     => "\u{1F4B0} Market",
+                'cloning'    => "\u{1F9EC} Cloning",
+                'science'    => "\u{1F52C} Research",
+                'mining'     => "\u{26CF}\u{FE0F} Mining",
+                'logistics'  => "\u{1F310} Logistics",
+                'other'      => "\u{2699}\u{FE0F} Other",
+            ];
+
+            foreach ($byCategory as $cat => $names) {
+                $label = $categoryLabels[$cat] ?? ucfirst($cat);
+                $fields[] = [
+                    'name'   => $label,
+                    'value'  => implode(', ', array_slice($names, 0, 8))
+                              . (count($names) > 8 ? ' +' . (count($names) - 8) . ' more' : ''),
+                    'inline' => false,
+                ];
+            }
+
+            $fields[] = [
+                'name'   => "\u{1F525} Impact",
+                'value'  => '**' . strtoupper($highestImpact) . '** — ' . count($modules) . ' service module(s) offline',
+                'inline' => true,
+            ];
+        }
+
+        if (!empty($meta['dotlan_url'])) {
+            $fields[] = [
+                'name'   => "\u{1F5FA} Map",
+                'value'  => "[{$meta['system_name']} ({$meta['region_name']})]({$meta['dotlan_url']})",
+                'inline' => true,
+            ];
+        }
+
+        $embed = [
+            'title'     => ($meta['name'] ?? $meta['type'] ?? 'Structure') . ' — Services Offline',
+            'color'     => $color,
+            'fields'    => $fields,
+            'footer'    => ['text' => $this->buildFooterText($notification)],
+            'timestamp' => Carbon::parse($notification->timestamp)->toIso8601String(),
+        ];
+
+        return [
+            'content'         => '**Services Offline** — refuel to recover',
+            'embeds'          => [$embed],
+            'username'        => 'SeAT Structure Manager',
+            'allowed_mentions' => ['parse' => [], 'users' => [], 'roles' => []],
+        ];
+    }
+
+    /**
+     * Map a service module typeID to a {name, category, impact} descriptor.
+     *
+     * Categorization is name-based (regex on typeName) rather than ID-hardcoded
+     * so the function adapts when CCP adds new service modules without
+     * requiring a code change. Pattern:
+     *   /Manufacturing|Reprocessing|Refinery|Composite|Reactor|Component/ → industry
+     *   /Market/                                                       → market
+     *   /Cloning/                                                      → cloning
+     *   /Research|Lab|Invention/                                       → science
+     *   /Drilling|Moon Drill/                                          → mining
+     *   /Cyno|Jump Gate/                                               → logistics
+     *   else                                                           → other
+     */
+    private function resolveServiceModuleImpact(int $typeId): array
+    {
+        $name = $this->resolveTypeName($typeId);
+
+        $lname = strtolower($name);
+        if (preg_match('/manufactur|reprocess|refin|composite|reactor|component/i', $lname)) {
+            return ['name' => $name, 'category' => 'industry', 'impact' => 'critical'];
+        }
+        if (preg_match('/market/i', $lname)) {
+            return ['name' => $name, 'category' => 'market', 'impact' => 'critical'];
+        }
+        if (preg_match('/cloning/i', $lname)) {
+            return ['name' => $name, 'category' => 'cloning', 'impact' => 'high'];
+        }
+        if (preg_match('/research|\blab\b|invention/i', $lname)) {
+            return ['name' => $name, 'category' => 'science', 'impact' => 'medium'];
+        }
+        if (preg_match('/drilling|moon drill/i', $lname)) {
+            return ['name' => $name, 'category' => 'mining', 'impact' => 'high'];
+        }
+        if (preg_match('/cyno|jump gate|beacon|jammer/i', $lname)) {
+            return ['name' => $name, 'category' => 'logistics', 'impact' => 'medium'];
+        }
+        return ['name' => $name, 'category' => 'other', 'impact' => 'low'];
+    }
+
+    /**
+     * Sovereignty event embed — handles EntosisCaptureStarted, SovStructureReinforced,
+     * SovStructureDestroyed, SovCommandNodeEventStarted.
+     *
+     * CCP's sov YAML is different from Upwell — fields use camelCase (`solarSystemID`
+     * vs `solarsystemID`), `decloakTime` for reinforce node decloaks, etc. The embed
+     * surfaces what's actionable for sov ops: timer end, attacker corp/alliance,
+     * type of structure (TCU/IHUB), region for dotlan.
+     */
+    private function buildSovereigntyPayload($notification, array $data, array $meta): array
+    {
+        $type = $notification->type;
+
+        // Sov YAML uses different field names than Upwell — normalize
+        $solarSystemId = $data['solarSystemID']
+                      ?? $data['solarsystemID']
+                      ?? null;
+        $structureTypeId = $data['structureTypeID'] ?? null;
+        $structureTypeName = $structureTypeId ? $this->resolveTypeName((int) $structureTypeId) : null;
+
+        // Re-resolve meta if sov YAML's solarSystemID didn't match our default lookup
+        if ($solarSystemId !== null && empty($meta['system'])) {
+            $sys = DB::table('mapDenormalize')
+                ->where('itemID', $solarSystemId)
+                ->select('itemName', 'security', 'regionID')
+                ->first();
+            if ($sys) {
+                $meta['system_name'] = $sys->itemName;
+                $meta['system']      = $sys->itemName . ' (' . number_format($sys->security, 2) . ')';
+                if ($sys->regionID) {
+                    $regionName = DB::table('mapDenormalize')->where('itemID', $sys->regionID)->value('itemName');
+                    if ($regionName) {
+                        $meta['region_name'] = $regionName;
+                        $meta['dotlan_url']  = 'https://evemaps.dotlan.net/map/'
+                            . str_replace(' ', '_', $regionName) . '/'
+                            . str_replace(' ', '_', $sys->itemName);
+                    }
+                }
+            }
+        }
+
+        $titleMap = [
+            'EntosisCaptureStarted'      => 'ENTOSIS CAPTURE STARTED',
+            'SovStructureReinforced'     => 'SOV STRUCTURE REINFORCED',
+            'SovStructureDestroyed'      => 'SOV STRUCTURE DESTROYED',
+            'SovCommandNodeEventStarted' => 'COMMAND NODE EVENT STARTED',
+        ];
+        $colorMap = [
+            'EntosisCaptureStarted'      => 16753920, // orange
+            'SovStructureReinforced'     => 15158332, // red
+            'SovStructureDestroyed'      => 10038562, // dark red
+            'SovCommandNodeEventStarted' => 16776960, // yellow
+        ];
+
+        $fields = [];
+        $fields[] = ['name' => "\u{1F4CD} Location",   'value' => $meta['system'] ?? 'Unknown', 'inline' => true];
+
+        if ($structureTypeName) {
+            $fields[] = ['name' => 'Structure Type', 'value' => $structureTypeName, 'inline' => true];
+        }
+
+        $fields[] = ['name' => "\u{23F0} Last Update", 'value' => Carbon::parse($notification->timestamp)->diffForHumans(), 'inline' => true];
+
+        // Decloak / reinforce timer for SovStructureReinforced
+        if ($type === 'SovStructureReinforced' && !empty($data['decloakTime']) && is_numeric($data['decloakTime'])) {
+            $base = Carbon::parse($notification->timestamp);
+            $fmt  = $this->formatCcpDuration((int) $data['decloakTime'], $base);
+            $fields[] = [
+                'name'   => "\u{23F1} Node Decloak",
+                'value'  => $fmt['iso'] . "\n*({$fmt['remaining']})*",
+                'inline' => true,
+            ];
+        }
+
+        // Campaign event type (Command Node spawn details)
+        if ($type === 'SovCommandNodeEventStarted' && !empty($data['campaignEventType'])) {
+            $fields[] = [
+                'name'   => 'Campaign',
+                'value'  => match ((int) $data['campaignEventType']) {
+                    1       => 'TCU defense',
+                    2       => 'IHUB defense',
+                    3       => 'Station freeport',
+                    default => 'Type ' . $data['campaignEventType'],
+                },
+                'inline' => true,
+            ];
+        }
+
+        if (!empty($meta['dotlan_url'])) {
+            $fields[] = [
+                'name'   => "\u{1F5FA} Map",
+                'value'  => "[{$meta['system_name']} ({$meta['region_name']})]({$meta['dotlan_url']})",
+                'inline' => true,
+            ];
+        }
+
+        $titleSuffix = $titleMap[$type] ?? strtoupper($type);
+        $color       = $colorMap[$type] ?? 15158332;
+
+        $embed = [
+            'title'     => ($structureTypeName ?? 'Sovereignty Structure') . " \u{2014} " . $titleSuffix,
+            'color'     => $color,
+            'fields'    => $fields,
+            'footer'    => ['text' => $this->buildFooterText($notification)],
+            'timestamp' => Carbon::parse($notification->timestamp)->toIso8601String(),
+        ];
+
+        $contentMap = [
+            'EntosisCaptureStarted'      => '**ENTOSIS CAPTURE STARTED** — sov structure under hostile capture',
+            'SovStructureReinforced'     => '**SOV STRUCTURE REINFORCED** — defenders required at decloak',
+            'SovStructureDestroyed'      => '**SOV STRUCTURE DESTROYED**',
+            'SovCommandNodeEventStarted' => '**COMMAND NODE SPAWNED**',
+        ];
+
+        return [
+            'content'          => $contentMap[$type] ?? "**{$titleSuffix}**",
+            'embeds'           => [$embed],
+            'username'         => 'SeAT Structure Manager',
+            'allowed_mentions' => ['parse' => [], 'users' => [], 'roles' => []],
+        ];
+    }
+
     private function buildFooterText($notification): string
     {
         $source = $notification->source ?? 'unknown';
@@ -926,6 +1252,12 @@ class StructureEventHandler
         }
         if (in_array($type, self::FUEL_EVENT_TYPES)) {
             return 'fuel';
+        }
+        if (in_array($type, self::SERVICES_OFFLINE_TYPES)) {
+            return 'services_offline';
+        }
+        if (in_array($type, self::SOVEREIGNTY_TYPES)) {
+            return 'sovereignty';
         }
         return 'unknown';
     }
