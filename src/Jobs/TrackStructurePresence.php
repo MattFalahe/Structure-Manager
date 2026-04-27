@@ -77,6 +77,7 @@ class TrackStructurePresence implements ShouldQueue
         //         (refresh last_seen + reset miss counter + check for reappearance)
         // ============================================================
         $upsertedReappearances = 0;
+        $hullReinforcedFired   = 0;
         foreach ($present as $structureId => $row) {
             $existing = StructureDisappearanceTracking::where('structure_id', $structureId)->first();
 
@@ -90,6 +91,22 @@ class TrackStructurePresence implements ShouldQueue
             ) {
                 $isResetFromGone = true;
                 Log::info("TrackStructurePresence: structure {$structureId} reappeared within grace window (was '{$existing->status}'), resetting to watching");
+            }
+
+            // Detect state transition INTO 'hull_reinforce' BEFORE the upsert
+            // overwrites last_known_state. This is the primary signal source for
+            // hull_reinforced events because CCP doesn't reliably send a separate
+            // notification when armor reinforce ends and hull begins (some installs
+            // see StructureLostArmor with state=hull_reinforce in the YAML, but
+            // it's not consistent — polling state column is the authoritative source).
+            // Naturally idempotent: once stored as hull_reinforce, subsequent polls
+            // see "current == previous" and skip.
+            if ($existing
+                && $existing->last_known_state !== 'hull_reinforce'
+                && $row->state === 'hull_reinforce'
+            ) {
+                $this->publishHullReinforcedEvent($row);
+                $hullReinforcedFired++;
             }
 
             StructureDisappearanceTracking::updateOrCreate(
@@ -182,13 +199,69 @@ class TrackStructurePresence implements ShouldQueue
         }
 
         Log::info('TrackStructurePresence: complete — ' . json_encode([
-            'present'            => count($presentIds),
-            'reappeared'         => $upsertedReappearances,
-            'destroyed_fired'    => $classified['destroyed'],
-            'likely_transferred' => $classified['likely_transferred'],
-            'bulk_vanished'      => $classified['bulk_vanished'],
-            'still_watching'     => $classified['still_watching'],
+            'present'             => count($presentIds),
+            'reappeared'          => $upsertedReappearances,
+            'hull_reinforced'     => $hullReinforcedFired,
+            'destroyed_fired'     => $classified['destroyed'],
+            'likely_transferred'  => $classified['likely_transferred'],
+            'bulk_vanished'       => $classified['bulk_vanished'],
+            'still_watching'      => $classified['still_watching'],
         ]));
+    }
+
+    /**
+     * Publish structure.alert.hull_reinforced when a structure transitions INTO
+     * the 'hull_reinforce' state. This is the polling-driven path — CCP doesn't
+     * reliably send a separate notification for hull reinforce, so we watch
+     * corporation_structures.state directly.
+     *
+     * timer_ends_at comes from corporation_structures.state_timer_end which is
+     * authoritative for hull-timer expiration.
+     *
+     * No-op when Manager Core is not installed.
+     *
+     * @param object $row corporation_structures row joined with universe_structures + mapDenormalize
+     */
+    private function publishHullReinforcedEvent($row): void
+    {
+        if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
+            return;
+        }
+
+        // Pull state_timer_end from corporation_structures specifically — the
+        // join in handle() doesn't include it (we only need it on transitions).
+        $timerEnd = DB::table('corporation_structures')
+            ->where('structure_id', $row->structure_id)
+            ->value('state_timer_end');
+
+        $payload = [
+            'structure_id'      => (int) $row->structure_id,
+            'corporation_id'    => (int) $row->corporation_id,
+            'type_id'           => $row->type_id ? (int) $row->type_id : null,
+            'structure_name'    => $row->structure_name,
+            'system_id'         => $row->system_id ? (int) $row->system_id : null,
+            'system_name'       => $row->system_name,
+            'system_security'   => $row->system_security !== null ? (float) $row->system_security : null,
+            'timer_ends_at'     => $timerEnd ? Carbon::parse($timerEnd)->toIso8601String() : null,
+            'attacker_summary'  => null, // not available from state polling — use shield/armor_reinforced events for attacker info
+            'attacker_corp'     => null,
+            'attacker_alliance' => null,
+            'severity'          => 'critical',
+            'notification_id'   => null,
+            'notification_type' => null,
+            'detection_source'  => 'state_poll',
+        ];
+
+        try {
+            app(\ManagerCore\Services\EventBus::class)->publish(
+                'structure.alert.hull_reinforced',
+                'structure-manager',
+                $payload
+            );
+            Log::info("TrackStructurePresence: published structure.alert.hull_reinforced for structure {$row->structure_id} (state transition to hull_reinforce)");
+        } catch (\Throwable $e) {
+            Log::warning("TrackStructurePresence: failed to publish structure.alert.hull_reinforced for structure {$row->structure_id}: " . $e->getMessage());
+        }
     }
 
     /**
