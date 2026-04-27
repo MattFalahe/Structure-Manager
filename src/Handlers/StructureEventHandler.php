@@ -470,11 +470,28 @@ class StructureEventHandler
             $fields[] = ['name' => 'Hull', 'value' => number_format($data['hullPercentage'] ?? 100, 1) . '%', 'inline' => true];
         }
 
+        // Reinforce timer end — CCP notification YAML carries `timeLeft` (ticks)
+        // for LostShields/LostArmor; for LostShields, prefer corporation_structures.
+        // state_timer_end which is the authoritative armor-reinforce-ends time.
+        $reinforceTimerField = $this->resolveReinforceTimerField($notification, $data);
+        if ($reinforceTimerField !== null) {
+            $fields[] = $reinforceTimerField;
+        }
+
         if (isset($data['corpName'])) {
             $fields[] = ['name' => 'Attacker Corp', 'value' => $data['corpName'] ?? 'Unknown', 'inline' => true];
         }
         if (!empty($data['allianceName'])) {
             $fields[] = ['name' => 'Attacker Alliance', 'value' => $data['allianceName'], 'inline' => true];
+        }
+
+        // Dotlan map link for regional intel (recent kills, capital activity)
+        if (!empty($meta['dotlan_url'])) {
+            $fields[] = [
+                'name'  => "\u{1F5FA} Map",
+                'value' => "[{$meta['system_name']} ({$meta['region_name']})]({$meta['dotlan_url']})",
+                'inline' => true,
+            ];
         }
 
         $fields[] = ['name' => 'Detection', 'value' => 'via ' . ($notification->source ?? 'unknown') . ' (' . Carbon::parse($notification->timestamp)->diffForHumans() . ')', 'inline' => true];
@@ -531,8 +548,59 @@ class StructureEventHandler
         $fields[] = ['name' => 'Structure Type', 'value' => $meta['type'] ?? 'Unknown', 'inline' => true];
         $fields[] = ['name' => "\u{23F0} Last Update", 'value' => Carbon::parse($notification->timestamp)->diffForHumans(), 'inline' => true];
 
+        // Anchoring / Unanchoring: humanize CCP's nanosecond timeLeft into a
+        // proper completion timestamp + remaining countdown. Operators care
+        // exactly when these complete (anchoring deadline, unanchor abort window).
+        if (in_array($type, ['StructureAnchoring', 'StructureUnanchoring', 'AllAnchoringMsg', 'SkyhookDeployed'], true)
+            && !empty($data['timeLeft'])
+            && is_numeric($data['timeLeft'])
+            && (int) $data['timeLeft'] > 0
+        ) {
+            $base = Carbon::parse($notification->timestamp);
+            $fmt  = $this->formatCcpDuration((int) $data['timeLeft'], $base);
+
+            $completionLabel = match ($type) {
+                'StructureAnchoring', 'AllAnchoringMsg', 'SkyhookDeployed' => 'Anchoring Completes',
+                'StructureUnanchoring'                                    => 'Unanchoring Completes',
+                default                                                    => 'Completes',
+            };
+
+            $fields[] = [
+                'name'   => "\u{23F1} {$completionLabel}",
+                'value'  => $fmt['iso'] . "\n*({$fmt['remaining']})*",
+                'inline' => true,
+            ];
+        }
+
+        // Anchoring also carries `vulnerableTime` — the duration of the post-
+        // anchoring vulnerability window. CCP cites this in nanoseconds the
+        // same way as timeLeft.
+        if (in_array($type, ['StructureAnchoring', 'AllAnchoringMsg', 'SkyhookDeployed'], true)
+            && !empty($data['vulnerableTime'])
+            && is_numeric($data['vulnerableTime'])
+            && (int) $data['vulnerableTime'] > 0
+        ) {
+            // Vulnerable time is a duration, not an absolute time — the human
+            // representation alone is what the operator needs.
+            $vfmt = $this->formatCcpDuration((int) $data['vulnerableTime'], Carbon::now());
+            $fields[] = [
+                'name'   => "\u{1F6E1}\u{FE0F} Vulnerability Window",
+                'value'  => $vfmt['human'],
+                'inline' => true,
+            ];
+        }
+
         if (isset($data['corpName'])) {
             $fields[] = ['name' => 'Corporation', 'value' => $data['corpName'], 'inline' => true];
+        }
+
+        // Dotlan map link
+        if (!empty($meta['dotlan_url'])) {
+            $fields[] = [
+                'name'   => "\u{1F5FA} Map",
+                'value'  => "[{$meta['system_name']} ({$meta['region_name']})]({$meta['dotlan_url']})",
+                'inline' => true,
+            ];
         }
 
         $embed = [
@@ -581,12 +649,58 @@ class StructureEventHandler
         $fields[] = ['name' => 'Structure Type', 'value' => $meta['type'] ?? 'Unknown', 'inline' => true];
         $fields[] = ['name' => "\u{23F0} Last Update", 'value' => Carbon::parse($notification->timestamp)->diffForHumans(), 'inline' => true];
 
+        // For StructureWentLowPower, surface a prominent "going offline in" /
+        // "fuel exhausted" field by reading corporation_structures.fuel_expires.
+        // CCP doesn't carry this in the YAML — we have to look it up. Adds
+        // urgency cue that's missing from SeAT core's bare-bones notification.
+        if ($type === 'StructureWentLowPower' && !empty($data['structureID'])) {
+            $fuelExpires = DB::table('corporation_structures')
+                ->where('structure_id', $data['structureID'])
+                ->value('fuel_expires');
+
+            if ($fuelExpires) {
+                $exp = Carbon::parse($fuelExpires);
+                if ($exp->isPast()) {
+                    $fields[] = [
+                        'name'   => "\u{26A0}\u{FE0F} Fuel Status",
+                        'value'  => '**Fuel exhausted** ' . $exp->diffForHumans() . ' — refuel ASAP to recover services.',
+                        'inline' => false,
+                    ];
+                } else {
+                    $remaining = $exp->diffForHumans(Carbon::now(), [
+                        'parts' => 2,
+                        'syntax' => \Carbon\CarbonInterface::DIFF_RELATIVE_TO_NOW,
+                    ]);
+                    $fields[] = [
+                        'name'   => "\u{1F525} Going Offline In",
+                        'value'  => '**' . $remaining . '**' . "\n" . $exp->format('Y-m-d H:i') . ' UTC',
+                        'inline' => false,
+                    ];
+                }
+            } else {
+                $fields[] = [
+                    'name'   => "\u{26A0}\u{FE0F} Fuel Status",
+                    'value'  => '**No fuel data** — structure may already be in low-power state with empty fuel bay.',
+                    'inline' => false,
+                ];
+            }
+        }
+
         if (isset($data['listOfTypesAndQty']) && is_array($data['listOfTypesAndQty'])) {
             foreach ($data['listOfTypesAndQty'] as $item) {
                 $typeName = $this->resolveTypeName($item[1] ?? 0);
                 $qty = $item[0] ?? 0;
                 $fields[] = ['name' => $typeName, 'value' => number_format($qty) . ' remaining', 'inline' => true];
             }
+        }
+
+        // Dotlan map link — useful for any fuel/power event for regional intel
+        if (!empty($meta['dotlan_url'])) {
+            $fields[] = [
+                'name'   => "\u{1F5FA} Map",
+                'value'  => "[{$meta['system_name']} ({$meta['region_name']})]({$meta['dotlan_url']})",
+                'inline' => true,
+            ];
         }
 
         $embed = [
@@ -620,18 +734,35 @@ class StructureEventHandler
     private function resolveStructureMeta(array $data): array
     {
         $meta = [
-            'name' => null,
-            'type' => null,
-            'system' => null,
+            'name'          => null,
+            'type'          => null,
+            'system'        => null, // "Name (sec)" — kept for backward-compat with existing fields
+            'system_name'   => null, // raw system name (no security suffix)
+            'region_name'   => null, // for dotlan URL
+            'dotlan_url'    => null, // built dotlan map link
         ];
 
         if (isset($data['solarsystemID'])) {
             $system = DB::table('mapDenormalize')
                 ->where('itemID', $data['solarsystemID'])
-                ->select('itemName', 'security')
+                ->select('itemName', 'security', 'regionID')
                 ->first();
             if ($system) {
-                $meta['system'] = $system->itemName . ' (' . number_format($system->security, 2) . ')';
+                $meta['system_name'] = $system->itemName;
+                $meta['system']      = $system->itemName . ' (' . number_format($system->security, 2) . ')';
+
+                if ($system->regionID) {
+                    $regionName = DB::table('mapDenormalize')
+                        ->where('itemID', $system->regionID)
+                        ->value('itemName');
+                    if ($regionName) {
+                        $meta['region_name'] = $regionName;
+                        // Dotlan uses underscores for spaces; system + region must both be encoded.
+                        $meta['dotlan_url'] = 'https://evemaps.dotlan.net/map/'
+                            . str_replace(' ', '_', $regionName) . '/'
+                            . str_replace(' ', '_', $system->itemName);
+                    }
+                }
             }
         }
 
@@ -651,6 +782,127 @@ class StructureEventHandler
         }
 
         return $meta;
+    }
+
+    /**
+     * Build a "Reinforce Timer Ends" field for attack-style notifications.
+     *
+     * Resolution order:
+     *   1. corporation_structures.state_timer_end — most authoritative (refreshed
+     *      from ESI every poll cycle, accurate even minutes after the notification)
+     *   2. notification timestamp + timeLeft from CCP YAML — fallback when the
+     *      structure isn't in our local DB
+     *
+     * Returns null if neither path yields a timer (e.g. StructureUnderAttack
+     * which doesn't carry timeLeft and structure isn't reinforced yet).
+     */
+    private function resolveReinforceTimerField($notification, array $data): ?array
+    {
+        // Skip for events that don't have a forward-looking reinforce timer
+        if (in_array($notification->type, ['StructureUnderAttack', 'SkyhookUnderAttack', 'StructureDestroyed', 'SkyhookDestroyed'], true)) {
+            return null;
+        }
+
+        // Prefer the authoritative state_timer_end on the structure row
+        if (!empty($data['structureID'])) {
+            $stateTimerEnd = DB::table('corporation_structures')
+                ->where('structure_id', $data['structureID'])
+                ->value('state_timer_end');
+            if ($stateTimerEnd) {
+                $absolute  = Carbon::parse($stateTimerEnd);
+                $now       = Carbon::now();
+                $remaining = $absolute->isPast()
+                    ? 'expired ' . $absolute->diffForHumans()
+                    : $absolute->diffForHumans($now, [
+                        'parts' => 2,
+                        'short' => false,
+                        'syntax' => \Carbon\CarbonInterface::DIFF_RELATIVE_TO_NOW,
+                    ]);
+
+                $label = match ($notification->type) {
+                    'StructureLostShields', 'SkyhookLostShields' => 'Armor Reinforce Ends',
+                    'StructureLostArmor'                         => 'Hull Reinforce Ends',
+                    default                                       => 'Reinforce Timer Ends',
+                };
+
+                return [
+                    'name'   => "\u{23F1} {$label}",
+                    'value'  => $absolute->format('Y-m-d H:i') . " UTC\n*({$remaining})*",
+                    'inline' => true,
+                ];
+            }
+        }
+
+        // Fallback: notification timestamp + timeLeft from CCP YAML
+        if (!empty($data['timeLeft']) && is_numeric($data['timeLeft']) && (int) $data['timeLeft'] > 0) {
+            $base = Carbon::parse($notification->timestamp);
+            $fmt  = $this->formatCcpDuration((int) $data['timeLeft'], $base);
+
+            $label = match ($notification->type) {
+                'StructureLostShields', 'SkyhookLostShields' => 'Armor Reinforce Ends',
+                'StructureLostArmor'                         => 'Hull Reinforce Ends',
+                default                                       => 'Reinforce Timer Ends',
+            };
+
+            return [
+                'name'   => "\u{23F1} {$label}",
+                'value'  => $fmt['iso'] . "\n*({$fmt['remaining']})*",
+                'inline' => true,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Format a CCP-encoded nanosecond duration into:
+     *   ['absolute' => Carbon, 'human' => 'Xd Yh Zm', 'iso' => '2026-05-01 08:17 UTC']
+     *
+     * CCP delivers durations in `timeLeft` / `vulnerableTime` fields as
+     * 100-nanosecond ticks (Microsoft .NET TimeSpan ticks). 1 second = 10 million ticks.
+     * The duration is RELATIVE TO THE NOTIFICATION TIMESTAMP — so completion time
+     * is notification.timestamp + (timeLeft / 10_000_000) seconds.
+     *
+     * @param int $nanoseconds raw value from notification YAML
+     * @param Carbon $base notification timestamp; absolute = base + duration
+     * @return array{seconds:int, absolute:Carbon, human:string, iso:string, remaining:string}
+     */
+    private function formatCcpDuration(int $nanoseconds, Carbon $base): array
+    {
+        $seconds  = (int) max(0, $nanoseconds / 10_000_000);
+        $absolute = $base->copy()->addSeconds($seconds);
+
+        $days  = intdiv($seconds, 86400);
+        $hours = intdiv($seconds % 86400, 3600);
+        $mins  = intdiv($seconds % 3600, 60);
+
+        $parts = [];
+        if ($days > 0)  { $parts[] = "{$days}d"; }
+        if ($hours > 0) { $parts[] = "{$hours}h"; }
+        if ($mins > 0 || empty($parts)) { $parts[] = "{$mins}m"; }
+        $human = implode(' ', $parts);
+
+        // "Xd Yh remaining" — relative to NOW, not to the base timestamp
+        $now            = Carbon::now();
+        $remainingSecs  = max(0, $absolute->diffInSeconds($now, false));
+        $remD = intdiv($remainingSecs, 86400);
+        $remH = intdiv($remainingSecs % 86400, 3600);
+        $remM = intdiv($remainingSecs % 3600, 60);
+        $remParts = [];
+        if ($remD > 0) { $remParts[] = "{$remD}d"; }
+        if ($remH > 0) { $remParts[] = "{$remH}h"; }
+        if ($remM > 0 || empty($remParts)) { $remParts[] = "{$remM}m"; }
+        $remaining = $absolute->isPast()
+            ? 'expired ' . $absolute->diffForHumans()
+            : implode(' ', $remParts) . ' remaining';
+
+        return [
+            'seconds'   => $seconds,
+            'absolute'  => $absolute,
+            'human'     => $human,
+            'iso'       => $absolute->format('Y-m-d H:i') . ' UTC',
+            'remaining' => $remaining,
+        ];
     }
 
     private function resolveTypeName(int $typeId): string
