@@ -14,6 +14,7 @@ use StructureManager\Console\Commands\CreateTestPoses;
 use StructureManager\Console\Commands\SimulateFastConsumption;
 use StructureManager\Console\Commands\NotifyUpwellFuelCommand;
 use StructureManager\Console\Commands\ProcessStructureNotificationsCommand;
+use StructureManager\Console\Commands\TrackStructurePresenceCommand;
 use StructureManager\Database\Seeders\ScheduleSeeder;
 use StructureManager\Integrations\ManagerCoreIntegration;
 
@@ -45,6 +46,7 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 SimulateFastConsumption::class,
                 NotifyUpwellFuelCommand::class,
                 ProcessStructureNotificationsCommand::class,
+                TrackStructurePresenceCommand::class,
             ]);
         }
 

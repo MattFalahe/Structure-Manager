@@ -80,6 +80,23 @@ class ScheduleSeeder extends AbstractScheduleSeeder
                 'ping_after' => null,
             ],
 
+            // Structure presence tracking.
+            // Drives the MEDIUM-confidence path of destruction detection — polls
+            // corporation_structures every 10 minutes, tracks last-seen + last-
+            // known state, and classifies structures that vanish for 3+ polls
+            // (~30 min absent) as destroyed / likely_transferred / bulk_vanished.
+            // Standalone — does NOT depend on Manager Core. The HIGH-confidence
+            // path (CCP StructureDestroyed notification) fires from
+            // StructureEventHandler regardless of whether MC is installed.
+            [
+                'command' => 'structure-manager:track-structure-presence',
+                'expression' => '*/10 * * * *', // Run every 10 minutes
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+
             // Cleanup
             [
                 'command' => 'structure-manager:cleanup-history',

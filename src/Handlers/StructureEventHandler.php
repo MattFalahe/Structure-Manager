@@ -262,6 +262,7 @@ class StructureEventHandler
         $alertFlavor = match ($notification->type) {
             'StructureLostShields', 'SkyhookLostShields' => 'shield_reinforced',
             'StructureLostArmor'                         => 'armor_reinforced',
+            'StructureDestroyed', 'SkyhookDestroyed'     => 'destroyed',
             default                                       => null,
         };
 
@@ -281,6 +282,24 @@ class StructureEventHandler
             // Without a structure ID downstream subscribers can't act — drop
             // rather than publish a malformed event
             return;
+        }
+
+        // For 'destroyed': latch the disappearance-tracking row to prevent the
+        // grace-period job from also firing a duplicate event ~30 minutes later.
+        // The HIGH-confidence (notification) path always wins over the MEDIUM
+        // (grace-period) path.
+        if ($alertFlavor === 'destroyed') {
+            try {
+                \StructureManager\Models\StructureDisappearanceTracking::where('structure_id', $structureId)
+                    ->update([
+                        'status'           => 'destroyed',
+                        'detection_source' => 'notification',
+                        'resolved_at'      => Carbon::now(),
+                    ]);
+            } catch (\Throwable $e) {
+                Log::warning("StructureEventHandler: failed to latch disappearance-tracking for {$structureId}: " . $e->getMessage());
+                // Non-fatal — proceed with the publish
+            }
         }
 
         // Resolve the reinforcement timer end from corporation_structures.
@@ -338,6 +357,19 @@ class StructureEventHandler
             'notification_id'     => $notification->notification_id ?? null,
             'notification_type'   => $notification->type,
         ];
+
+        // For 'destroyed' alerts, add the destruction-specific fields the
+        // contract requires (see project_structure_manager_destruction_detection.md
+        // payload contract). HIGH-confidence detection from a CCP notification
+        // is the gold standard — destroyed_at is the notification timestamp.
+        if ($alertFlavor === 'destroyed') {
+            $payload['destroyed_at']       = isset($notification->timestamp)
+                ? Carbon::parse($notification->timestamp)->toIso8601String()
+                : Carbon::now()->toIso8601String();
+            $payload['detection_source']   = 'notification';
+            $payload['killmail_url']       = null; // Could be enriched via zKillboard later (LOW-confidence cross-ref)
+            $payload['final_timer_result'] = 'destroyed_via_notification';
+        }
 
         try {
             app(\ManagerCore\Services\EventBus::class)->publish(
