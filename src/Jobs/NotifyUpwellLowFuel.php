@@ -65,6 +65,26 @@ class NotifyUpwellLowFuel implements ShouldQueue
     const MAGMATIC_GAS_TYPE_ID = 81143;
 
     /**
+     * Cyno-module reagent type IDs.
+     *   Liquid Ozone — consumed by Standup Cyno Generator per cyno cycle
+     *   Strontium Clathrate — consumed by Standup Cyno Jammer per jam cycle
+     *   (also POS strontium type ID — same item across both contexts)
+     */
+    const LIQUID_OZONE_TYPE_ID       = 16273;
+    const STRONTIUM_CLATHRATE_TYPE_ID = 16275;
+
+    /**
+     * Default thresholds for cyno reagent quantity alerts. Quantity-based
+     * (not time-based) because cyno modules consume on demand per cycle —
+     * "1 hour remaining" makes no sense for an idle cyno gen, but "you have
+     * enough for 1 cyno left" does. Admins tune via settings.
+     */
+    const DEFAULT_LIQUID_OZONE_WARNING  = 25000;
+    const DEFAULT_LIQUID_OZONE_CRITICAL = 5000;
+    const DEFAULT_STRONTIUM_WARNING     = 50000;
+    const DEFAULT_STRONTIUM_CRITICAL    = 10000;
+
+    /**
      * Execute the job.
      */
     public function handle()
@@ -128,11 +148,240 @@ class NotifyUpwellLowFuel implements ShouldQueue
             }
         }
 
+        // Cyno reagent pass — runs alongside the fuel pass but keyed off the
+        // upwell.cyno_reagents category, not upwell.fuel. Iterates only structures
+        // that have a Standup Cyno Generator or Cyno Jammer service module.
+        try {
+            $cynoSent = $this->processCynoReagents();
+            $notificationsSent += $cynoSent;
+        } catch (\Throwable $e) {
+            Log::error('NotifyUpwellLowFuel: cyno reagent pass failed: ' . $e->getMessage());
+        }
+
         Log::info("NotifyUpwellLowFuel: Job completed, sent {$notificationsSent} notification(s)");
     }
 
     /**
-     * Process a single structure: determine status, check triggers, send if needed.
+     * Cyno reagent pass — alerts when Liquid Ozone or Strontium Clathrate runs
+     * low in the fuel bay of a structure with the corresponding cyno service.
+     *
+     * Detection: query corporation_structure_services for online services with
+     * 'Cyno Generator' or 'Cyno Jammer' in the name, joined to corporation_structures.
+     * For each match, sum the reagent quantity from corporation_assets (where
+     * location_id = structure_id, location_flag = StructureFuel) and compare
+     * against configured warning/critical thresholds.
+     *
+     * Same notification triggers as fuel: status transitions only (good →
+     * warning → critical), no spam if quantity stays in the same bracket.
+     * Status latch lives on the Timer board via source_reference dedup —
+     * source_reference = 'cyno_reagent:{structure_id}:{reagent}'.
+     *
+     * @return int Number of webhook dispatches fired across all structures
+     */
+    private function processCynoReagents(): int
+    {
+        if (!WebhookDispatcher::isCategoryEnabled('upwell', 'cyno_reagents')) {
+            Log::debug('NotifyUpwellLowFuel: upwell.cyno_reagents category disabled; skipping cyno pass.');
+            return 0;
+        }
+
+        $loWarn  = (int) StructureManagerSettings::get('upwell_liquid_ozone_warning_qty', self::DEFAULT_LIQUID_OZONE_WARNING);
+        $loCrit  = (int) StructureManagerSettings::get('upwell_liquid_ozone_critical_qty', self::DEFAULT_LIQUID_OZONE_CRITICAL);
+        $srWarn  = (int) StructureManagerSettings::get('upwell_strontium_warning_qty', self::DEFAULT_STRONTIUM_WARNING);
+        $srCrit  = (int) StructureManagerSettings::get('upwell_strontium_critical_qty', self::DEFAULT_STRONTIUM_CRITICAL);
+
+        // Find all online cyno-module services across corporation_structures.
+        // Use LIKE matching on the service name rather than hardcoded type IDs
+        // so future CCP module renames or tier additions just work.
+        $rows = DB::table('corporation_structure_services as css')
+            ->join('corporation_structures as cs', 'css.structure_id', '=', 'cs.structure_id')
+            ->where('css.state', 'online')
+            ->where(function ($q) {
+                $q->where('css.name', 'LIKE', '%Cyno Generator%')
+                  ->orWhere('css.name', 'LIKE', '%Cyno Jammer%');
+            })
+            ->select(
+                'cs.structure_id',
+                'cs.corporation_id',
+                'cs.type_id',
+                'cs.system_id',
+                'css.name as service_name'
+            )
+            ->get();
+
+        if ($rows->isEmpty()) {
+            Log::debug('NotifyUpwellLowFuel: no cyno modules detected; cyno pass complete.');
+            return 0;
+        }
+
+        Log::info('NotifyUpwellLowFuel: cyno pass found ' . $rows->count() . ' active cyno service(s)');
+
+        $sent = 0;
+        foreach ($rows as $row) {
+            // Determine which reagent + threshold pair applies based on service name
+            $isJammer = stripos($row->service_name, 'Jammer') !== false;
+            $reagentTypeId = $isJammer ? self::STRONTIUM_CLATHRATE_TYPE_ID : self::LIQUID_OZONE_TYPE_ID;
+            $reagentName   = $isJammer ? 'Strontium Clathrate' : 'Liquid Ozone';
+            $warnThreshold = $isJammer ? $srWarn : $loWarn;
+            $critThreshold = $isJammer ? $srCrit : $loCrit;
+
+            // Sum reagent quantity in the structure's fuel bay
+            $qty = (int) DB::table('corporation_assets')
+                ->where('location_id', $row->structure_id)
+                ->where('location_flag', 'StructureFuel')
+                ->where('type_id', $reagentTypeId)
+                ->sum('quantity');
+
+            $status = $this->classifyReagentStatus($qty, $warnThreshold, $critThreshold);
+
+            if ($status === 'good') {
+                // Recovery — soft-dismiss any existing timer row for this reagent
+                Timer::where('source_reference', "cyno_reagent:{$row->structure_id}:" . ($isJammer ? 'strontium' : 'liquid_ozone'))
+                    ->whereNull('dismissed_at')
+                    ->update(['dismissed_at' => Carbon::now()]);
+                continue;
+            }
+
+            // Resolve bindings for this corp
+            $bindings = WebhookDispatcher::resolveBindings('upwell', 'cyno_reagents', (int) $row->corporation_id);
+
+            // Upsert Timer board row regardless of webhook bindings (board still
+            // shows it even if no webhook is bound)
+            $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer);
+
+            if (empty($bindings)) {
+                continue;
+            }
+
+            // Build one webhook payload per structure-reagent pair
+            $payload = $this->buildCynoReagentPayload($row, $reagentName, $qty, $warnThreshold, $critThreshold, $status, $isJammer);
+
+            foreach ($bindings as $binding) {
+                if (!\StructureManager\Models\WebhookConfiguration::isValidWebhookUrl($binding['webhook_url'])) {
+                    continue;
+                }
+                $finalPayload = $this->injectCynoReagentMention($payload, $binding['role_mention'] ?? '', $status);
+
+                try {
+                    Http::connectTimeout(5)->timeout(10)->post($binding['webhook_url'], $finalPayload);
+                    $sent++;
+                } catch (\Throwable $e) {
+                    Log::error("NotifyUpwellLowFuel: cyno reagent webhook failed for structure {$row->structure_id}: " . $e->getMessage());
+                }
+            }
+
+            Log::info("NotifyUpwellLowFuel: dispatched cyno_reagent {$status} for structure {$row->structure_id} ({$reagentName}={$qty})");
+        }
+
+        return $sent;
+    }
+
+    private function classifyReagentStatus(int $qty, int $warn, int $crit): string
+    {
+        if ($qty < $crit) return 'critical';
+        if ($qty < $warn) return 'warning';
+        return 'good';
+    }
+
+    private function buildCynoReagentPayload($row, string $reagentName, int $qty, int $warn, int $crit, string $status, bool $isJammer): array
+    {
+        $color = $status === 'critical' ? 15158332 : 16776960; // red / yellow
+
+        // Resolve display metadata
+        $structureName = DB::table('universe_structures')->where('structure_id', $row->structure_id)->value('name')
+            ?: ('Structure #' . $row->structure_id);
+        $structureType = DB::table('invTypes')->where('typeID', $row->type_id)->value('typeName') ?: 'Unknown';
+        $sys = DB::table('mapDenormalize')->where('itemID', $row->system_id)->select('itemName', 'security')->first();
+        $systemDisplay = $sys ? $sys->itemName . ' (' . number_format($sys->security, 2) . ')' : 'Unknown';
+
+        $moduleLabel = $isJammer ? 'Standup Cyno Jammer' : 'Standup Cyno Generator';
+        $consumeNote = $isJammer
+            ? '*Consumed per jam cycle when actively jamming.*'
+            : '*Consumed per cyno cycle (~5,000 per fire).*';
+
+        $fields = [
+            ['name' => "\u{1F4CD} Location",     'value' => $systemDisplay,  'inline' => true],
+            ['name' => 'Structure Type',         'value' => $structureType,  'inline' => true],
+            ['name' => "\u{23F0} Last Update",   'value' => Carbon::now()->diffForHumans(), 'inline' => true],
+
+            ['name' => "\u{1F9EA} Reagent",      'value' => $reagentName,    'inline' => true],
+            ['name' => 'Module',                 'value' => $moduleLabel,    'inline' => true],
+            ['name' => "\u{1F4E6} Quantity",     'value' => '**' . number_format($qty) . '** units', 'inline' => true],
+
+            ['name' => "\u{1F525} Status",       'value' => '**' . strtoupper($status) . '**' . "\nThreshold: < " . number_format($status === 'critical' ? $crit : $warn), 'inline' => false],
+            ['name' => 'Note',                   'value' => $consumeNote,    'inline' => false],
+        ];
+
+        $embed = [
+            'title'     => $structureName . " \u{2014} {$reagentName} " . strtoupper($status),
+            'color'     => $color,
+            'fields'    => $fields,
+            'footer'    => ['text' => 'SeAT Structure Manager | Structure ID: ' . $row->structure_id],
+            'timestamp' => Carbon::now()->toIso8601String(),
+        ];
+
+        $contentTitle = $status === 'critical'
+            ? "**CRITICAL: {$reagentName} low** — restock to keep cyno service operational"
+            : "**Warning: {$reagentName} low**";
+
+        return [
+            'content'         => $contentTitle,
+            'embeds'          => [$embed],
+            'username'        => 'SeAT Structure Manager',
+            'allowed_mentions' => ['parse' => [], 'users' => [], 'roles' => []],
+        ];
+    }
+
+    private function injectCynoReagentMention(array $payload, ?string $roleMention, string $status): array
+    {
+        if (empty($roleMention)) return $payload;
+        // Only ping for critical (matches existing fuel-alert behavior)
+        if ($status !== 'critical') return $payload;
+
+        $mention = trim($roleMention);
+        if (preg_match('/^<@&(\d+)>$/', $mention, $m)) {
+            $payload['content'] = "<@&{$m[1]}> " . ($payload['content'] ?? '');
+            $payload['allowed_mentions']['roles'][] = $m[1];
+        } elseif (preg_match('/^\d+$/', $mention)) {
+            $payload['content'] = "<@&{$mention}> " . ($payload['content'] ?? '');
+            $payload['allowed_mentions']['roles'][] = $mention;
+        } elseif (preg_match('/^<@!?(\d+)>$/', $mention, $m)) {
+            $payload['content'] = "<@{$m[1]}> " . ($payload['content'] ?? '');
+            $payload['allowed_mentions']['users'][] = $m[1];
+        }
+        return $payload;
+    }
+
+    private function upsertCynoBoardTimer($row, string $reagentName, int $reagentTypeId, int $qty, string $status, bool $isJammer): void
+    {
+        $reagentKey = $isJammer ? 'strontium' : 'liquid_ozone';
+
+        $structureName = DB::table('universe_structures')->where('structure_id', $row->structure_id)->value('name');
+        $structureType = DB::table('invTypes')->where('typeID', $row->type_id)->value('typeName');
+        $sys = DB::table('mapDenormalize')->where('itemID', $row->system_id)->select('itemName', 'security')->first();
+        $ownerName = DB::table('corporation_infos')->where('corporation_id', $row->corporation_id)->value('name');
+
+        Timer::upsertAuto([
+            'source'                 => 'auto_fuel',
+            'event_type'             => $status === 'critical' ? 'fuel_critical' : 'fuel_warning',
+            'severity'               => $status,
+            'structure_id'           => $row->structure_id,
+            'structure_name'         => ($structureName ?? 'Unknown') . " — {$reagentName}",
+            'structure_type'         => $structureType,
+            'structure_type_id'      => $row->type_id,
+            'system_id'              => $row->system_id,
+            'system_name'            => $sys->itemName ?? null,
+            'system_security'        => $sys->security ?? null,
+            'corporation_id'         => $row->corporation_id,
+            'owner_corporation_name' => $ownerName,
+            // No deterministic eve_time for cyno reagents (consumption is event-driven, not steady).
+            // Use now() so the row sorts to "current" on the board; admin reads quantity from notes.
+            'eve_time'               => Carbon::now(),
+            'notes'                  => "{$reagentName}: " . number_format($qty) . " units (status: {$status})",
+            'source_reference'       => "cyno_reagent:{$row->structure_id}:{$reagentKey}",
+            'dismissed_at'           => null,
+        ]);
+    }
      *
      * @param array<int, array{webhook_id:int, webhook_url:string, role_mention:?string}> $bindings
      * @return int Number of notifications sent (0 or count of bindings)

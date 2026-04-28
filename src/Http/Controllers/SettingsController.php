@@ -139,6 +139,11 @@ class SettingsController extends Controller
                 'upwell_fuel_critical_days',
                 'upwell_fuel_warning_days',
                 'upwell_fuel_notification_interval',
+                // Cyno reagent thresholds (Standup Cyno Generator + Cyno Jammer)
+                'upwell_liquid_ozone_warning_qty',
+                'upwell_liquid_ozone_critical_qty',
+                'upwell_strontium_warning_qty',
+                'upwell_strontium_critical_qty',
                 // ESI polling settings
                 'esi_polling_enabled',
                 'esi_polling_interval',
