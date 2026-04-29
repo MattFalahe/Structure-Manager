@@ -618,7 +618,23 @@ class FuelCalculator
             // Defensive — if MM tables aren't yet migrated or the query
             // blows up for any reason, fall back to "no active extraction"
             // so we don't surface a false SM error for a transient issue.
-            \Log::debug("[SM] hasActiveMoonExtraction check failed for structure {$structureId}: " . $e->getMessage());
+            //
+            // Logged at warning (not debug) because this failure means the
+            // SM ↔ MM cross-plugin alert chain is silently broken: SM's
+            // own webhooks for low-fuel still fire, but the structure.alert.*
+            // event won't be published and MM's extraction_at_risk
+            // notification never fires. Without warning-level visibility,
+            // operators wouldn't notice the integration is degraded.
+            //
+            // Common causes that warrant operator attention:
+            //  - MM's moon_extractions table missing/migrated incorrectly
+            //  - DB connection issue
+            //  - MM's MoonExtraction model class loaded but signature drift
+            \Log::warning("[SM] hasActiveMoonExtraction check failed for structure {$structureId}: " . $e->getMessage(), [
+                'structure_id' => $structureId,
+                'error' => $e->getMessage(),
+                'trace_first_frame' => $e->getTrace()[0] ?? null,
+            ]);
             return false;
         }
     }

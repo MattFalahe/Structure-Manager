@@ -5,6 +5,7 @@ namespace StructureManager\Handlers;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use StructureManager\Helpers\AlertEventEnvelope;
 use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
@@ -358,21 +359,37 @@ class StructureEventHandler
             ? trim($attackerCorporation . ($attackerAlliance ? " ({$attackerAlliance})" : ''))
             : null;
 
-        $payload = [
-            'structure_id'        => $structureId,
-            'corporation_id'      => (int) $notification->corporation_id,
-            'type_id'             => $typeId,
-            'structure_name'      => $meta['name'],
-            'system_id'           => isset($data['solarsystemID']) ? (int) $data['solarsystemID'] : null,
-            'system_name'         => $meta['system'] ? preg_replace('/\s*\([^)]*\)\s*$/', '', $meta['system']) : null,
-            'system_security'     => $systemSecurity,
-            'timer_ends_at'       => $timerEndsAt,
-            'attacker_summary'    => $attackerSummary,
-            'attacker_corp'       => $attackerCorporation,
-            'attacker_alliance'   => $attackerAlliance,
-            'severity'            => 'critical',
-            'notification_id'     => $notification->notification_id ?? null,
-            'notification_type'   => $notification->type,
+        // Assemble the publisher's view of the event, then route through
+        // AlertEventEnvelope so subscribers see the full contract scaffold
+        // (source_plugin / schema_version / event_id / category_group /
+        // eve_time / seconds_until / is_elapsed / url) without each publish
+        // site needing to remember those base fields.
+        $context = [
+            'structure_id'              => $structureId,
+            'corporation_id'            => (int) $notification->corporation_id,
+            'type_id'                   => $typeId,                          // legacy key (MM reads this)
+            'structure_type_id'         => $typeId,                          // contract key
+            'structure_name'            => $meta['name'],
+            'system_id'                 => isset($data['solarsystemID']) ? (int) $data['solarsystemID'] : null,
+            'system_name'               => $meta['system'] ? preg_replace('/\s*\([^)]*\)\s*$/', '', $meta['system']) : null,
+            'system_security'           => $systemSecurity,
+            'severity'                  => 'critical',
+            'attacker_corporation_name' => $attackerCorporation,             // contract key
+            'source_reference'          => isset($notification->notification_id)
+                ? 'esi-notif:' . $notification->notification_id
+                : null,
+
+            // Legacy/flavor-specific keys MM already reads — preserved verbatim
+            'timer_ends_at'     => $timerEndsAt,
+            'attacker_summary'  => $attackerSummary,
+            'attacker_corp'     => $attackerCorporation,
+            'attacker_alliance' => $attackerAlliance,
+            'notification_id'   => $notification->notification_id ?? null,
+            'notification_type' => $notification->type,
+
+            // For shield/armor: eve_time = when the reinforce timer ends.
+            // For destroyed: overridden below to destroyed_at.
+            'eve_time' => $timerEndsAt,
         ];
 
         // For 'destroyed' alerts, add the destruction-specific fields the
@@ -380,13 +397,17 @@ class StructureEventHandler
         // payload contract). HIGH-confidence detection from a CCP notification
         // is the gold standard — destroyed_at is the notification timestamp.
         if ($alertFlavor === 'destroyed') {
-            $payload['destroyed_at']       = isset($notification->timestamp)
+            $destroyedAtIso = isset($notification->timestamp)
                 ? Carbon::parse($notification->timestamp)->toIso8601String()
                 : Carbon::now()->toIso8601String();
-            $payload['detection_source']   = 'notification';
-            $payload['killmail_url']       = null; // Could be enriched via zKillboard later (LOW-confidence cross-ref)
-            $payload['final_timer_result'] = 'destroyed_via_notification';
+            $context['destroyed_at']       = $destroyedAtIso;
+            $context['detection_source']   = 'notification';
+            $context['killmail_url']       = null; // Could be enriched via zKillboard later (LOW-confidence cross-ref)
+            $context['final_timer_result'] = 'destroyed_via_notification';
+            $context['eve_time']           = $destroyedAtIso;                // event "happened" at destruction
         }
+
+        $payload = AlertEventEnvelope::build($alertFlavor, $context);
 
         try {
             app(\ManagerCore\Services\EventBus::class)->publish(
@@ -394,7 +415,7 @@ class StructureEventHandler
                 'structure-manager',
                 $payload
             );
-            Log::info("StructureEventHandler: published structure.alert.{$alertFlavor} for structure {$structureId} (notification #{$notification->notification_id})");
+            Log::info("StructureEventHandler: published structure.alert.{$alertFlavor} for structure {$structureId} (notification #{$notification->notification_id}, event_id={$payload['event_id']})");
         } catch (\Throwable $e) {
             Log::warning("StructureEventHandler: failed to publish structure.alert.{$alertFlavor} for structure {$structureId}: " . $e->getMessage());
         }

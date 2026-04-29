@@ -15,6 +15,7 @@ use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
 use StructureManager\Helpers\FuelCalculator;
+use StructureManager\Helpers\AlertEventEnvelope;
 use Carbon\Carbon;
 
 /**
@@ -548,27 +549,40 @@ class NotifyUpwellLowFuel implements ShouldQueue
             return;
         }
 
+        // Route through AlertEventEnvelope so the contract base fields
+        // (source_plugin / schema_version / event_id / category_group /
+        // eve_time / seconds_until / is_elapsed / url) are uniform with the
+        // other 4 structure.alert.* flavors.
+        $payload = AlertEventEnvelope::build('fuel_critical', [
+            'structure_id'      => (int) $structure->structure_id,
+            'corporation_id'    => (int) $structure->corporation_id,
+            'type_id'           => (int) $structure->type_id,                // legacy key
+            'structure_type_id' => (int) $structure->type_id,                // contract key
+            'system_id'         => isset($structure->system_id) ? (int) $structure->system_id : null,
+            'structure_name'    => $fuelData['structure_name'] ?? null,
+            'system_name'       => $fuelData['system_name'] ?? null,
+            'system_security'   => $fuelData['system_security'] ?? null,
+            'severity'          => $currentStatus,
+            'source_reference'  => 'fuel:' . $structure->structure_id,
+
+            // eve_time = when the structure runs out of fuel
+            'eve_time' => $fuelData['fuel_expires'] ?? null,
+
+            // Flavor-specific extras (preserved verbatim — MM reads these)
+            'days_remaining'  => (float) ($fuelData['days_remaining'] ?? 0),
+            'hours_remaining' => (float) ($fuelData['hours_remaining'] ?? 0),
+            'fuel_expires'    => $fuelData['fuel_expires'] ?? null,
+            'hourly_rate'     => (float) ($fuelData['hourly_rate'] ?? 0),
+        ]);
+
         try {
             app(\ManagerCore\Services\EventBus::class)->publish(
                 'structure.alert.fuel_critical',
                 'structure-manager',
-                [
-                    'structure_id'    => (int) $structure->structure_id,
-                    'corporation_id'  => (int) $structure->corporation_id,
-                    'type_id'         => (int) $structure->type_id,
-                    'system_id'       => isset($structure->system_id) ? (int) $structure->system_id : null,
-                    'structure_name'  => $fuelData['structure_name'] ?? null,
-                    'system_name'     => $fuelData['system_name'] ?? null,
-                    'system_security' => $fuelData['system_security'] ?? null,
-                    'days_remaining'  => (float) ($fuelData['days_remaining'] ?? 0),
-                    'hours_remaining' => (float) ($fuelData['hours_remaining'] ?? 0),
-                    'fuel_expires'    => $fuelData['fuel_expires'] ?? null,
-                    'hourly_rate'     => (float) ($fuelData['hourly_rate'] ?? 0),
-                    'severity'        => $currentStatus,
-                ]
+                $payload
             );
 
-            Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_critical for refinery {$structure->structure_id} (active extraction + critical fuel)");
+            Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_critical for refinery {$structure->structure_id} (active extraction + critical fuel, event_id={$payload['event_id']})");
         } catch (\Throwable $e) {
             Log::warning("NotifyUpwellLowFuel: refinery_at_risk event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
         }

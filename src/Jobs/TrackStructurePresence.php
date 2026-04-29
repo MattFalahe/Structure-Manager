@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use StructureManager\Helpers\AlertEventEnvelope;
 use StructureManager\Models\StructureDisappearanceTracking;
 
 /**
@@ -245,23 +246,33 @@ class TrackStructurePresence implements ShouldQueue
             ->where('structure_id', $row->structure_id)
             ->value('state_timer_end');
 
-        $payload = [
+        $timerEndIso = $timerEnd ? Carbon::parse($timerEnd)->toIso8601String() : null;
+
+        $payload = AlertEventEnvelope::build('hull_reinforced', [
             'structure_id'      => (int) $row->structure_id,
             'corporation_id'    => (int) $row->corporation_id,
-            'type_id'           => $row->type_id ? (int) $row->type_id : null,
+            'type_id'           => $row->type_id ? (int) $row->type_id : null,           // legacy
+            'structure_type_id' => $row->type_id ? (int) $row->type_id : null,           // contract
             'structure_name'    => $row->structure_name,
             'system_id'         => $row->system_id ? (int) $row->system_id : null,
             'system_name'       => $row->system_name,
             'system_security'   => $row->system_security !== null ? (float) $row->system_security : null,
-            'timer_ends_at'     => $timerEnd ? Carbon::parse($timerEnd)->toIso8601String() : null,
+            'severity'          => 'critical',
+            'source_reference'  => 'state-poll:hull_reinforce:' . $row->structure_id,
+
+            // eve_time = when the hull timer ends (when the structure becomes
+            // killable in the final timer window)
+            'eve_time' => $timerEndIso,
+
+            // Flavor-specific extras
+            'timer_ends_at'     => $timerEndIso,
             'attacker_summary'  => null, // not available from state polling — use shield/armor_reinforced events for attacker info
             'attacker_corp'     => null,
             'attacker_alliance' => null,
-            'severity'          => 'critical',
             'notification_id'   => null,
             'notification_type' => null,
             'detection_source'  => 'state_poll',
-        ];
+        ]);
 
         try {
             app(\ManagerCore\Services\EventBus::class)->publish(
@@ -269,7 +280,7 @@ class TrackStructurePresence implements ShouldQueue
                 'structure-manager',
                 $payload
             );
-            Log::info("TrackStructurePresence: published structure.alert.hull_reinforced for structure {$row->structure_id} (state transition to hull_reinforce)");
+            Log::info("TrackStructurePresence: published structure.alert.hull_reinforced for structure {$row->structure_id} (state transition to hull_reinforce, event_id={$payload['event_id']})");
         } catch (\Throwable $e) {
             Log::warning("TrackStructurePresence: failed to publish structure.alert.hull_reinforced for structure {$row->structure_id}: " . $e->getMessage());
         }
@@ -290,25 +301,34 @@ class TrackStructurePresence implements ShouldQueue
 
         $finalTimerResult = $this->inferFinalTimerResult($tracking);
 
-        $payload = [
+        // Best-effort destroyed_at: midpoint between last sighting and now
+        $destroyedAtIso = $tracking->last_seen_at
+            ? $tracking->last_seen_at->copy()->addMinutes(15)->toIso8601String()
+            : Carbon::now()->toIso8601String();
+
+        $payload = AlertEventEnvelope::build('destroyed', [
             'structure_id'       => (int) $tracking->structure_id,
             'corporation_id'     => (int) $tracking->last_known_corporation_id,
-            'type_id'            => $tracking->last_known_type_id ? (int) $tracking->last_known_type_id : null,
+            'type_id'            => $tracking->last_known_type_id ? (int) $tracking->last_known_type_id : null,           // legacy
+            'structure_type_id'  => $tracking->last_known_type_id ? (int) $tracking->last_known_type_id : null,           // contract
             'structure_name'     => $tracking->last_known_structure_name,
             'system_id'          => $tracking->last_known_system_id ? (int) $tracking->last_known_system_id : null,
             'system_name'        => $tracking->last_known_system_name,
             'system_security'    => $tracking->last_known_system_security !== null
                 ? (float) $tracking->last_known_system_security
                 : null,
-            // Best-effort timestamp: midpoint between last sighting and now
-            'destroyed_at'       => $tracking->last_seen_at
-                ? $tracking->last_seen_at->copy()->addMinutes(15)->toIso8601String()
-                : Carbon::now()->toIso8601String(),
+            'severity'           => 'critical',
+            'source_reference'   => 'grace-period:destroyed:' . $tracking->structure_id,
+
+            // eve_time = when the structure was (estimated) destroyed
+            'eve_time' => $destroyedAtIso,
+
+            // Flavor-specific extras
+            'destroyed_at'       => $destroyedAtIso,
             'detection_source'   => $detectionSource,
             'killmail_url'       => null,
             'final_timer_result' => $finalTimerResult,
-            'severity'           => 'critical',
-        ];
+        ]);
 
         try {
             app(\ManagerCore\Services\EventBus::class)->publish(
@@ -316,7 +336,7 @@ class TrackStructurePresence implements ShouldQueue
                 'structure-manager',
                 $payload
             );
-            Log::info("TrackStructurePresence: published structure.alert.destroyed for structure {$tracking->structure_id} (detection={$detectionSource}, last_state={$tracking->last_known_state})");
+            Log::info("TrackStructurePresence: published structure.alert.destroyed for structure {$tracking->structure_id} (detection={$detectionSource}, last_state={$tracking->last_known_state}, event_id={$payload['event_id']})");
         } catch (\Throwable $e) {
             Log::warning("TrackStructurePresence: failed to publish structure.alert.destroyed for structure {$tracking->structure_id}: " . $e->getMessage());
         }
