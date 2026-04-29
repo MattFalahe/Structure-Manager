@@ -469,19 +469,24 @@ class TrackFuelConsumption implements ShouldQueue
             'fuel_type_id' => null,
         ];
         
-        // Get fuel from StructureFuel bay ONLY (what's being consumed)
-        $fuelBayAsset = DB::table('corporation_assets')
+        // Sum ALL racial fuel block types in the StructureFuel bay.
+        // Upwell structures consume any racial block from a single pool, so a
+        // mixed-fuel bay is intentional EVE behavior and the totals must be
+        // summed (not just the first row taken). GitHub issue #17.
+        $totalQty = (int) DB::table('corporation_assets')
             ->where('location_id', $structureId)
             ->where('location_flag', 'StructureFuel')
             ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
-            ->first();
-        
-        if ($fuelBayAsset) {
-            $result['quantity'] = $fuelBayAsset->quantity;
+            ->sum('quantity');
+
+        if ($totalQty > 0) {
+            $result['quantity'] = $totalQty;
             $result['available'] = true;
-            $result['fuel_type_id'] = $fuelBayAsset->type_id;
-            
-            Log::debug("Structure {$structureId}: Found {$fuelBayAsset->quantity} blocks (type {$fuelBayAsset->type_id}) in fuel bay");
+            // fuel_type_id intentionally left null — type is irrelevant for
+            // mixed-fuel Upwell tracking; consumption rate is per-block, not
+            // per-racial-type.
+
+            Log::debug("Structure {$structureId}: Found {$totalQty} total blocks in fuel bay (mixed-fuel sum)");
         } else {
             Log::debug("Structure {$structureId}: No fuel bay data found, will use days_remaining method");
         }
