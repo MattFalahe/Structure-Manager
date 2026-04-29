@@ -136,6 +136,17 @@ class TrackStructurePresence implements ShouldQueue
         // ============================================================
         // Step 3: find tracked-but-now-missing rows, classify them
         // ============================================================
+        // The .watching() scope (status='watching') is what dedupes against the
+        // notification-driven destruction path in StructureEventHandler. When
+        // CCP's StructureDestroyed/SkyhookDestroyed notification arrives via
+        // ESI fast-poll, StructureEventHandler latches the tracking row to
+        // status='destroyed' BEFORE this job runs again — so the row falls
+        // out of the watching() filter and the grace-period path can't fire
+        // a duplicate structure.alert.destroyed event for the same loss.
+        // DO NOT remove this filter without a replacement dedup mechanism
+        // (e.g. checking status != 'destroyed' inline) or the high-confidence
+        // notification path and the medium-confidence grace-period path will
+        // double-publish for any loss CCP delivers a notification for.
         $missing = StructureDisappearanceTracking::watching()
             ->whereNotIn('structure_id', $presentIds)
             ->get();

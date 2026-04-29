@@ -216,6 +216,37 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         Log::info('NotifyUpwellLowFuel: cyno pass found ' . $rows->count() . ' active cyno service(s)');
 
+        // Pre-load display metadata once for the whole batch. Without this, both
+        // upsertCynoBoardTimer() and buildCynoReagentPayload() each do 3-4 DB
+        // lookups per row (universe_structures, invTypes, mapDenormalize,
+        // corporation_infos). With it, the loop body only does the per-row asset
+        // sum that actually varies — everything else is dictionary access.
+        $structureIds = $rows->pluck('structure_id')->unique()->values()->all();
+        $typeIds      = $rows->pluck('type_id')->unique()->values()->all();
+        $systemIds    = $rows->pluck('system_id')->filter()->unique()->values()->all();
+        $corpIds      = $rows->pluck('corporation_id')->unique()->values()->all();
+
+        $structureNames = DB::table('universe_structures')
+            ->whereIn('structure_id', $structureIds)
+            ->pluck('name', 'structure_id')
+            ->all();
+        $typeNames = DB::table('invTypes')
+            ->whereIn('typeID', $typeIds)
+            ->pluck('typeName', 'typeID')
+            ->all();
+        $systems = !empty($systemIds)
+            ? DB::table('mapDenormalize')
+                ->whereIn('itemID', $systemIds)
+                ->select('itemID', 'itemName', 'security')
+                ->get()
+                ->keyBy('itemID')
+                ->all()
+            : [];
+        $corpNames = DB::table('corporation_infos')
+            ->whereIn('corporation_id', $corpIds)
+            ->pluck('name', 'corporation_id')
+            ->all();
+
         $sent = 0;
         foreach ($rows as $row) {
             // Determine which reagent + threshold pair applies based on service name
@@ -242,19 +273,27 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 continue;
             }
 
+            // Resolve metadata for this row from preloaded dictionaries (O(1) each)
+            $meta = [
+                'structure_name' => $structureNames[$row->structure_id] ?? null,
+                'structure_type' => $typeNames[$row->type_id] ?? null,
+                'system'         => $systems[$row->system_id] ?? null,
+                'owner_name'     => $corpNames[$row->corporation_id] ?? null,
+            ];
+
             // Resolve bindings for this corp
             $bindings = WebhookDispatcher::resolveBindings('upwell', 'cyno_reagents', (int) $row->corporation_id);
 
             // Upsert Timer board row regardless of webhook bindings (board still
             // shows it even if no webhook is bound)
-            $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer);
+            $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer, $meta);
 
             if (empty($bindings)) {
                 continue;
             }
 
             // Build one webhook payload per structure-reagent pair
-            $payload = $this->buildCynoReagentPayload($row, $reagentName, $qty, $warnThreshold, $critThreshold, $status, $isJammer);
+            $payload = $this->buildCynoReagentPayload($row, $reagentName, $qty, $warnThreshold, $critThreshold, $status, $isJammer, $meta);
 
             foreach ($bindings as $binding) {
                 if (!\StructureManager\Models\WebhookConfiguration::isValidWebhookUrl($binding['webhook_url'])) {
@@ -283,15 +322,15 @@ class NotifyUpwellLowFuel implements ShouldQueue
         return 'good';
     }
 
-    private function buildCynoReagentPayload($row, string $reagentName, int $qty, int $warn, int $crit, string $status, bool $isJammer): array
+    private function buildCynoReagentPayload($row, string $reagentName, int $qty, int $warn, int $crit, string $status, bool $isJammer, array $meta = []): array
     {
         $color = $status === 'critical' ? 15158332 : 16776960; // red / yellow
 
-        // Resolve display metadata
-        $structureName = DB::table('universe_structures')->where('structure_id', $row->structure_id)->value('name')
-            ?: ('Structure #' . $row->structure_id);
-        $structureType = DB::table('invTypes')->where('typeID', $row->type_id)->value('typeName') ?: 'Unknown';
-        $sys = DB::table('mapDenormalize')->where('itemID', $row->system_id)->select('itemName', 'security')->first();
+        // Display metadata is preloaded in the caller (processCynoReagents)
+        // and passed via $meta. Helpers no longer hit the DB per row.
+        $structureName = ($meta['structure_name'] ?? null) ?: ('Structure #' . $row->structure_id);
+        $structureType = ($meta['structure_type'] ?? null) ?: 'Unknown';
+        $sys = $meta['system'] ?? null;
         $systemDisplay = $sys ? $sys->itemName . ' (' . number_format($sys->security, 2) . ')' : 'Unknown';
 
         $moduleLabel = $isJammer ? 'Standup Cyno Jammer' : 'Standup Cyno Generator';
@@ -352,14 +391,16 @@ class NotifyUpwellLowFuel implements ShouldQueue
         return $payload;
     }
 
-    private function upsertCynoBoardTimer($row, string $reagentName, int $reagentTypeId, int $qty, string $status, bool $isJammer): void
+    private function upsertCynoBoardTimer($row, string $reagentName, int $reagentTypeId, int $qty, string $status, bool $isJammer, array $meta = []): void
     {
         $reagentKey = $isJammer ? 'strontium' : 'liquid_ozone';
 
-        $structureName = DB::table('universe_structures')->where('structure_id', $row->structure_id)->value('name');
-        $structureType = DB::table('invTypes')->where('typeID', $row->type_id)->value('typeName');
-        $sys = DB::table('mapDenormalize')->where('itemID', $row->system_id)->select('itemName', 'security')->first();
-        $ownerName = DB::table('corporation_infos')->where('corporation_id', $row->corporation_id)->value('name');
+        // Display metadata is preloaded in the caller (processCynoReagents)
+        // and passed via $meta. Helpers no longer hit the DB per row.
+        $structureName = $meta['structure_name'] ?? null;
+        $structureType = $meta['structure_type'] ?? null;
+        $sys = $meta['system'] ?? null;
+        $ownerName = $meta['owner_name'] ?? null;
 
         Timer::upsertAuto([
             'source'                 => 'auto_fuel',
@@ -515,6 +556,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
                     'structure_id'    => (int) $structure->structure_id,
                     'corporation_id'  => (int) $structure->corporation_id,
                     'type_id'         => (int) $structure->type_id,
+                    'system_id'       => isset($structure->system_id) ? (int) $structure->system_id : null,
                     'structure_name'  => $fuelData['structure_name'] ?? null,
                     'system_name'     => $fuelData['system_name'] ?? null,
                     'system_security' => $fuelData['system_security'] ?? null,
