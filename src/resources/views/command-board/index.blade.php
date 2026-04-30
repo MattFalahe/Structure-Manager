@@ -202,12 +202,84 @@
     @endif
 
     <div class="cb-header-actions">
+        @php
+            $icsUrl = \Illuminate\Support\Facades\URL::signedRoute(
+                'structure-manager.command-board.calendar',
+                ['user_id' => auth()->id()]
+            );
+        @endphp
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle="modal" data-target="#cbCalendarSubscribeModal" title="Subscribe to your timers in your calendar app">
+            <i class="far fa-calendar-plus"></i> Subscribe (ICS)
+        </button>
+
         @if($canCreate)
             <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#cbManualOpModal">
                 <i class="fas fa-plus"></i> Add Manual Op Timer
             </button>
         @endif
     </div>
+
+    {{-- ICS subscription modal — lets the user copy their personal feed URL --}}
+    <div class="modal fade" id="cbCalendarSubscribeModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content" style="background:#2a2f3a; border:1px solid #454d55; color:#c2c7d0;">
+                <div class="modal-header" style="border-bottom-color:#454d55;">
+                    <h5 class="modal-title" style="color:#fff;">
+                        <i class="far fa-calendar-plus"></i> Subscribe to Structure Board
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal" style="color:#fff;"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        Paste this URL into Google Calendar, Outlook, or Apple Calendar as a
+                        new <em>subscription</em> calendar (NOT an import — subscriptions
+                        refresh automatically).
+                    </p>
+                    <div class="form-group">
+                        <label>Your subscription URL (keep it private — it grants read access to YOUR view of the board)</label>
+                        <div class="input-group">
+                            <input type="text" id="cbIcsUrl" class="form-control" value="{{ $icsUrl }}" readonly style="background:#1f242c; color:#fff; border-color:#454d55;">
+                            <span class="input-group-append">
+                                <button type="button" class="btn btn-secondary" onclick="cbCopyIcsUrl()">
+                                    <i class="far fa-copy"></i> Copy
+                                </button>
+                            </span>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        The URL is signed with this SeAT instance's APP_KEY and is unique
+                        to you. Anyone with the URL can read your visible timers as a
+                        calendar feed (read-only — they can't dismiss, delete, or modify).
+                        The URL stays valid until your SeAT installation rotates APP_KEY.
+                    </small>
+
+                    <hr style="border-color:#454d55;">
+                    <strong style="color:#fff;">Where to paste it:</strong>
+                    <ul style="margin-top:6px;">
+                        <li><strong>Google Calendar</strong>: Settings → Add calendar → From URL</li>
+                        <li><strong>Outlook</strong>: Calendar → Add calendar → Subscribe from web</li>
+                        <li><strong>Apple Calendar</strong>: File → New Calendar Subscription</li>
+                        <li><strong>Thunderbird / Lightning</strong>: New Calendar → On the Network → iCalendar</li>
+                    </ul>
+                </div>
+                <div class="modal-footer" style="border-top-color:#454d55;">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function cbCopyIcsUrl() {
+            const input = document.getElementById('cbIcsUrl');
+            if (!input) return;
+            input.select();
+            input.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+            } catch (e) { /* clipboard blocked — user can copy manually */ }
+        }
+    </script>
 
     {{-- Filter strip --}}
     <div class="cb-filters">

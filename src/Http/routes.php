@@ -318,6 +318,21 @@ Route::group([
         'middleware' => 'can:structure-manager.command-board.view',
     ]);
 
+    // ICS calendar feed — subscription URL operators paste into Google
+    // Calendar / Outlook / Apple Calendar to see timers natively. Auth
+    // is via Laravel's signed-URL middleware: the URL embeds a HMAC over
+    // (route + user_id) using APP_KEY. The user's normal visibility
+    // filters apply (their corp memberships + role gates) so the feed
+    // shows exactly the timers they would see on the web board.
+    //
+    // No CSRF (this is a GET subscribed by external apps, not a form
+    // submission), no auth middleware (signed URL itself authenticates).
+    Route::get('/command-board/calendar.ics', [
+        'as'         => 'structure-manager.command-board.calendar',
+        'uses'       => 'StructureBoardController@calendar',
+        'middleware' => 'signed',
+    ])->withoutMiddleware(['web', 'auth', 'locale']);
+
     // ESI Key Holder management moved to Manager Core v1.x.
     // When MC is installed, admins manage the shared key pool at
     //   route('manager-core.esi-key-pool.index')

@@ -393,6 +393,166 @@ class StructureBoardController extends Controller
     }
 
     /**
+     * GET /command-board/calendar.ics
+     *
+     * Subscribed-feed ICS calendar. The signed URL embeds a HMAC over
+     * (route + query) using APP_KEY; Laravel's `signed` middleware rejects
+     * tampered URLs. The user_id query parameter identifies whose visibility
+     * filter to apply — same scope rules as the web board (corp memberships
+     * + role gates).
+     *
+     * Output: text/calendar (RFC 5545). One VEVENT per active timer in the
+     * window. eve_time is the event's start (UTC). DTEND is +1 hour for
+     * visualization (most calendar apps need a non-zero duration).
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function calendar(Request $request)
+    {
+        $userId = (int) $request->input('user_id');
+        if ($userId <= 0) {
+            abort(400, 'Missing user_id');
+        }
+
+        $user = \Seat\Web\Models\User::find($userId);
+        if (!$user) {
+            abort(404);
+        }
+
+        // Apply the same visibility filters the web board uses. The scope
+        // bypasses for admins; for non-admins it intersects corp + role.
+        $now = Carbon::now();
+
+        $timers = Timer::query()
+            ->visibleTo($user)
+            ->whereNull('dismissed_at')
+            ->where('eve_time', '>=', $now->copy()->subDays(7))
+            ->where('eve_time', '<=', $now->copy()->addDays(60))
+            ->orderBy('eve_time', 'asc')
+            ->limit(500)
+            ->get();
+
+        // Build the ICS document. Newlines must be CRLF per RFC 5545.
+        $crlf = "\r\n";
+        $now_ical = $now->format('Ymd\THis\Z');
+        $host = parse_url(config('app.url') ?? request()->getSchemeAndHttpHost(), PHP_URL_HOST) ?? 'seat.local';
+
+        $lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//SeAT Structure Manager//Structure Board//EN',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'X-WR-CALNAME:Structure Board',
+            'X-WR-CALDESC:Upwell timers, fuel events, manual ops + lifecycle',
+            'X-WR-TIMEZONE:UTC',
+        ];
+
+        foreach ($timers as $timer) {
+            if ($timer->eve_time === null) {
+                continue;
+            }
+            $start = $timer->eve_time->copy()->utc();
+            $end   = $start->copy()->addHour();
+
+            $summary = self::icsSummary($timer);
+            $description = self::icsDescription($timer);
+            $location = $timer->system_name
+                ? ($timer->system_name . ($timer->system_security !== null ? sprintf(' (%.2f)', $timer->system_security) : ''))
+                : '';
+
+            $url = url('/structure-manager/command-board?timer_id=' . $timer->id);
+
+            $lines[] = 'BEGIN:VEVENT';
+            $lines[] = 'UID:sm-timer-' . $timer->id . '@' . $host;
+            $lines[] = 'DTSTAMP:' . $now_ical;
+            $lines[] = 'DTSTART:' . $start->format('Ymd\THis\Z');
+            $lines[] = 'DTEND:'   . $end->format('Ymd\THis\Z');
+            $lines[] = 'SUMMARY:' . self::icsEscape($summary);
+            if ($description !== '') {
+                $lines[] = 'DESCRIPTION:' . self::icsEscape($description);
+            }
+            if ($location !== '') {
+                $lines[] = 'LOCATION:' . self::icsEscape($location);
+            }
+            $lines[] = 'URL:' . self::icsEscape($url);
+            $lines[] = 'CATEGORIES:' . self::icsEscape(strtoupper($timer->category_group ?? 'TIMER'));
+            // Severity hint for clients that respect priority (1=high, 9=low)
+            $lines[] = 'PRIORITY:' . match ($timer->severity) {
+                'critical' => '1',
+                'warning'  => '5',
+                default    => '9',
+            };
+            $lines[] = 'END:VEVENT';
+        }
+
+        $lines[] = 'END:VCALENDAR';
+
+        $ics = implode($crlf, $lines) . $crlf;
+
+        return response($ics, 200, [
+            'Content-Type'        => 'text/calendar; charset=utf-8',
+            'Content-Disposition' => 'inline; filename="structure-board.ics"',
+            'Cache-Control'       => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+
+    /**
+     * Build an ICS SUMMARY line from a Timer. Concise, scannable in calendar
+     * grid views ("Astrahus: fuel critical (Jita)").
+     */
+    private static function icsSummary(Timer $timer): string
+    {
+        $struct = $timer->structure_name ?? $timer->structure_type ?? 'Structure';
+        $type   = str_replace('_', ' ', $timer->event_type ?? '');
+        $sys    = $timer->system_name ? " ({$timer->system_name})" : '';
+        return "{$struct}: {$type}{$sys}";
+    }
+
+    /**
+     * Build an ICS DESCRIPTION line from a Timer. Multi-line detail for
+     * subscribers viewing event detail in their calendar app.
+     */
+    private static function icsDescription(Timer $timer): string
+    {
+        $parts = [];
+        if ($timer->severity) {
+            $parts[] = 'Severity: ' . strtoupper($timer->severity);
+        }
+        if ($timer->source) {
+            $parts[] = 'Source: ' . str_replace('_', ' ', $timer->source);
+        }
+        if ($timer->owner_corporation_name) {
+            $parts[] = 'Owner: ' . $timer->owner_corporation_name;
+        }
+        if ($timer->attacker_corporation_name) {
+            $parts[] = 'Attacker: ' . $timer->attacker_corporation_name;
+        }
+        if ($timer->notes) {
+            $parts[] = '';
+            $parts[] = $timer->notes;
+        }
+        return implode("\n", $parts);
+    }
+
+    /**
+     * Escape a value for inclusion in an ICS line. Per RFC 5545:
+     *   - backslashes escaped to \\
+     *   - newlines to \n
+     *   - commas to \,
+     *   - semicolons to \;
+     */
+    private static function icsEscape(string $value): string
+    {
+        $value = str_replace('\\', '\\\\', $value);
+        $value = str_replace("\r\n", "\n", $value);
+        $value = str_replace("\n", '\\n', $value);
+        $value = str_replace(',', '\\,', $value);
+        $value = str_replace(';', '\\;', $value);
+        return $value;
+    }
+
+    /**
      * Resolve which corp_ids a new manual-op timer should be created for,
      * based on the chosen visibility scope.
      *
