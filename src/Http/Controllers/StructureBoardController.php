@@ -113,6 +113,95 @@ class StructureBoardController extends Controller
     }
 
     /**
+     * GET /command-board/grid
+     *
+     * Monthly calendar grid view — alternative to the timeline. Same data,
+     * same visibility scope. Useful for operators planning around a long
+     * window (multi-week ops, anchor cycles). Filters by ?month=YYYY-MM
+     * (defaults to current month) and ?corp=N (same as the timeline view).
+     *
+     * Renders a 6-week grid (always 42 cells = 6 rows × 7 days) starting
+     * from the Monday on or before the 1st of the requested month, so the
+     * grid stays a consistent shape across months. Days outside the
+     * requested month are dimmed.
+     */
+    public function calendarGrid(Request $request)
+    {
+        $user = auth()->user();
+
+        $isBoardAdmin = $user->can('structure-manager.admin')
+            || $user->can('structure-manager.command-board.admin')
+            || $user->isAdmin();
+
+        // Resolve target month (?month=YYYY-MM); fall back to current month.
+        $monthInput = $request->input('month');
+        try {
+            $monthStart = $monthInput
+                ? Carbon::createFromFormat('Y-m', $monthInput)->startOfMonth()
+                : Carbon::now()->startOfMonth();
+        } catch (\Throwable $e) {
+            $monthStart = Carbon::now()->startOfMonth();
+        }
+        $monthEnd = $monthStart->copy()->endOfMonth();
+
+        // Grid window: snap to Monday on/before month start, run 42 days
+        // forward. Always 6 rows x 7 cols regardless of which day-of-week
+        // the 1st falls on, so the grid template is uniform.
+        $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
+        $gridEnd   = $gridStart->copy()->addDays(42);
+
+        $query = Timer::active()
+            ->visibleTo($user)
+            ->whereBetween('eve_time', [$gridStart, $gridEnd])
+            ->orderBy('eve_time', 'asc');
+
+        $corpFilter = $request->input('corp');
+        if ($corpFilter === 'all_mine' || $corpFilter === null) {
+            // No extra filter — visibleTo already scopes
+        } elseif ($corpFilter === 'all_tracked' && $isBoardAdmin) {
+            // Admin: see everything
+        } elseif (is_numeric($corpFilter)) {
+            $query->where('corporation_id', (int) $corpFilter);
+        }
+
+        $timers = $query->get();
+
+        // Group timers by day-of-month-key for cell rendering
+        $byDay = $timers->groupBy(function ($timer) {
+            return $timer->eve_time->format('Y-m-d');
+        });
+
+        // Build the 42-day grid as a flat array of [date => Carbon] entries
+        $gridDays = [];
+        for ($i = 0; $i < 42; $i++) {
+            $d = $gridStart->copy()->addDays($i);
+            $gridDays[] = $d;
+        }
+
+        // Corp dropdown data — same as timeline view
+        $userCorpIds = Timer::getUserCorpIds($user);
+        $userCorps = DB::table('corporation_infos')
+            ->whereIn('corporation_id', $userCorpIds)
+            ->select('corporation_id', 'name', 'ticker')
+            ->orderBy('name')
+            ->get();
+
+        return view('structure-manager::command-board.grid', [
+            'monthStart'    => $monthStart,
+            'monthEnd'      => $monthEnd,
+            'gridStart'     => $gridStart,
+            'gridDays'      => $gridDays,
+            'byDay'         => $byDay,
+            'timers'        => $timers,
+            'userCorps'     => $userCorps,
+            'corpFilter'    => $corpFilter ?? 'all_mine',
+            'isBoardAdmin'  => $isBoardAdmin,
+            'prevMonthIso'  => $monthStart->copy()->subMonthNoOverflow()->format('Y-m'),
+            'nextMonthIso'  => $monthStart->copy()->addMonthNoOverflow()->format('Y-m'),
+        ]);
+    }
+
+    /**
      * POST /command-board/op
      * Create a manual hostile/defense op timer.
      */

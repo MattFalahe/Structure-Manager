@@ -333,6 +333,16 @@ Route::group([
         'middleware' => 'signed',
     ])->withoutMiddleware(['web', 'auth', 'locale']);
 
+    // Monthly grid view — alternative to the timeline. Same data, same
+    // visibility filters; just laid out as a calendar grid for operators
+    // who prefer that view shape. Defaults to the current month; ?month=YYYY-MM
+    // navigates.
+    Route::get('/command-board/grid', [
+        'as'         => 'structure-manager.command-board.grid',
+        'uses'       => 'StructureBoardController@calendarGrid',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
     // ESI Key Holder management moved to Manager Core v1.x.
     // When MC is installed, admins manage the shared key pool at
     //   route('manager-core.esi-key-pool.index')

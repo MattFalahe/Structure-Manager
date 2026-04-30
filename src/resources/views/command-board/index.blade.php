@@ -208,6 +208,9 @@
                 ['user_id' => auth()->id()]
             );
         @endphp
+        <a href="{{ route('structure-manager.command-board.grid') }}" class="btn btn-outline-secondary btn-sm" title="Switch to monthly calendar grid view">
+            <i class="far fa-calendar"></i> Grid view
+        </a>
         <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle="modal" data-target="#cbCalendarSubscribeModal" title="Subscribe to your timers in your calendar app">
             <i class="far fa-calendar-plus"></i> Subscribe (ICS)
         </button>
