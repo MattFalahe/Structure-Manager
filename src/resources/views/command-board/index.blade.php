@@ -427,6 +427,15 @@
                             @if($timer->notes)
                                 <div class="cb-timer-notes">{{ $timer->notes }}</div>
                             @endif
+                            @if(!$timer->tags->isEmpty())
+                                <div class="cb-timer-tags" style="margin-top:4px;">
+                                    @foreach($timer->tags_list as $tag)
+                                        <span class="cb-tag-chip" style="display:inline-block; padding:1px 8px; margin-right:4px; font-size:11px; background:#454d55; color:#aaa; border-radius:10px; border:1px solid #5a6268;">
+                                            <i class="fas fa-tag" style="font-size:9px;"></i> {{ $tag }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
 
                         <div class="cb-timer-when">
@@ -575,6 +584,15 @@
                     <div class="form-group">
                         <label>Notes</label>
                         <textarea name="notes" class="form-control cb-select" rows="3" maxlength="2000" placeholder="Op details, callouts, doctrine, etc."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tags <small class="text-muted">(optional)</small></label>
+                        <input type="text" name="tags" class="form-control cb-select" maxlength="1024"
+                               placeholder="e.g. op-stillwater, vs-tribe, doctrine-armor">
+                        <small class="form-text text-muted">
+                            Comma-separated. Free-form labels for filtering / grouping. Lowercased + deduped on save. Up to 16 per timer, max 64 chars each.
+                        </small>
                     </div>
 
                 </div>

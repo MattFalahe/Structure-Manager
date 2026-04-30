@@ -152,6 +152,11 @@ final class TimerEventEnvelope
             'dismissed_at'     => $timer->dismissed_at?->toIso8601String(),
             'is_manual'        => $isManual,
             'url'              => $url,
+
+            // Free-form labels (Polish item — see migration 000029). Subscribers
+            // can route on these for custom workflows ("ping the doctrine
+            // channel for any timer tagged 'doctrine-armor'", etc.).
+            'tags'             => self::extractTags($timer),
         ];
 
         // Caller's $extras overlay — flavor-specific fields like
@@ -171,6 +176,31 @@ final class TimerEventEnvelope
         }
 
         return $merged;
+    }
+
+    /**
+     * Extract the timer's tags as a flat string array. Defensively handles
+     * the case where the tags relationship hasn't been eager-loaded — falls
+     * back to an empty array rather than triggering an N+1 lazy-load on
+     * every event publish.
+     *
+     * @return array<int, string>
+     */
+    private static function extractTags(Timer $timer): array
+    {
+        if (!$timer->relationLoaded('tags')) {
+            // Caller didn't eager-load tags. Trying to publish without tags
+            // is acceptable — they're optional payload metadata. Skip the
+            // lazy-load to keep observers fast.
+            return [];
+        }
+        return $timer->tags
+            ->pluck('tag')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
     }
 
     /**

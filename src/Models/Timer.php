@@ -109,6 +109,61 @@ class Timer extends Model
         return $this->belongsTo(\Seat\Eveapi\Models\Corporation\CorporationInfo::class, 'corporation_id', 'corporation_id');
     }
 
+    /**
+     * Free-form tag rows attached to this timer. See TimerTag + the
+     * `tags_list` accessor for a flat string array.
+     */
+    public function tags(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TimerTag::class, 'timer_id');
+    }
+
+    /**
+     * Convenience accessor — returns this timer's tags as a sorted unique
+     * array of strings. Falls back to empty array when no tags loaded.
+     * Subscribers reading the cross-plugin event payload see the same shape.
+     *
+     * @return array<int, string>
+     */
+    public function getTagsListAttribute(): array
+    {
+        return $this->tags
+            ->pluck('tag')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Replace this timer's tags with a fresh list. Normalizes (lowercase,
+     * trimmed, deduped, capped at 16 tags), removes existing rows, inserts
+     * the new set. Pass [] to clear all tags.
+     */
+    public function syncTags(array $tags): void
+    {
+        $normalized = collect($tags)
+            ->map(fn ($t) => mb_strtolower(trim((string) $t)))
+            ->filter(fn ($t) => $t !== '' && mb_strlen($t) <= 64)
+            ->unique()
+            ->take(16)
+            ->values()
+            ->all();
+
+        // Two-step: delete + insert. Tiny table, no real cost.
+        $this->tags()->delete();
+        if (empty($normalized)) {
+            return;
+        }
+        $now = Carbon::now();
+        $rows = array_map(
+            fn ($tag) => ['timer_id' => $this->id, 'tag' => $tag, 'created_at' => $now],
+            $normalized
+        );
+        TimerTag::insert($rows);
+    }
+
     // ============================================================
     // Scopes
     // ============================================================

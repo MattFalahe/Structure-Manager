@@ -42,10 +42,12 @@ class StructureBoardController extends Controller
             $days = $defaultDays;
         }
 
-        // Build base query
+        // Build base query — eager-load tags so per-row chip rendering
+        // doesn't N+1.
         $query = Timer::active()
             ->visibleTo($user)
             ->withinWindow($days)
+            ->with('tags')
             ->orderBy('eve_time', 'asc');
 
         // Optional corp filter (from URL param — client will re-POST on change)
@@ -153,6 +155,7 @@ class StructureBoardController extends Controller
         $query = Timer::active()
             ->visibleTo($user)
             ->whereBetween('eve_time', [$gridStart, $gridEnd])
+            ->with('tags')
             ->orderBy('eve_time', 'asc');
 
         $corpFilter = $request->input('corp');
@@ -230,6 +233,7 @@ class StructureBoardController extends Controller
             'specific_corp_id'          => 'nullable|integer',
             'role_id'                   => 'nullable|integer',
             'severity'                  => 'nullable|in:info,warning,critical',
+            'tags'                      => 'nullable|string|max:1024',  // comma-separated, normalized in syncTags
         ]);
 
         // Resolve system_id if the admin typed a system name we can look up
@@ -286,11 +290,20 @@ class StructureBoardController extends Controller
         // per corp and link them via a shared group_id so edits can propagate.
         $groupId = count($corpIds) > 1 ? (string) Str::uuid() : null;
 
+        // Parse comma-separated tag input. Normalization (lowercase, dedupe,
+        // length cap) happens inside Timer::syncTags.
+        $tagList = !empty($data['tags'])
+            ? array_filter(array_map('trim', explode(',', $data['tags'])))
+            : [];
+
         foreach ($corpIds as $corpId) {
-            Timer::create(array_merge($baseAttrs, [
+            $timer = Timer::create(array_merge($baseAttrs, [
                 'corporation_id' => $corpId,
                 'group_id'       => $groupId,
             ]));
+            if (!empty($tagList)) {
+                $timer->syncTags($tagList);
+            }
         }
 
         return redirect()
@@ -517,6 +530,7 @@ class StructureBoardController extends Controller
             ->whereNull('dismissed_at')
             ->where('eve_time', '>=', $now->copy()->subDays(7))
             ->where('eve_time', '<=', $now->copy()->addDays(60))
+            ->with('tags')
             ->orderBy('eve_time', 'asc')
             ->limit(500)
             ->get();
@@ -565,7 +579,16 @@ class StructureBoardController extends Controller
                 $lines[] = 'LOCATION:' . self::icsEscape($location);
             }
             $lines[] = 'URL:' . self::icsEscape($url);
-            $lines[] = 'CATEGORIES:' . self::icsEscape(strtoupper($timer->category_group ?? 'TIMER'));
+
+            // CATEGORIES: category_group + any user-applied tags.
+            // ICS spec accepts comma-separated values on a CATEGORIES line.
+            $categories = [strtoupper($timer->category_group ?? 'TIMER')];
+            if ($timer->relationLoaded('tags') && !$timer->tags->isEmpty()) {
+                foreach ($timer->tags_list as $tag) {
+                    $categories[] = self::icsEscape($tag);
+                }
+            }
+            $lines[] = 'CATEGORIES:' . implode(',', $categories);
             // Severity hint for clients that respect priority (1=high, 9=low)
             $lines[] = 'PRIORITY:' . match ($timer->severity) {
                 'critical' => '1',
@@ -616,6 +639,9 @@ class StructureBoardController extends Controller
         }
         if ($timer->attacker_corporation_name) {
             $parts[] = 'Attacker: ' . $timer->attacker_corporation_name;
+        }
+        if ($timer->relationLoaded('tags') && !$timer->tags->isEmpty()) {
+            $parts[] = 'Tags: ' . implode(', ', $timer->tags_list);
         }
         if ($timer->notes) {
             $parts[] = '';
