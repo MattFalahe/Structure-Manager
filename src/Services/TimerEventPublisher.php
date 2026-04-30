@@ -37,10 +37,10 @@ class TimerEventPublisher
      * @param array  $extras  flavor-specific payload fields (passed through
      *                        to TimerEventEnvelope::build)
      */
-    public static function publish(string $action, Timer $timer, array $extras = []): void
+    public static function publish(string $action, Timer $timer, array $extras = []): bool
     {
         if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
-            return;
+            return false;
         }
 
         $eventName = 'structure_manager.timer.' . $action;
@@ -56,8 +56,10 @@ class TimerEventPublisher
                 "TimerEventPublisher: published {$eventName} for timer {$timer->id} " .
                 "(event_id={$payload['event_id']}, event_type={$timer->event_type}, severity={$timer->severity})"
             );
+            return true;
         } catch (\Throwable $e) {
             Log::warning("TimerEventPublisher: failed to publish {$eventName} for timer {$timer->id}: " . $e->getMessage());
+            return false;
         }
     }
 }

@@ -15,6 +15,7 @@ use StructureManager\Console\Commands\SimulateFastConsumption;
 use StructureManager\Console\Commands\NotifyUpwellFuelCommand;
 use StructureManager\Console\Commands\ProcessStructureNotificationsCommand;
 use StructureManager\Console\Commands\TrackStructurePresenceCommand;
+use StructureManager\Console\Commands\PublishTimerScheduleEventsCommand;
 use StructureManager\Database\Seeders\ScheduleSeeder;
 use StructureManager\Integrations\ManagerCoreIntegration;
 use StructureManager\Models\Timer;
@@ -49,6 +50,7 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                 NotifyUpwellFuelCommand::class,
                 ProcessStructureNotificationsCommand::class,
                 TrackStructurePresenceCommand::class,
+                PublishTimerScheduleEventsCommand::class,
             ]);
         }
 
