@@ -449,6 +449,21 @@ class NotifyUpwellLowFuel implements ShouldQueue
         // Reset latches on recovery (above critical threshold)
         $this->resetLatchesOnRecovery($status, $currentStatus);
 
+        // Detect a recovery transition: structure was previously alerting at
+        // warning/critical and is now back to good. Publish a recovery event
+        // so cross-plugin subscribers can clear their dedup latches without
+        // waiting for the next critical fire. Snapshot+commit pattern: read
+        // the previous status BEFORE updating, write 'good' back if we fired,
+        // so we don't double-publish on the next 10-min poll.
+        $previousStatus = $status->last_fuel_notification_status ?? null;
+        $wasAlerting = in_array($previousStatus, ['warning', 'critical'], true);
+        if ($wasAlerting && $currentStatus === 'good') {
+            $this->publishFuelRecoveredEvent($structure, $fuelData);
+            $status->last_fuel_notification_status = 'good';
+            $status->last_fuel_notification_at = Carbon::now();
+            $status->save();
+        }
+
         // Upsert a Structure Board timer row so the board reflects this
         // structure's pending fuel expiry. Always called — on recovery to
         // 'good' the row is soft-dismissed (board hides it) but kept for
@@ -488,13 +503,12 @@ class NotifyUpwellLowFuel implements ShouldQueue
         }
         $status->save();
 
-        // Cross-plugin: publish a `structure.alert.fuel_critical` event
-        // through Manager Core's EventBus when this is a refinery with an
-        // active moon extraction. Mining Manager subscribes and fires its
-        // own extraction_at_risk notification (dedicated channel, mining-
-        // domain embed, capital-safety language). No-op if MC is missing
-        // or the refinery isn't mining right now.
-        $this->publishRefineryAtRiskEvent($structure, $fuelData, $currentStatus);
+        // Cross-plugin: publish a `structure.alert.fuel_critical` event through
+        // Manager Core's EventBus for ALL critical-fuel structures. Subscribers
+        // filter to the structures they care about (MM filters to refineries
+        // with active moon extractions; future subscribers can use their own
+        // criteria). No-op if MC is missing.
+        $this->publishFuelCriticalEvent($structure, $fuelData, $currentStatus);
 
         return $sent;
     }
@@ -502,50 +516,37 @@ class NotifyUpwellLowFuel implements ShouldQueue
     /**
      * Publish a `structure.alert.fuel_critical` event on Manager Core's
      * EventBus when:
-     *   - structure is an Athanor (35835) or Tatara (35836)
      *   - current fuel status is 'critical'
-     *   - an active moon extraction exists (Mining Manager owns this check)
      *   - Manager Core is installed (EventBus class exists)
      *
-     * Mining Manager subscribes to the `structure.alert.*` wildcard and
-     * filters this into its extraction_at_risk notification pipeline.
+     * Fires for ALL critical-fuel Upwell structures uniformly with the other 4
+     * `structure.alert.*` flavors (shield_reinforced, armor_reinforced,
+     * hull_reinforced, destroyed). Subscribers are responsible for filtering
+     * to the structures they care about — Mining Manager filters to refineries
+     * with active moon extractions inside its own StructureAlertHandler;
+     * future subscribers (Pings, etc.) can route by their own criteria.
      *
-     * This is the FIRST piece of SM's future `structure.alert.*` family —
-     * shield_reinforced, armor_reinforced, hull_reinforced, destroyed
-     * will follow. See memory doc
-     * project_structure_manager_destruction_detection.md for the full design.
-     *
-     * @pending-sm-work Extend with shield/armor/hull/destroyed event flavors
-     *                  in a future SM session. Mining Manager is already
-     *                  subscribed to the wildcard pattern, so adding more
-     *                  publish calls from SM automatically activates them.
+     * This was previously gated behind a refinery+active-extraction filter to
+     * limit MM's notification volume, but that left non-MM subscribers unable
+     * to receive fuel-critical events for citadels and engineering complexes.
+     * The contract pattern is "publish broadly, subscribe narrowly" — push the
+     * filtering to where it belongs (subscribers).
      *
      * @param object $structure
      * @param array  $fuelData
      * @param string $currentStatus
      * @return void
      */
-    private function publishRefineryAtRiskEvent($structure, array $fuelData, string $currentStatus): void
+    private function publishFuelCriticalEvent($structure, array $fuelData, string $currentStatus): void
     {
-        // Refinery check — Athanor 35835, Tatara 35836
-        if (!in_array((int) $structure->type_id, [35835, 35836], true)) {
-            return;
-        }
-
-        // Only fire on the critical transition — warning is too noisy
+        // Only fire on the critical transition — warning is intentionally not
+        // an event flavor (matches contract: only critical + recovered fire)
         if ($currentStatus !== 'critical') {
             return;
         }
 
         // MC not installed — nothing to publish to
         if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
-            return;
-        }
-
-        // MM-owned check — is this refinery actually mining right now?
-        // If not, SM's existing low-fuel webhook already covers the
-        // operator; no need to also spam MM's mining-specific channel.
-        if (!FuelCalculator::hasActiveMoonExtraction((int) $structure->structure_id)) {
             return;
         }
 
@@ -582,9 +583,64 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 $payload
             );
 
-            Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_critical for refinery {$structure->structure_id} (active extraction + critical fuel, event_id={$payload['event_id']})");
+            Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_critical for structure {$structure->structure_id} (event_id={$payload['event_id']})");
         } catch (\Throwable $e) {
-            Log::warning("NotifyUpwellLowFuel: refinery_at_risk event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
+            Log::warning("NotifyUpwellLowFuel: fuel_critical event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Publish a `structure.alert.fuel_recovered` event when an Upwell structure's
+     * fuel status transitions from warning/critical back to good (i.e. the
+     * structure has been refueled). Closes the alert ladder so subscribers can
+     * auto-clear their dedup latches without waiting for the next critical fire.
+     *
+     * Subscribers (Mining Manager, Pings, etc.) can use this to:
+     *   - Reset per-structure alert-sent flags
+     *   - Send a "structure refueled" follow-up message
+     *   - Update calendar / board entries to dismissed state
+     *
+     * @param object $structure
+     * @param array  $fuelData
+     * @return void
+     */
+    private function publishFuelRecoveredEvent($structure, array $fuelData): void
+    {
+        if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
+            return;
+        }
+
+        $payload = AlertEventEnvelope::build('fuel_recovered', [
+            'structure_id'      => (int) $structure->structure_id,
+            'corporation_id'    => (int) $structure->corporation_id,
+            'type_id'           => (int) $structure->type_id,                // legacy key
+            'structure_type_id' => (int) $structure->type_id,                // contract key
+            'system_id'         => isset($structure->system_id) ? (int) $structure->system_id : null,
+            'structure_name'    => $fuelData['structure_name'] ?? null,
+            'system_name'       => $fuelData['system_name'] ?? null,
+            'system_security'   => $fuelData['system_security'] ?? null,
+            'severity'          => 'info',                                   // recovery is good news
+            'source_reference'  => 'fuel:' . $structure->structure_id,       // matches the critical event so subscribers can correlate
+
+            // eve_time = now (the moment of recovery)
+            'eve_time' => Carbon::now(),
+
+            // Flavor-specific extras — the new fuel runway after the refuel
+            'days_remaining'  => (float) ($fuelData['days_remaining'] ?? 0),
+            'hours_remaining' => (float) ($fuelData['hours_remaining'] ?? 0),
+            'fuel_expires'    => $fuelData['fuel_expires'] ?? null,
+            'hourly_rate'     => (float) ($fuelData['hourly_rate'] ?? 0),
+        ]);
+
+        try {
+            app(\ManagerCore\Services\EventBus::class)->publish(
+                'structure.alert.fuel_recovered',
+                'structure-manager',
+                $payload
+            );
+            Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_recovered for structure {$structure->structure_id} (event_id={$payload['event_id']})");
+        } catch (\Throwable $e) {
+            Log::warning("NotifyUpwellLowFuel: fuel_recovered event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
         }
     }
 

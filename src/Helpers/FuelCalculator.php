@@ -569,12 +569,15 @@ class FuelCalculator
      *
      *   1. ✅ hasActiveMoonExtraction() helper — this method (ships now)
      *   2. ✅ structure.alert.fuel_critical publish from NotifyUpwellLowFuel
-     *          (see publishRefineryAtRiskEvent() in that Job)
-     *   3. ⏳ Progressive combat events: structure.alert.shield_reinforced,
+     *          (see publishFuelCriticalEvent() in that Job; subscriber-side
+     *          filtering — was previously gated to refineries-with-active-
+     *          extraction here, but moved to MM's StructureAlertHandler so
+     *          non-MM subscribers can also receive citadel/EC fuel alerts)
+     *   3. ✅ Progressive combat events: structure.alert.shield_reinforced,
      *          structure.alert.armor_reinforced, structure.alert.hull_reinforced
      *          — scan character_notifications for StructureLostShields /
      *          StructureLostArmor / StructureUnderAttack types.
-     *   4. ⏳ structure.alert.destroyed — requires disappearance-detection
+     *   4. ✅ structure.alert.destroyed — requires disappearance-detection
      *          tracking table + StructureDestroyed notification scan.
      *          Full design in memory:
      *          project_structure_manager_destruction_detection.md

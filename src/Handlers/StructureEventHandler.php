@@ -263,7 +263,7 @@ class StructureEventHandler
      *
      * Mapping (matches the contract in
      * project_structure_manager_destruction_detection.md and the existing
-     * NotifyUpwellLowFuel::publishRefineryAtRiskEvent for fuel_critical):
+     * NotifyUpwellLowFuel::publishFuelCriticalEvent for fuel_critical):
      *
      *   StructureLostShields / SkyhookLostShields → structure.alert.shield_reinforced
      *   StructureLostArmor                        → structure.alert.armor_reinforced
