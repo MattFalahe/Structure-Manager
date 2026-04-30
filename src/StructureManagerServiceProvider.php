@@ -17,6 +17,8 @@ use StructureManager\Console\Commands\ProcessStructureNotificationsCommand;
 use StructureManager\Console\Commands\TrackStructurePresenceCommand;
 use StructureManager\Database\Seeders\ScheduleSeeder;
 use StructureManager\Integrations\ManagerCoreIntegration;
+use StructureManager\Models\Timer;
+use StructureManager\Observers\TimerObserver;
 
 class StructureManagerServiceProvider extends AbstractSeatPlugin
 {
@@ -52,6 +54,11 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
 
         // Opt into Manager Core's shared ESI fast-poll if available. No-op if MC is absent.
         ManagerCoreIntegration::registerStructureEventHandler();
+
+        // Family B (cross-plugin timer.* events): observer fires
+        // structure_manager.timer.created / .updated / .dismissed on Timer
+        // row transitions. No-op when MC is absent (publisher checks).
+        Timer::observe(TimerObserver::class);
 
         // Add publications
         $this->add_publications();
