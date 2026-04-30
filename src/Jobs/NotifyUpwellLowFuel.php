@@ -14,6 +14,7 @@ use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
+use StructureManager\Services\TimerEventPublisher;
 use StructureManager\Helpers\FuelCalculator;
 use StructureManager\Helpers\AlertEventEnvelope;
 use Carbon\Carbon;
@@ -459,6 +460,24 @@ class NotifyUpwellLowFuel implements ShouldQueue
         $wasAlerting = in_array($previousStatus, ['warning', 'critical'], true);
         if ($wasAlerting && $currentStatus === 'good') {
             $this->publishFuelRecoveredEvent($structure, $fuelData);
+
+            // Family B: also publish structure_manager.timer.recovered for
+            // the active fuel timer (if one exists). The timer is about to
+            // be auto-soft-dismissed by upsertBoardTimer below — firing
+            // recovered BEFORE that dismiss gives subscribers two distinct
+            // signals: "good news, this fuel timer's condition resolved"
+            // and (immediately after) "the row was dismissed." Subscribers
+            // can react to either or both.
+            $recoveryTimer = Timer::where('source_reference', "fuel:{$structure->structure_id}")
+                ->whereNull('dismissed_at')
+                ->first();
+            if ($recoveryTimer) {
+                TimerEventPublisher::publish('recovered', $recoveryTimer, [
+                    'recovered_to_status' => 'good',
+                    'previous_severity'   => $previousStatus,
+                ]);
+            }
+
             $status->last_fuel_notification_status = 'good';
             $status->last_fuel_notification_at = Carbon::now();
             $status->save();
