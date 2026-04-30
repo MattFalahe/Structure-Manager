@@ -288,6 +288,111 @@ class StructureBoardController extends Controller
     }
 
     /**
+     * POST /command-board/bulk-dismiss
+     *
+     * Take an array of timer IDs and dismiss the ones the current user is
+     * allowed to dismiss. Silently skips ones they aren't (no error — bulk
+     * actions tolerate partial-permission scenarios so a small mistake
+     * doesn't lose all the legitimate dismissals).
+     *
+     * Permission model: same as single-dismiss (admin OR creator OR
+     * board.admin OR superuser). Auto-generated timers can be bulk-dismissed
+     * by anyone with view permission.
+     */
+    public function bulkDismiss(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (!is_array($ids) || empty($ids)) {
+            return back()->with('error', 'No timers selected.');
+        }
+        // Cap to prevent DoS via huge bulk requests
+        $ids = array_slice(array_map('intval', $ids), 0, 500);
+
+        $user = auth()->user();
+        $isAdmin = $user->can('structure-manager.command-board.admin')
+            || $user->can('structure-manager.admin')
+            || $user->isAdmin();
+
+        $timers = Timer::whereIn('id', $ids)->whereNull('dismissed_at')->get();
+        $dismissed = 0;
+        $skipped = 0;
+
+        foreach ($timers as $timer) {
+            $canDismiss = $isAdmin || ($timer->created_by_user_id === $user->id);
+            if (!$canDismiss) {
+                $skipped++;
+                continue;
+            }
+            $timer->dismiss($user->id);
+            $dismissed++;
+        }
+
+        $msg = "Dismissed {$dismissed} timer(s).";
+        if ($skipped > 0) {
+            $msg .= " Skipped {$skipped} you don't own (admin can dismiss those).";
+        }
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * DELETE /command-board/bulk-destroy
+     *
+     * Permanently delete a batch of timers. Admin-only for auto-generated
+     * timers; creators may delete their own manual ops. Skips ones the user
+     * isn't allowed to delete.
+     *
+     * Group expansion: if a manual op was created with "All my corps" it has
+     * a group_id with one row per corp. Deleting one of those by ID would
+     * leave siblings stranded. To keep behavior consistent with single
+     * destroy(), we expand each group_id-bearing row into the whole group.
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (!is_array($ids) || empty($ids)) {
+            return back()->with('error', 'No timers selected.');
+        }
+        $ids = array_slice(array_map('intval', $ids), 0, 500);
+
+        $user = auth()->user();
+        $isAdmin = $user->can('structure-manager.command-board.admin')
+            || $user->can('structure-manager.admin')
+            || $user->isAdmin();
+
+        $timers = Timer::whereIn('id', $ids)->get();
+        $deletable = collect();
+        $skipped = 0;
+
+        foreach ($timers as $timer) {
+            $isAuto = str_starts_with((string) $timer->source, 'auto_');
+            $isOwnManual = !$isAuto && $timer->created_by_user_id === $user->id;
+            if (!$isAdmin && !$isOwnManual) {
+                $skipped++;
+                continue;
+            }
+            $deletable->push($timer);
+        }
+
+        // Expand group_id-bearing rows into the whole group (matches single-destroy semantics)
+        $directIds = $deletable->whereNull('group_id')->pluck('id')->all();
+        $groupIds  = $deletable->whereNotNull('group_id')->pluck('group_id')->unique()->all();
+
+        $deleted = 0;
+        if (!empty($directIds)) {
+            $deleted += Timer::whereIn('id', $directIds)->delete();
+        }
+        if (!empty($groupIds)) {
+            $deleted += Timer::whereIn('group_id', $groupIds)->delete();
+        }
+
+        $msg = "Deleted {$deleted} timer(s).";
+        if ($skipped > 0) {
+            $msg .= " Skipped {$skipped} you can't delete (admin / creator only).";
+        }
+        return back()->with('success', $msg);
+    }
+
+    /**
      * Resolve which corp_ids a new manual-op timer should be created for,
      * based on the chosen visibility scope.
      *

@@ -258,6 +258,39 @@
         </div>
     </div>
 
+    {{-- Bulk-action bar — appears when at least one timer is checked --}}
+    <div id="cbBulkBar" class="cb-bulk-bar" style="display:none; padding:8px 12px; background:#3a4250; border-radius:4px; margin-bottom:12px; align-items:center; gap:12px;">
+        <strong style="color:#fff;"><span id="cbBulkCount">0</span> selected</strong>
+
+        <form id="cbBulkDismissForm" method="POST" action="{{ route('structure-manager.command-board.bulk-dismiss') }}" style="margin:0; display:inline;">
+            @csrf
+            <input type="hidden" name="ids" id="cbBulkDismissIds" value="">
+            <button type="submit" class="btn btn-sm btn-secondary">
+                <i class="fas fa-eye-slash"></i> Dismiss selected
+            </button>
+        </form>
+
+        @if($isBoardAdmin)
+            <form id="cbBulkDestroyForm" method="POST" action="{{ route('structure-manager.command-board.bulk-destroy') }}" style="margin:0; display:inline;" onsubmit="return confirm('Permanently delete the selected timers? This cannot be undone.');">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="ids" id="cbBulkDestroyIds" value="">
+                <button type="submit" class="btn btn-sm btn-danger">
+                    <i class="fas fa-trash"></i> Delete selected
+                </button>
+            </form>
+        @endif
+
+        <button type="button" id="cbBulkClear" class="btn btn-sm btn-link" style="color:#aaa;">
+            Clear selection
+        </button>
+
+        <span style="margin-left:auto; color:#aaa; font-size:12px;">
+            <i class="fas fa-info-circle"></i>
+            Bulk actions skip rows you can't dismiss/delete (no error — admins can clean up the rest).
+        </span>
+    </div>
+
     {{-- Timeline --}}
     <div id="cbTimeline">
         @if($timers->isEmpty())
@@ -283,6 +316,10 @@
                          data-group="{{ $timer->category_group }}"
                          data-severity="{{ $timer->severity }}"
                          @if($timer->is_elapsed) class="cb-timer elapsed" @endif>
+
+                        <label class="cb-timer-select" title="Select for bulk action" style="display:flex; align-items:center; padding:0 8px 0 0; cursor:pointer; user-select:none;">
+                            <input type="checkbox" class="js-timer-checkbox" value="{{ $timer->id }}" style="cursor:pointer;">
+                        </label>
 
                         <img src="{{ $timer->structure_image }}" class="cb-timer-img" alt="{{ $timer->structure_type }}">
 
@@ -561,9 +598,77 @@
         window.location.href = url.toString();
     });
 
+    // ============================================================
+    // Bulk-action bar — sticky toolbar above the timeline.
+    // Tracks the set of checked timer IDs as the user clicks rows,
+    // shows / hides itself based on whether any are selected, and
+    // before the user submits the dismiss/destroy form, fills the
+    // hidden `ids` field with a JSON-array-style indexed value list.
+    // ============================================================
+    function refreshBulkBar() {
+        const $checked = $('.js-timer-checkbox:checked');
+        const count = $checked.length;
+        $('#cbBulkCount').text(count);
+        $('#cbBulkBar').css('display', count > 0 ? 'flex' : 'none');
+    }
+
+    function buildIdsArrayString() {
+        // Laravel happily accepts either form submission of multiple
+        // ids[]= values or a serialized array via a JSON-style hidden
+        // field. We use the simpler approach: comma-joined string,
+        // then split server-side. But the controller expects an array
+        // from request->input('ids'). So we'll inject hidden inputs
+        // dynamically right before submit instead — cleaner.
+        return $('.js-timer-checkbox:checked').map(function () {
+            return parseInt(this.value, 10);
+        }).get();
+    }
+
+    function injectIdsIntoForm($form, ids) {
+        // Remove any prior dynamically-added id inputs
+        $form.find('input[name="ids[]"]').remove();
+        ids.forEach(function (id) {
+            $('<input type="hidden" name="ids[]">').val(id).appendTo($form);
+        });
+    }
+
+    // Track changes
+    $(document).on('change', '.js-timer-checkbox', refreshBulkBar);
+
+    // Clear all selections
+    $('#cbBulkClear').on('click', function () {
+        $('.js-timer-checkbox').prop('checked', false);
+        refreshBulkBar();
+    });
+
+    // Inject the chosen IDs as ids[] hidden inputs right before submit.
+    // The static `name="ids"` field on the form is just a placeholder so
+    // the controller never sees an empty submission with no array; we
+    // strip it and add real ids[] inputs here.
+    $('#cbBulkDismissForm').on('submit', function (e) {
+        const ids = buildIdsArrayString();
+        if (ids.length === 0) {
+            e.preventDefault();
+            return false;
+        }
+        $(this).find('#cbBulkDismissIds').remove(); // drop the placeholder
+        injectIdsIntoForm($(this), ids);
+    });
+
+    $('#cbBulkDestroyForm').on('submit', function (e) {
+        const ids = buildIdsArrayString();
+        if (ids.length === 0) {
+            e.preventDefault();
+            return false;
+        }
+        $(this).find('#cbBulkDestroyIds').remove();
+        injectIdsIntoForm($(this), ids);
+    });
+
     // Initial render
     renderChipState();
     applyFilter();
+    refreshBulkBar();
 
 })(jQuery);
 </script>

@@ -303,6 +303,21 @@ Route::group([
         'middleware' => 'can:structure-manager.command-board.view',
     ])->where('id', '[0-9]+');
 
+    // Bulk operations on the Structure Board. Both endpoints take an
+    // `ids[]` array of timer IDs; the controller filters to ones the
+    // current user is allowed to dismiss/delete and quietly skips the rest.
+    Route::post('/command-board/bulk-dismiss', [
+        'as'         => 'structure-manager.command-board.bulk-dismiss',
+        'uses'       => 'StructureBoardController@bulkDismiss',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
+    Route::delete('/command-board/bulk-destroy', [
+        'as'         => 'structure-manager.command-board.bulk-destroy',
+        'uses'       => 'StructureBoardController@bulkDestroy',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
     // ESI Key Holder management moved to Manager Core v1.x.
     // When MC is installed, admins manage the shared key pool at
     //   route('manager-core.esi-key-pool.index')
