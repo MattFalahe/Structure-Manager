@@ -147,6 +147,7 @@ class SettingsController extends Controller
                 // ESI polling settings
                 'esi_polling_enabled',
                 'esi_polling_interval',
+                'esi_detection_mode',          // 'auto' | 'seat_native' | 'off'
                 'esi_attack_role_mention',
                 'notify_structure_attack',
                 'notify_structure_lifecycle',

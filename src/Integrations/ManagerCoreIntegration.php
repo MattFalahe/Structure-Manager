@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use StructureManager\Handlers\StructureEventHandler;
+use StructureManager\Models\StructureManagerSettings;
 
 /**
  * Integration point with Manager Core.
@@ -24,6 +25,24 @@ use StructureManager\Handlers\StructureEventHandler;
 class ManagerCoreIntegration
 {
     /**
+     * Detection mode setting key (in structure_manager_settings).
+     *
+     * Values:
+     *   'auto'        — default; use MC fast-poll if available, otherwise SeAT native sweep
+     *   'seat_native' — always use SeAT native sweep, even if MC is installed
+     *                   (opt-out of MC fast-poll for operators who prefer to
+     *                    keep notification detection inside SeAT's native path)
+     *   'off'         — don't run any detection (operator manually disabled)
+     *
+     * Operators may also leave the legacy boolean `esi_polling_enabled` set
+     * to false to disable detection — kept honored for backward-compat. New
+     * deployments should use `esi_detection_mode` instead.
+     */
+    public const MODE_AUTO        = 'auto';
+    public const MODE_SEAT_NATIVE = 'seat_native';
+    public const MODE_OFF         = 'off';
+
+    /**
      * Is Manager Core installed and its ESI notification registry available?
      *
      * We check the registry class specifically (not just any MC class) so
@@ -36,16 +55,79 @@ class ManagerCoreIntegration
     }
 
     /**
+     * Read the operator's chosen detection mode, defaulting to 'auto'.
+     * Falls through to the legacy `esi_polling_enabled` boolean: if that's
+     * explicitly false AND no mode is set, treat as 'off'.
+     */
+    public static function detectionMode(): string
+    {
+        $mode = StructureManagerSettings::get('esi_detection_mode', null);
+        if ($mode !== null && in_array($mode, [self::MODE_AUTO, self::MODE_SEAT_NATIVE, self::MODE_OFF], true)) {
+            return $mode;
+        }
+
+        // Legacy fallback — old installs without esi_detection_mode set
+        $polling = StructureManagerSettings::get('esi_polling_enabled', true);
+        return $polling ? self::MODE_AUTO : self::MODE_OFF;
+    }
+
+    /**
+     * Should SM register its handler with MC's fast-poll?
+     *
+     * True only when:
+     *   - MC is installed (registry class exists)
+     *   - Detection mode is 'auto' (default)
+     *
+     * Operators can deliberately opt out of MC fast-poll by setting mode to
+     * 'seat_native' even when MC is installed — falls back to SeAT's native
+     * notification table. Use cases:
+     *   - Don't want a director key in MC's shared pool
+     *   - Privacy / least-privilege concerns about cross-plugin polling
+     *   - Other tools depending on SeAT's native cadence
+     *   - Want to keep notifications under SeAT's native rate limits only
+     */
+    public static function isFastPollEnabled(): bool
+    {
+        return self::isAvailable() && self::detectionMode() === self::MODE_AUTO;
+    }
+
+    /**
+     * Should the SM-side `ProcessStructureNotifications` sweep run? True when:
+     *   - Detection mode is 'auto' AND MC is absent (sweep is the fallback)
+     *   - Detection mode is 'seat_native' (sweep is the chosen path even with MC)
+     *
+     * False when:
+     *   - Detection mode is 'off' (operator disabled all detection)
+     *   - MC is present AND mode is 'auto' (MC is doing the work)
+     */
+    public static function isNativeSweepEnabled(): bool
+    {
+        $mode = self::detectionMode();
+        if ($mode === self::MODE_OFF) {
+            return false;
+        }
+        if ($mode === self::MODE_SEAT_NATIVE) {
+            return true;
+        }
+        // mode is 'auto' — sweep runs only as fallback when MC is absent
+        return !self::isAvailable();
+    }
+
+    /**
      * Register Structure Manager's event handler with MC's notification registry.
      *
-     * Called at service-provider boot. No-op if MC is absent.
+     * Called at service-provider boot. No-op if MC is absent OR the operator
+     * has set detection mode to 'seat_native' / 'off'.
      *
-     * After this returns, any time MC's fast-poll finds one of our types,
-     * StructureEventHandler::handle() will be invoked with the notification.
+     * After this returns (when fast-poll is enabled), any time MC's fast-poll
+     * finds one of our types, StructureEventHandler::handle() will be invoked.
      */
     public static function registerStructureEventHandler(): void
     {
-        if (!self::isAvailable()) {
+        if (!self::isFastPollEnabled()) {
+            // MC absent OR operator chose seat_native / off — no fast-poll
+            // registration. SM either uses its own sweep (modes auto-without-MC
+            // or seat_native) or does nothing (mode off).
             return;
         }
 
@@ -57,7 +139,7 @@ class ManagerCoreIntegration
                 'structure-manager'
             );
 
-            Log::info('[Structure Manager] Registered ' . count(StructureEventHandler::registeredTypes()) . ' notification types with Manager Core');
+            Log::info('[Structure Manager] Registered ' . count(StructureEventHandler::registeredTypes()) . ' notification types with Manager Core (mode=auto)');
         } catch (\Throwable $e) {
             Log::warning('[Structure Manager] Could not register with Manager Core: ' . $e->getMessage());
         }
@@ -146,17 +228,34 @@ class ManagerCoreIntegration
     }
 
     /**
-     * Summary for diagnostics / settings view.
+     * Summary for diagnostics / settings view. Reports the EFFECTIVE detection
+     * mode (what's actually happening) plus the configured mode (what the
+     * operator chose), since the two can diverge — e.g. configured=auto but
+     * MC isn't installed, so effective is native_sweep.
      */
     public static function status(): array
     {
-        $available = self::isAvailable();
+        $available     = self::isAvailable();
+        $configured    = self::detectionMode();
+        $fastPoll      = self::isFastPollEnabled();
+        $nativeSweep   = self::isNativeSweepEnabled();
+
+        if ($fastPoll) {
+            $effectiveLabel = 'fast_poll (Manager Core, ~2 min)';
+        } elseif ($nativeSweep) {
+            $effectiveLabel = 'native_sweep (SeAT, ~20-30 min)';
+        } else {
+            $effectiveLabel = 'off (no detection)';
+        }
 
         $data = [
-            'available' => $available,
-            'detection_mode' => $available ? 'fast_poll (Manager Core)' : 'native_sweep (SeAT ~20-30 min)',
-            'handler_registered' => false,
-            'key_pool_route' => $available ? 'manager-core.esi-key-pool.index' : null,
+            'available'              => $available,
+            'configured_mode'        => $configured,
+            'effective_mode'         => $fastPoll ? 'fast_poll' : ($nativeSweep ? 'native_sweep' : 'off'),
+            'detection_mode'         => $effectiveLabel, // legacy key kept for view compat
+            'handler_registered'     => false,
+            'key_pool_route'         => $available ? 'manager-core.esi-key-pool.index' : null,
+            'mc_available_but_native' => $available && $configured === self::MODE_SEAT_NATIVE,
         ];
 
         if ($available) {

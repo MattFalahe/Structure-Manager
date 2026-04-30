@@ -1198,8 +1198,11 @@
                     </p>
                 </div>
 
-                <!-- Detection mode: MC present vs. absent -->
-                @php($mcAvailable = \StructureManager\Integrations\ManagerCoreIntegration::isAvailable())
+                <!-- Detection mode: explicit operator choice -->
+                @php($mcAvailable    = \StructureManager\Integrations\ManagerCoreIntegration::isAvailable())
+                @php($configuredMode = \StructureManager\Integrations\ManagerCoreIntegration::detectionMode())
+                @php($effectiveFast  = \StructureManager\Integrations\ManagerCoreIntegration::isFastPollEnabled())
+                @php($effectiveSweep = \StructureManager\Integrations\ManagerCoreIntegration::isNativeSweepEnabled())
 
                 <div class="settings-section">
                     <h4><i class="fas fa-satellite-dish"></i> Detection Mode</h4>
@@ -1207,9 +1210,8 @@
                     @if($mcAvailable)
                         <div class="info-banner mb-3" style="border-left:4px solid #28a745;">
                             <i class="fas fa-bolt"></i>
-                            <strong>Manager Core detected</strong> — fast ESI polling is active.
-                            Detection speed: ~2 minutes (vs. SeAT's native 20&ndash;30 minute bucket).
-                            Director key holders are managed in a shared pool used by every Manager Core-aware plugin.
+                            <strong>Manager Core detected</strong> &mdash; fast ESI polling is available.
+                            By default it's used (~2 minute detection). You can opt out below if you prefer SeAT's native flow.
                             <div class="mt-2">
                                 <a href="{{ route('manager-core.esi-key-pool.index') }}" class="btn btn-primary btn-sm">
                                     <i class="fas fa-key"></i> Manage shared key pool in Manager Core
@@ -1229,6 +1231,37 @@
                             </div>
                         </div>
                     @endif
+
+                    <div class="form-group">
+                        <label for="esi_detection_mode">ESI detection mode</label>
+                        <select class="form-control" id="esi_detection_mode" name="esi_detection_mode" style="max-width:480px;">
+                            <option value="auto"        @if($configuredMode === 'auto') selected @endif>
+                                Auto &mdash; use Manager Core fast-poll when available, fall back to SeAT native otherwise (recommended)
+                            </option>
+                            <option value="seat_native" @if($configuredMode === 'seat_native') selected @endif>
+                                SeAT native only &mdash; ignore Manager Core fast-poll even if installed (slower; ~20&ndash;30 min)
+                            </option>
+                            <option value="off"         @if($configuredMode === 'off') selected @endif>
+                                Off &mdash; do not detect ESI structure events (disables shield/armor/hull/destroyed alerts)
+                            </option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Effective mode right now:
+                            @if($effectiveFast)
+                                <span class="badge badge-success">fast_poll (Manager Core, ~2 min)</span>
+                            @elseif($effectiveSweep)
+                                <span class="badge badge-warning">native_sweep (SeAT, ~20&ndash;30 min)</span>
+                            @else
+                                <span class="badge badge-danger">off (no detection)</span>
+                            @endif
+                            @if($mcAvailable && $configuredMode === 'seat_native')
+                                <br><strong>Note:</strong> Manager Core is installed but you've opted out of fast-poll. SM falls back to SeAT's native sweep, which is slower but keeps all polling inside SeAT's own infrastructure (no director keys in MC's shared pool).
+                            @endif
+                            @if($configuredMode === 'off')
+                                <br><strong class="text-danger">Warning:</strong> All ESI-driven structure event detection is disabled. Fuel alerts (poll-based) still fire, but shield/armor/hull/destroyed events from CCP notifications will not be processed.
+                            @endif
+                        </small>
+                    </div>
                 </div>
 
                 <!-- Notification categories moved to Notifications page -->

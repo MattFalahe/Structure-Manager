@@ -793,13 +793,38 @@ class DiagnosticController extends Controller
      */
     private function checkEsiPollingState(): array
     {
-        $mcAvailable = ManagerCoreIntegration::isAvailable();
-
-        if ($mcAvailable) {
+        // Branch on the EFFECTIVE detection state, not just MC availability.
+        // Operator's `esi_detection_mode` choice may opt out of MC fast-poll
+        // even when MC is installed (mode=seat_native), or disable detection
+        // entirely (mode=off). Surface that explicitly so admins can see at
+        // a glance which path is actually running.
+        $configured = ManagerCoreIntegration::detectionMode();
+        if ($configured === ManagerCoreIntegration::MODE_OFF) {
+            return $this->checkEsiPollingStateOff();
+        }
+        if (ManagerCoreIntegration::isFastPollEnabled()) {
             return $this->checkEsiPollingStateWithManagerCore();
         }
 
+        // Native sweep is active — either MC is absent, or operator chose
+        // 'seat_native' mode. Both paths use the same SM-local infrastructure.
         return $this->checkEsiPollingStateStandalone();
+    }
+
+    /**
+     * Mode = off — operator disabled all ESI detection.
+     */
+    private function checkEsiPollingStateOff(): array
+    {
+        return [
+            'status'  => 'warn',
+            'message' => 'ESI detection is set to OFF. Shield/armor/hull/destroyed events will NOT fire. Fuel alerts (poll-based) still work.',
+            'details' => [
+                'Detection mode' => 'off (manually disabled)',
+                'Effect'         => 'No CCP notifications processed; no structure.alert.* events published',
+                'How to fix'     => 'Settings > Structure Events > Detection Mode → switch to Auto or SeAT native',
+            ],
+        ];
     }
 
     /**
@@ -879,17 +904,27 @@ class DiagnosticController extends Controller
     }
 
     /**
-     * Standalone path: no MC installed. Report on SM's local dedup table only.
+     * Native-sweep path. Reached in two situations:
+     *   - MC is absent (auto mode falls back) — "standalone" in the strict sense
+     *   - MC is installed but operator chose mode=seat_native (opt-out)
+     *
+     * Reports on SM's local dedup table state for both cases.
      */
     private function checkEsiPollingStateStandalone(): array
     {
-        $enabled = \StructureManager\Models\StructureManagerSettings::get('esi_polling_enabled', true);
+        $mcAvailable = ManagerCoreIntegration::isAvailable();
+        $configured  = ManagerCoreIntegration::detectionMode();
+        $optedOut    = $mcAvailable && $configured === ManagerCoreIntegration::MODE_SEAT_NATIVE;
 
         $details = [
-            'Detection mode'       => 'SeAT native (~20-30 min bucket)',
-            'Notification gate'    => $enabled ? 'enabled' : 'NO (disabled in settings)',
-            'Install Manager Core' => 'for 2-min detection + shared key pool',
+            'Detection mode'    => 'SeAT native (~20-30 min bucket)',
+            'Configured mode'   => $configured,
+            'Manager Core'      => $mcAvailable ? 'installed (fast-poll opted out)' : 'not installed',
         ];
+
+        if (!$mcAvailable) {
+            $details['Install Manager Core'] = 'for 2-min detection + shared key pool';
+        }
 
         if (Schema::hasTable('structure_manager_esi_notifications')) {
             $sinceHour = \Carbon\Carbon::now()->subHour();
@@ -897,13 +932,14 @@ class DiagnosticController extends Controller
             $details['Local dedup rows (total)']     = EsiNotification::count();
         }
 
-        $status = $enabled ? 'info' : 'warn';
-        $message = $enabled
-            ? 'Standalone mode: Structure Manager reads from SeAT\'s character_notifications every 10 minutes. Install Manager Core for fast-poll.'
-            : 'Notification gate is disabled in Settings > Structure Events.';
+        if ($optedOut) {
+            $message = 'Native sweep is active by operator choice: Manager Core is installed but you opted out of fast-poll (mode=seat_native). SM reads from SeAT\'s character_notifications every 10 minutes.';
+        } else {
+            $message = 'Standalone mode: Structure Manager reads from SeAT\'s character_notifications every 10 minutes. Install Manager Core for fast-poll.';
+        }
 
         return [
-            'status'  => $status,
+            'status'  => 'info',
             'message' => $message,
             'details' => $details,
         ];

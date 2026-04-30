@@ -12,18 +12,22 @@ use Illuminate\Support\Facades\Schema;
 use StructureManager\Handlers\StructureEventHandler;
 use StructureManager\Integrations\ManagerCoreIntegration;
 use StructureManager\Models\EsiNotification;
-use StructureManager\Models\StructureManagerSettings;
 use Carbon\Carbon;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Fallback processor for SeAT's native notification table.
+ * SeAT-native notification sweep — runs when MC fast-poll isn't being used.
  *
- * This job only does work when Manager Core is NOT installed. When MC is
- * available, MC's fast-poll + sweep handle discovery and dispatch directly,
- * and this job is a no-op.
+ * Decides whether to run by consulting `ManagerCoreIntegration::isNativeSweepEnabled()`.
+ * That method honors the operator's chosen detection mode:
  *
- * Without MC the detection path is:
+ *   - mode=auto + MC absent     → run (this job is the fallback)
+ *   - mode=auto + MC present    → no-op (MC fast-poll is doing the work)
+ *   - mode=seat_native          → run (operator opted out of MC fast-poll
+ *                                  even though MC is installed)
+ *   - mode=off                  → no-op (operator disabled detection)
+ *
+ * Without MC fast-poll the detection path is:
  *   SeAT's updateCharacterNotifications (20-30 min bucket) writes rows to
  *   character_notifications → this job reads them → dedup against SM's local
  *   structure_manager_esi_notifications table → call StructureEventHandler.
@@ -41,13 +45,10 @@ class ProcessStructureNotifications implements ShouldQueue
 
     public function handle(): void
     {
-        if (ManagerCoreIntegration::isAvailable()) {
-            Log::debug('ProcessStructureNotifications: Manager Core is handling ESI notifications; fallback job is a no-op.');
-            return;
-        }
-
-        if (!StructureManagerSettings::get('esi_polling_enabled', true)) {
-            Log::debug('ProcessStructureNotifications: ESI polling disabled in settings.');
+        if (!ManagerCoreIntegration::isNativeSweepEnabled()) {
+            $mode = ManagerCoreIntegration::detectionMode();
+            $mcOn = ManagerCoreIntegration::isAvailable();
+            Log::debug("ProcessStructureNotifications: native sweep disabled (mode={$mode}, mc_available=" . ($mcOn ? 'yes' : 'no') . "); job is a no-op.");
             return;
         }
 
