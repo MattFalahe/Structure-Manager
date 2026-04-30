@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use StructureManager\Helpers\AlertEventEnvelope;
+use StructureManager\Jobs\EnrichKillmailJob;
 use StructureManager\Models\StructureDisappearanceTracking;
 
 /**
@@ -352,6 +353,28 @@ class TrackStructurePresence implements ShouldQueue
             Log::info("TrackStructurePresence: published structure.alert.destroyed for structure {$tracking->structure_id} (detection={$detectionSource}, last_state={$tracking->last_known_state}, event_id={$payload['event_id']})");
         } catch (\Throwable $e) {
             Log::warning("TrackStructurePresence: failed to publish structure.alert.destroyed for structure {$tracking->structure_id}: " . $e->getMessage());
+        }
+
+        // Tier C Stage 2: dispatch async zKB killmail enrichment. The grace-period
+        // path has even less attacker info than the notification path (we never
+        // saw a destruction notification at all), so the zKB lookup is the main
+        // way to recover attacker / ISK details for these losses.
+        $typeIdForJob   = $tracking->last_known_type_id   ? (int) $tracking->last_known_type_id   : 0;
+        $systemIdForJob = $tracking->last_known_system_id ? (int) $tracking->last_known_system_id : null;
+        if ($typeIdForJob > 0 && $systemIdForJob !== null) {
+            try {
+                EnrichKillmailJob::dispatch(
+                    (int) $tracking->structure_id,
+                    (int) $tracking->last_known_corporation_id,
+                    $typeIdForJob,
+                    $systemIdForJob,
+                    $destroyedAtIso,
+                    $payload['event_id']
+                )->delay(now()->addSeconds(30));
+                Log::info("TrackStructurePresence: dispatched EnrichKillmailJob for grace-period destroyed {$tracking->structure_id}");
+            } catch (\Throwable $e) {
+                Log::warning("TrackStructurePresence: failed to dispatch EnrichKillmailJob for {$tracking->structure_id}: " . $e->getMessage());
+            }
         }
     }
 

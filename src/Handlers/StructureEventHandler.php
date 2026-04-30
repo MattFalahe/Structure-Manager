@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use StructureManager\Helpers\AlertEventEnvelope;
+use StructureManager\Jobs\EnrichKillmailJob;
 use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
@@ -463,6 +464,28 @@ class StructureEventHandler
             Log::info("StructureEventHandler: published structure.alert.{$alertFlavor} for structure {$structureId} (notification #{$notification->notification_id}, event_id={$payload['event_id']}, attacker={$attackerResolutionStatus})");
         } catch (\Throwable $e) {
             Log::warning("StructureEventHandler: failed to publish structure.alert.{$alertFlavor} for structure {$structureId}: " . $e->getMessage());
+        }
+
+        // Tier C Stage 2: for destroyed events, dispatch async zKB enrichment.
+        // Initial 30s delay gives zKB a head start on ingesting the killmail.
+        // The job retries on backoff, finalizes as either 'enriched' (zKB hit)
+        // or 'not_found' (retry budget exhausted), and publishes a follow-up
+        // structure.alert.destroyed_confirmed event correlated by event_id.
+        if ($alertFlavor === 'destroyed' && $typeId !== null && isset($context['system_id']) && $context['system_id'] !== null) {
+            try {
+                EnrichKillmailJob::dispatch(
+                    $structureId,
+                    (int) $notification->corporation_id,
+                    (int) $typeId,
+                    (int) $context['system_id'],
+                    $context['destroyed_at'],
+                    $payload['event_id']
+                )->delay(now()->addSeconds(30));
+                Log::info("StructureEventHandler: dispatched EnrichKillmailJob for destroyed structure {$structureId}");
+            } catch (\Throwable $e) {
+                // Non-fatal — operators got stage 1 already; stage 2 is enrichment only.
+                Log::warning("StructureEventHandler: failed to dispatch EnrichKillmailJob for {$structureId}: " . $e->getMessage());
+            }
         }
     }
 

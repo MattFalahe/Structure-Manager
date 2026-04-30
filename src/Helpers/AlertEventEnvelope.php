@@ -63,12 +63,13 @@ final class AlertEventEnvelope
      * tactical events".
      */
     private const CATEGORY_GROUPS = [
-        'fuel_critical'      => 'fuel',
-        'fuel_recovered'     => 'fuel',
-        'shield_reinforced'  => 'tactical',
-        'armor_reinforced'   => 'tactical',
-        'hull_reinforced'    => 'tactical',
-        'destroyed'          => 'tactical',
+        'fuel_critical'       => 'fuel',
+        'fuel_recovered'      => 'fuel',
+        'shield_reinforced'   => 'tactical',
+        'armor_reinforced'    => 'tactical',
+        'hull_reinforced'     => 'tactical',
+        'destroyed'           => 'tactical',
+        'destroyed_confirmed' => 'tactical',  // Tier C Stage 2 zKB enrichment follow-up
     ];
 
     /**
