@@ -425,6 +425,13 @@ class NotifyUpwellLowFuel implements ShouldQueue
             'dismissed_at'           => null,
         ]);
     }
+
+    /**
+     * Process a single Upwell structure for fuel-status alerts. Decides
+     * whether to fire warning / critical / final-alert webhook(s), updates
+     * the local notification-status latch, upserts a Structure Board timer
+     * row, and (when MC is installed) publishes cross-plugin events on
+     * recovery / critical transitions.
      *
      * @param array<int, array{webhook_id:int, webhook_url:string, role_mention:?string}> $bindings
      * @return int Number of notifications sent (0 or count of bindings)
