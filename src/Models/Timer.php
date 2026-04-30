@@ -41,12 +41,19 @@ class Timer extends Model
         'dismissed_at',
         'created_by_user_id',
         'source_reference',
+        // Family B (timer.* event) emission latches — see migration 000028
+        'emitted_upcoming_24h_at',
+        'emitted_upcoming_1h_at',
+        'emitted_elapsed_at',
     ];
 
     protected $casts = [
-        'eve_time'         => 'datetime',
-        'dismissed_at'     => 'datetime',
-        'system_security'  => 'decimal:4',
+        'eve_time'                 => 'datetime',
+        'dismissed_at'             => 'datetime',
+        'system_security'          => 'decimal:4',
+        'emitted_upcoming_24h_at'  => 'datetime',
+        'emitted_upcoming_1h_at'   => 'datetime',
+        'emitted_elapsed_at'       => 'datetime',
     ];
 
     /**
