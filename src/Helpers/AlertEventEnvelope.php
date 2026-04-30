@@ -118,7 +118,29 @@ final class AlertEventEnvelope
 
             // parties
             'owner_corporation_name'    => null,
-            'attacker_corporation_name' => null,
+
+            // Attacker context. Combat events (shield/armor/hull/destroyed)
+            // populate these based on whatever CCP's notification YAML carried
+            // plus a character_infos cache lookup for the name.
+            //
+            // attacker_resolution_status: indicates how complete this picture is —
+            //   'resolved'   → we have name + IDs (cache hit)
+            //   'partial'    → we have IDs but no name (cache miss / never pulled)
+            //   'unresolved' → no attacker info at all (state-poll paths,
+            //                  grace-period destroyed, or CCP YAML lacked it)
+            //   null         → field N/A (non-combat events like fuel_*)
+            //
+            // Subscribers can render "Pilot #ID (name pending)" for 'partial' or
+            // "Aggressor pending verification" for 'unresolved' — operators
+            // get the alert immediately with whatever was available.
+            'attacker_resolution_status' => null,
+            'attacker_character_id'      => null,
+            'attacker_character_name'    => null,
+            'attacker_corporation_id'    => null,
+            'attacker_corporation_name'  => null,
+            'attacker_alliance_id'       => null,
+            'attacker_alliance_name'     => null,
+            'attacker_ship_type_id'      => null,
 
             // timing (overwritten below from computed values)
             'eve_time'      => null,

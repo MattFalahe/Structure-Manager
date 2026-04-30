@@ -352,10 +352,47 @@ class StructureEventHandler
             }
         }
 
-        // Optional attacker info from the notification YAML
-        $attackerCorporation = $data['corpName'] ?? null;
-        $attackerAlliance    = $data['allianceName'] ?? null;
-        $attackerSummary     = $attackerCorporation
+        // Resolve attacker context from the notification YAML + character_infos
+        // cache. We lift everything CCP gave us into discrete fields and compute
+        // a single attacker_resolution_status so subscribers can label "(name
+        // pending)" / "Aggressor pending verification" instead of rendering
+        // "Unknown" or omitting the data.
+        $attackerCharacterId   = isset($data['charID'])     ? (int) $data['charID']     : null;
+        $attackerCorporationId = isset($data['corpID'])     ? (int) $data['corpID']     : null;
+        $attackerAllianceId    = isset($data['allianceID']) ? (int) $data['allianceID'] : null;
+        $attackerCorporation   = $data['corpName']     ?? null;
+        $attackerAlliance      = $data['allianceName'] ?? null;
+
+        // Try to resolve the character name from SeAT's local cache
+        // (character_infos is populated when SeAT does any character-info
+        // ESI pull). Cache miss → leave name null; subscribers render the
+        // ID-only form. No blocking ESI call here — speed matters more than
+        // completeness on this initial alert.
+        $attackerCharacterName = null;
+        if ($attackerCharacterId) {
+            try {
+                $attackerCharacterName = DB::table('character_infos')
+                    ->where('character_id', $attackerCharacterId)
+                    ->value('name');
+            } catch (\Throwable $e) {
+                // character_infos table missing or query blew up — non-fatal,
+                // fall through with null name and let resolution_status reflect it
+            }
+        }
+
+        // Resolution status:
+        //   resolved   = full identity (charID + name)
+        //   partial    = some IDs/names but no full character resolution
+        //   unresolved = nothing useful
+        if ($attackerCharacterId && $attackerCharacterName) {
+            $attackerResolutionStatus = 'resolved';
+        } elseif ($attackerCharacterId || $attackerCorporationId || $attackerCorporation || $attackerAlliance) {
+            $attackerResolutionStatus = 'partial';
+        } else {
+            $attackerResolutionStatus = 'unresolved';
+        }
+
+        $attackerSummary = $attackerCorporation
             ? trim($attackerCorporation . ($attackerAlliance ? " ({$attackerAlliance})" : ''))
             : null;
 
@@ -374,10 +411,18 @@ class StructureEventHandler
             'system_name'               => $meta['system'] ? preg_replace('/\s*\([^)]*\)\s*$/', '', $meta['system']) : null,
             'system_security'           => $systemSecurity,
             'severity'                  => 'critical',
-            'attacker_corporation_name' => $attackerCorporation,             // contract key
             'source_reference'          => isset($notification->notification_id)
                 ? 'esi-notif:' . $notification->notification_id
                 : null,
+
+            // Discrete attacker fields (contract base — see AlertEventEnvelope)
+            'attacker_resolution_status' => $attackerResolutionStatus,
+            'attacker_character_id'      => $attackerCharacterId,
+            'attacker_character_name'    => $attackerCharacterName,
+            'attacker_corporation_id'    => $attackerCorporationId,
+            'attacker_corporation_name'  => $attackerCorporation,
+            'attacker_alliance_id'       => $attackerAllianceId,
+            'attacker_alliance_name'     => $attackerAlliance,
 
             // Legacy/flavor-specific keys MM already reads — preserved verbatim
             'timer_ends_at'     => $timerEndsAt,
@@ -415,7 +460,7 @@ class StructureEventHandler
                 'structure-manager',
                 $payload
             );
-            Log::info("StructureEventHandler: published structure.alert.{$alertFlavor} for structure {$structureId} (notification #{$notification->notification_id}, event_id={$payload['event_id']})");
+            Log::info("StructureEventHandler: published structure.alert.{$alertFlavor} for structure {$structureId} (notification #{$notification->notification_id}, event_id={$payload['event_id']}, attacker={$attackerResolutionStatus})");
         } catch (\Throwable $e) {
             Log::warning("StructureEventHandler: failed to publish structure.alert.{$alertFlavor} for structure {$structureId}: " . $e->getMessage());
         }

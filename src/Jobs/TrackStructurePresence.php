@@ -264,9 +264,16 @@ class TrackStructurePresence implements ShouldQueue
             // killable in the final timer window)
             'eve_time' => $timerEndIso,
 
+            // State-poll paths have no attacker info — CCP doesn't reliably send
+            // a notification for hull-reinforce, we detect via state transition.
+            // Subscribers should render "Aggressor: pending verification" or
+            // similar; correlate with prior shield/armor_reinforced events for
+            // this same structure_id to recover attacker identity.
+            'attacker_resolution_status' => 'unresolved',
+
             // Flavor-specific extras
             'timer_ends_at'     => $timerEndIso,
-            'attacker_summary'  => null, // not available from state polling — use shield/armor_reinforced events for attacker info
+            'attacker_summary'  => null,
             'attacker_corp'     => null,
             'attacker_alliance' => null,
             'notification_id'   => null,
@@ -322,6 +329,12 @@ class TrackStructurePresence implements ShouldQueue
 
             // eve_time = when the structure was (estimated) destroyed
             'eve_time' => $destroyedAtIso,
+
+            // Grace-period path: row vanished without a destruction notification
+            // arriving. We never had attacker info to begin with — that comes
+            // later via Stage 2 zKB enrichment (planned). Subscribers should
+            // label as pending verification.
+            'attacker_resolution_status' => 'unresolved',
 
             // Flavor-specific extras
             'destroyed_at'       => $destroyedAtIso,
