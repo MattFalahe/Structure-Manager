@@ -5,7 +5,294 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
-## 🆕 Version 1.0.11 — *January 2026*
+## 🎉 Version 2.0.0 — The Ecosystem Era — *May 2026*
+
+Structure Manager v2.0.0 is the first public canonical release of the ecosystem-era plugin family. Where the original Structure Manager was a single-purpose fuel tracker, v2.0.0 sits at the centre of a connected plugin suite where Manager Core provides shared infrastructure, Mining Manager consumes Structure Manager's combat events for extraction-at-risk alerting, and SeAT Broadcast (`seat-discord-pings`) will consume the tactical-planning events for fleet calendar planning.
+
+> **Mental model:** Structure Manager still works fully standalone. Every ecosystem feature is purely additive. Install Manager Core when you want faster detection and cross-plugin coordination; leave it out and Structure Manager keeps doing everything it used to, just at SeAT's native 15-20 minute notification cadence instead of ~2 minutes.
+
+### 🚀 Headline Features
+
+#### Plugin ecosystem integration
+Structure Manager publishes a documented family of `structure.alert.*` events on Manager Core's EventBus:
+
+| Event | Fires for | Tactical use |
+|---|---|---|
+| `structure.alert.shield_reinforced` | StructureLostShields, SkyhookLostShields | Defend at armor exit |
+| `structure.alert.armor_reinforced` | StructureLostArmor | Final defense or evacuate |
+| `structure.alert.destroyed` | StructureDestroyed, SkyhookDestroyed | After-action: clear timers, update intel |
+| `structure.alert.anchoring_started` | StructureAnchoring, AllAnchoringMsg | Contest anchor before 24h completion |
+| `structure.alert.sov_reinforced` | SovStructureReinforced | Fleet coverage for sov defense |
+| `structure.alert.entosis_in_progress` | EntosisCaptureStarted, SovCommandNodeEventStarted | Counter-entosis NOW |
+| `structure.alert.fuel_critical` | SM fuel poll (low fuel detected) | Schedule refuel run |
+| `structure.alert.fuel_recovered` | SM fuel poll (refilled) | Clear calendar, cancel reminders |
+
+Mining Manager already subscribes for extraction-at-risk alerts. SeAT Broadcast will subscribe (when its calendar build lands) for fleet-coverage calendaring with configurable pre-timer reminder pings.
+
+#### Three-path ESI detection
+Structure Manager now has three distinct paths for ESI notification detection, identifiable by the embed footer:
+
+| Path | Footer label | Latency | When it runs |
+|---|---|---|---|
+| Manager Core fast-poll | `Fast Poll (Manager Core)` | ~2 minutes | MC installed + mode=auto |
+| Manager Core sweep fallback | `SeAT Sweep (Manager Core)` | ~1 min after SeAT's 15-20 min bucket | MC installed + mode=auto (belt-and-braces) |
+| Structure Manager native | `SeAT Native` | ~1 min after SeAT's 15-20 min bucket | MC absent OR mode=seat_native |
+
+Detection mode is operator-configurable per install (Settings > Structure Events > ESI Detection Mode). Auto (default) uses MC fast-poll when available; `seat_native` opts out of MC fast-poll even when MC is installed; `off` disables detection entirely.
+
+#### Attacker name resolution via public ESI
+Discord embeds for combat events show real character / corporation / alliance names where possible (even for attackers who have never been a member of any corp on this SeAT install). A new `IdResolver` service uses a three-tier lookup chain:
+
+1. SeAT's local info tables (`character_infos`, `corporation_infos`, `alliance_infos`) — instant
+2. SeAT's `universe_names` secondary cache — instant
+3. CCP's public ESI endpoint with 2-second timeout, results cached for 7 days
+
+First-time attacker resolution adds ~250ms to alert dispatch; subsequent attacks by the same attacker resolve instantly from cache. Falls back gracefully to ID-only rendering on ESI outages.
+
+#### Fuel Economics page (Manager Core required)
+Dedicated page projecting structure fuel costs in ISK over weekly / monthly / quarterly / yearly windows. Per-system and per-structure breakdowns, daily-trend chart, cheapest-fuel-block suggestion with optimization-savings banner. Uses MC's pricing service; configurable market and price method per plugin in `Manager Core > Pricing Preferences`. Hidden from the sidebar when MC is not installed.
+
+#### Operational security policy
+Formal documentation of trust zones (SeAT auth + operator-controlled webhooks) and explicit rejection of feature classes that would leak tactical data outside those zones. ICS / iCalendar feed export, third-party data feeds, and similar will not ship: the reasoning is documented in-product (Help > Notifications > Operational Security) so the same conversation doesn't need to get relitigated for each request.
+
+### 🛠 Operational Improvements
+
+- **Corp scope defaults to "My Corporations"** — every list view (Upwell Structures, Control Towers, Fuel Reserves, Logistics Report, Critical Alerts) now defaults an admin to their *own* corporations instead of fire-hosing them with every corporation on the SeAT install. Each view carries a corporation-scope selector: "My Corporations" (default), individual corporations, and "All Corporations" (admin-only). Non-admins are unchanged — they were always, and still are, locked to their own corporations. Implemented as a `?scope=mine|all|<corpId>` request parameter resolved by a new `getScopedCorporations()` helper; the existing `getUserCorporations()` (actual access rights) is untouched, so the security boundary is unchanged — `scope=all` is honored only for admins.
+- **Stale-structure hiding (Upwell only)** — when a corporation removes its ESI key, SeAT can no longer refresh that corp's structures: the row freezes, `fuel_expires` drifts months into the past, and the UI used to render a nonsensical "−142 days remaining" critical alert (which also inflated the critical count and the "total fuel needed" figure). Upwell structures whose `updated_at` is older than a configurable threshold are now hidden from the Upwell Structures list, Critical Alerts, and the Logistics Report. The threshold lives in **Settings > Stale Structure Visibility** (default 30 days; set to 0 to disable hiding). Resolved centrally by `FuelThresholds::staleStructureCutoff()`. **POS towers are exempt:** a `corporation_starbases` row only changes when the tower's state or settings change, so a stable or offline POS legitimately freezes its `updated_at` even while ESI polling is healthy; hiding on row age would drop healthy towers. POS activity is read from the tower state (online / offline / reinforced) instead.
+- **Mode-change worker restart warning** — the ESI detection mode dropdown now has an explicit warning that flipping modes requires a worker restart (because the in-memory notification registry is per-process). A "Why isn't there a re-register button?" collapsible explains the per-process registry vs. DB-persistent pricing preference distinction. Settings save now flashes an explicit reminder when the mode actually changes.
+- **Manager Core Plugin Bridge diagnostic improvements** — the MC admin dashboard shows worker-context registry snapshots (handlers registered, key pool size, plugins contributing) plus per-plugin integration badges (pricing types, EventBus subs, ESI handlers, recent publishes) and last-activity timestamps. Silent failures of cross-plugin integration become visible at a glance.
+- **`cleanup-test-data` command** — symmetric teardown for everything the `create-test-*` and `inject-test-notification` commands create. `--dry-run` to preview, `--force` to skip confirmation. Bounded by `TestDataGenerator` safe ID ranges so real CCP data cannot be touched.
+- **Better diagnostic page** — MC-aware detection-mode panel, registered handler status, per-source notification counts, pricing integration status.
+
+### 📦 Architecture & Ecosystem
+
+- **`structure.alert.*` event publishing** — the full 8-event family (shield_reinforced, armor_reinforced, destroyed, anchoring_started, sov_reinforced, entosis_in_progress, fuel_critical, fuel_recovered) registered in Manager Core's Topics registry with idempotency templates and required-field declarations.
+- **Tactical-planning event payload contract** — every `structure.alert.*` event ships a uniform payload with `source_plugin`, `schema_version`, `event_id`, `event_type`, `category_group`, `severity`, `corporation_id`, `structure_id`, `structure_name`, `system_id`, `timer_ends_at`, attacker context (resolution_status, character/corporation/alliance fields), and a Structure Board deeplink. Subscribers calendar events with non-null `timer_ends_at`; null-timer events are "react NOW" alerts.
+- **Unified timer extraction helper** (`computeTimerEndsAt`) handles all three CCP timer encodings (`corporation_structures.state_timer_end`, Microsoft FILETIME `decloakTime` for sov, CCP 100-ns ticks for `timeLeft` on anchoring). Subscribers see one uniform ISO 8601 field regardless of which CCP encoding the underlying notification used.
+- **TypeIdRegistry consolidation** — POS tower metadata (42 towers with size/faction/modifier), POS_BASE_FUEL_RATES per size, SERVICE_FUEL_RATES for Upwell modules, FUEL_BLOCK_* constants, MAGMATIC_GAS, STRONTIUM, CHARTER_* (6 charters), UPWELL_TYPE_IDS (13 types). Hardcoded values for fields where SeAT's SDE has known errors (notably Tenebrex Cyno Jammer ID 37534 vs. SDE's 35839, faction-tower fuel modifiers).
+
+### 📊 Documentation
+
+- **In-app help completely rewritten for v2.0.0** — new "What's New in v2.0.0 — The Ecosystem Era" section as the marketing pitch with companion-plugin listing; ESI detection paths documented with testing recipes for each path; opsec policy section explicitly rejecting calendar export and external data feeds; tactical-planning event contract documenting payload schema + subscriber implementation guide; IdResolver subsection explaining the three-tier lookup chain.
+- **All previously-undocumented commands now documented** — `process-notifications`, `track-structure-presence`, `publish-timer-schedule-events`, `prune-structure-board-timers`, `create-test-upwell-structures`, `inject-test-notification`, `cleanup-test-data`. Grouped into "Operational Background Jobs" (cron-driven) and "Test-Data Commands" (operator-invoked).
+- **Plugin naming standardized to display names** in user-facing docs (`SeAT Broadcast` not "Pings", `Manager Core` not "MC"). Package strings appear in brackets on first prominent reference for install / debug context.
+
+### ⚠️ Upgrade Notes
+
+- **Backwards-compatible.** All migrations are forward-only and idempotent. No data loss, no manual reconfiguration required for existing installs.
+- **Manager Core is optional but recommended.** Without it, Structure Manager works exactly as it did before (15-20 min detection cadence via SeAT's native notification bucket). With it, you get ~2-minute detection plus the cross-plugin integrations.
+- **Changing the ESI detection mode requires a worker restart** to apply uniformly. The settings page now flashes an explicit reminder when the mode changes. The in-memory notification registry is per-process; only a fresh boot can re-evaluate which registrations apply.
+- **Worker container must have the same plugin code as front.** Run `composer update` (or your container's equivalent) on every container that boots Laravel: `front`, `worker`, `scheduler`. Otherwise the worker may have stale code that doesn't match the front-end UI.
+
+### 🐳 Upgrading via SeAT Docker
+
+```bash
+# 1. Edit your seat-docker .env file. Add mattfalahe/manager-core to the
+#    SEAT_PLUGINS list (or whatever your template names the plugin list
+#    env var) IF you want the ecosystem features. Skip this step if you
+#    want to stay standalone.
+nano .env
+
+# 2. Stop the stack (pass all three compose files)
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml down
+
+# 3. Bring it back up. The entrypoint composer-installs the new plugin
+#    list, runs all pending migrations, and SeAT comes up ready.
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml up -d
+
+# 4. Watch the front container boot (optional but reassuring)
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml logs -f front
+```
+
+### 🚀 Additional v2.0.0 features
+
+These features landed during the dev-4.0 development cycle and ship together as part of v2.0.0. The "Headline Features" section above covers the core architecture; this section adds the broader feature set built on that foundation.
+
+#### Pre-Timer Reminder Pings (T-24h / T-6h / T-1h)
+
+Scheduled Discord reminders fired 24 hours, 6 hours, and 1 hour before a structure timer expires. Lets fleet leadership plan doctrine + roster on a predictable rhythm — *tomorrow plan / tonight prepare / hour-out ping* — rather than scrambling when the under-attack alert fires.
+
+Six dedicated notification categories (`events.pre_timer_armor`, `_hull`, `_sov`, `_nodes`, `_hostile`, `_defense`) — operator routes each event type independently via the Notifications panel. Combat reminders enabled by default; manual-op reminders opt-in.
+
+**Manager Core required** for the EventBus subscription that drives reminders. Without MC, under-attack alerts still fire via SeAT native — only the scheduled reminders are gated by MC.
+
+#### Attacker Threat Intel (zKillboard enrichment) — opt-in
+
+Optional follow-up Discord embed posted ~1-2 seconds after each under-attack alert with the attacker's zKillboard profile: kill count, top-flown ship, danger ratio, gang ratio, and a synthesized threat tier ("Professional", "Active", "Casual", "Dormant", "Cold"). FCs decide fleet form-up based on threat assessment.
+
+**Async** — never delays the primary alert. **Opt-in by design** — disabled by default because it makes external HTTP calls to zKillboard. Enable via Settings > Structure Events + bind the `events.attacker_threat_intel` category. **Standalone** (no MC required). 7-day cache; only public attacker character IDs leave SeAT (opsec-safe).
+
+#### Under-attack board behavior + escalation cleanup
+
+`StructureUnderAttack` notifications create a board row with an "UNDER ATTACK" badge and 15-minute auto-dismiss window (matching CCP's auto-repair behavior for transient attacks). If the attack escalates to `StructureLostShields`, the under_attack row is proactively dismissed in favor of the proper `reinforce_armor` row with the real `state_timer_end`. No more ghost rows lingering after a transient attack.
+
+Same fast-dismiss pattern applies to `EntosisCaptureStarted` rows — 60-min synthetic deadline (covers ~2 entosis cycles) instead of the 4-hour grace, so stale "ENTOSIS ACTIVE" rows clear from the board promptly.
+
+#### FINAL TIMER awareness
+
+Structures with no separate hull reinforce timer — **medium Upwell** (Astrahus / Raitaru / Athanor), **FLEX navigation** (Ansiblex / Pharolux / Tenebrex), and **Equinox single-cycle** structures (Metenox / Orbital Skyhook) — now show a red `⚠ FINAL TIMER` indicator on the Structure Board, in under-attack Discord embeds, and in pre-timer reminders. Makes the "this is the last fight" stakes visible at a glance.
+
+EventBus `structure.alert.armor_reinforced` payload includes `is_final_timer: bool` so cross-plugin subscribers (Mining Manager extraction_at_risk, future Pings calendar) can prioritize accordingly. Backward-compatible — old subscribers ignore unknown fields.
+
+#### Notification routing policy: explicit opt-in
+
+The notification category schema ships with **18 categories** across three namespaces (`upwell.*` / `events.*` / `pos.*`). Each has its own master toggle, default role mention, and webhook bindings via the Notifications panel.
+
+**Default state on fresh install:** all categories created with sensible enabled/disabled defaults, but **no webhooks are auto-bound**. Operators bind webhooks explicitly per category via the UI. Prevents surprise routing where existing webhooks would otherwise inherit every category's traffic post-upgrade.
+
+#### Discord role picker
+
+Inline slide-down role picker on every role-mention input across SM. Detects installed Discord-role provider packages (`mattfalahe/seat-discord-pings`, `warlof/seat-discord-connector`, etc.) and presents a deduplicated, color-coded role list. Operators no longer need to copy raw Discord snowflake IDs.
+
+#### Notification Routing Map
+
+A read-only **Routing Map** tab in Settings shows, at a glance, where every notification category delivers and which Discord role it pings, computed from the live configuration. Grouped per namespace (Upwell / Structure Events / POS), it lists each category, its bound webhooks, the corporation scope, and the resolved role mention, tagged with the precedence tier that won (`L1` binding override / `L2` category default / `L3` webhook legacy). Categories that are enabled but bound to no webhook are flagged as "firing nowhere"; `pre_timer_*` categories show a "needs Manager Core" reason when MC is absent (their reminders ride MC's EventBus).
+
+Role-mention inputs across the Notifications panel now also **translate raw Discord role IDs into readable names**: a `<@&1234...>` value resolves to `@Fleet Commander` (with the role's colour) when the ID is known to an installed Discord role source, and is flagged when it is not. The precedence ladder is labelled **L1 / L2 / L3** consistently across the legend, the role inputs, and the Routing Map.
+
+#### Fuel Forensics — event reclassification (Tier 1)
+
+The v1.x fuel tracker treated every negative bay delta as "refuel" and every positive bay delta as "consumption". A 5,000-block theft looked identical to a 4,032-block legit refuel. v2.0.0 reclassifies every fuel-tracking poll into one of **eight distinct event types**:
+
+| Event type | Detection rule |
+|---|---|
+| `consumption_normal` | Bay went DOWN ≤ expected consumption × 1.15 (within ±15% of expected) |
+| `consumption_anomaly` | Bay went DOWN 15-50% more than expected (likely service activation) |
+| `refuel_internal` | Bay went UP AND reserves went DOWN by ≥80% of bay gain → moved from CorpSAG |
+| `refuel_external` | Bay went UP AND reserves did NOT change → fuel added from outside |
+| `withdrawal_bay` | Bay went DOWN by ≥1.5× expected consumption |
+| `withdrawal_reserves` | CorpSAG dropped ≥500 without matching bay gain → fuel left the corp |
+| `unexplained_gain` | Bay went up with no matching reserve drop |
+| `unclassified` | First snapshot or no baseline yet |
+
+**Recent Fuel Records** in the structure detail page now renders color-coded badges per row (green refuel, red withdrawal, gray consumption, yellow anomaly). Each badge has a tooltip explaining the classification.
+
+Hard ESI limit (documented in-product): ESI does not expose actor identity for asset moves. Classification is based on quantity deltas, not who-did-it.
+
+#### Fuel Forensics — suspect narrowing (Tier 2)
+
+For each `withdrawal_*` event, an async `WithdrawalForensicsJob` builds a per-event candidate list of corp members who **collaterally match** four signals:
+
+| Signal | Source | Weight |
+|---|---|---|
+| Online during ±1h window | `corporation_member_trackings` | +30 |
+| Personal asset gain match | `character_assets` | +40 |
+| Has any corp title | `corporation_member_titles` | +20 |
+| Sold matching fuel ≤48h after event | `character_wallet_transactions` | +30 |
+
+Scores bucket into **HIGH / MEDIUM / LOW** confidence (≥60 / 30-59 / 10-29). Rows below 10 are dropped as noise.
+
+Withdrawal rows on the structure detail page gain an expandable forensics panel listing candidates with confidence badges, score bars, signal pills, and zKB profile links. The panel header explicitly states: *"ESI does not expose who moved this fuel — these candidates are inferred from collateral SeAT data."* False positives are inevitable (logistics alts look like thieves). The system catches lazy thieves; careful market-alt thieves escape.
+
+Tiers 3-5 (per-structure Z-score baselines, ISK valuation via MC, stewardship leaderboard) deferred — see internal roadmap.
+
+#### External Reserves Tracking (NPC stations + foreign Upwells)
+
+v1.x only saw CorpSAG fuel inside corp-owned Upwell structures. A corp staging refuel hauls in Jita 4-4 (NPC station Office rental) or in a friendly alliance-mate's Fortizar (foreign Upwell with Office rental) had those reserves completely invisible to the plugin. v2.0.0 sweeps `corporation_assets` corp-wide and resolves CorpSAG fuel inside Office containers regardless of whether the container sits in an NPC station or a foreign Upwell — using `staStations` + `mapDenormalize` for NPC stations and `universe_structures` + `mapDenormalize` for foreign Upwells.
+
+**Fuel Reserves** page now groups by solar system and shows external holdings as "External" badged cards alongside owned Upwells. Each external location resolves to its real EVE name (e.g. *"Jita IV - Moon 4 - Caldari Navy Assembly Plant"* for NPC, or *"3AE-CP - Cosmos Collective Cat Cafe"* for foreign Upwells) and its actual solar system.
+
+**Scope:** NPC stations + foreign Upwells. The only verdict skipped is `unknown_location` (resolution failure — location_id doesn't match any structure or station), since rendering "Unknown Location" cards is UI noise with no actionable info.
+
+**Depletion reconciliation:** every `track-fuel` poll runs a corp-wide reconciliation pass after both sweeps complete. For every `(structure_id, fuel_type, location_flag)` tuple with a positive latest quantity, it verifies the fuel is still physically present in `corporation_assets` (checking both direct placement and nested-Office traversal). Tuples that no longer match insert a depletion row (`reserve_quantity=0, quantity_change=-previous, is_refuel_event=true`) to close out the audit trail. Without this, the latest snapshot of a CorpSAG that had fuel moved out would stay at the old positive quantity forever — and a move to a new location would render as double-counted fuel in two places. Depletion rows appear correctly on the Fuel Withdrawals tab as proper withdrawal events with negative `quantity_change`; UI layers filter `reserve_quantity > 0` so the system view doesn't show "0 blocks" cards.
+
+**Phantom withdrawal safety net** — the original Fuel Withdrawals page would show endless hourly `−57,000` rows from a CorpSAG that hadn't actually moved any fuel. The smoking-gun diagnostic from an affected install showed eleven separate physical stacks of Hydrogen Fuel Block (`58,000 + 10 × 1,000`) sitting in a single CorpSAG3 inside an Office container. The root cause turned out to be a dedup mismatch in `trackStructureReserves` + `trackExternalReserves`:
+
+> EVE does NOT auto-merge identical items moved into CorpSAG hangars by different characters or at different times. A corp can easily end up with N separate physical stacks of e.g. Hydrogen in the same CorpSAG. Pre-v2.0.0 the tracker iterated each physical stack separately and compared each one to a per-tuple `lastReserve`. Result: every poll the dedup memory bounced between the 58k stack and the 1k stacks, writing a mirror pair of rows (`+57,000` / `−57,000`) into `structure_fuel_reserves` every cycle even though no fuel had actually moved.
+
+Fixed in four layers:
+
+- **Write-side aggregation** — both `trackStructureReserves` and `trackExternalReserves` now group the raw `corporation_assets` rows by `(fuel_type_id, location_flag)` (or `(actual_location_id, fuel_type_id, location_flag)` for external) and SUM the stack quantities into a single logical reserve before the `lastReserve` comparison. One row per tuple per poll, regardless of how many physical stacks the corp has lying around. Stack item_ids are preserved in `metadata.stack_item_ids` for audit.
+- **Depletion-reconciliation debounce** — `reconcileDepletedReserves` requires absence across **two consecutive polls** before committing a depletion row. Streak counter lives in Redis (`sm:depletion_absence:<corp>:<structure>:<fuel>:<flag>`, TTL 6h), cleared on detection. Defends against SeAT's `corporation-assets` refresh being non-atomic (DELETE-then-INSERT, no transaction) — a poll that lands inside the refresh window now can't write a phantom by itself.
+- **Display-side filter** — `FuelReserveController::detectPhantomPairs` hides two phantom signatures from the UI: (A) any `is_refuel_event` row that has a mirror `+N` companion in the same tuple within 5 minutes (the dual-stack signature); (B) any `depletion_reconciliation` row that is followed within 4 hours by a return-to-positive row (the reconciliation-race signature). Historical phantom rows from before the write-side fix shipped will simply stop appearing in the UI; they remain in the DB for audit until the operator runs the cleanup command.
+- **Cleanup command** — `php artisan structure-manager:cleanup-phantom-withdrawals` does two SQL self-joins to detect two distinct phantom signatures: **(A) symmetric mirror pairs** (`+N` and `−N` rows in the same tuple within `--window-seconds=300`, both halves deleted), and **(B) first-poll phantoms** (a `−N` row whose mirror is the very first observation of the tuple, with `quantity_change=NULL` — paired by the mathematical fingerprint `A.previous_quantity = B.reserve_quantity`, only the phantom side deleted, the first-observation audit row kept). Default is dry-run; pass `--force` to actually delete. Optional `--corp=ID` scopes to a single corporation for multi-corp installs. Explicitly excludes `depletion_reconciliation` rows from both pair-detection self-joins (uses LIKE on the raw metadata string to survive the legacy double-encoded JSON) so legitimate move-out audit rows are never wiped just because someone happened to refuel within the window.
+
+- **Automatic cleanup on upgrade** — migration `2026_05_01_000006_cleanup_phantom_dual_stack_pairs` runs the same SQL logic unconditionally during the v1.x → v2.0.0 upgrade. SeAT Docker auto-applies migrations on container restart, so operators don't need to manually invoke the artisan command — the Fuel Withdrawals UI is clean on first load after upgrade. Scoped to the last 365 days; capped at 100,000 rows per signature for migration speed (operators with pathological backlogs get a log warning telling them to re-run the manual command). Idempotent — re-running on a clean install is a no-op. Forward-only.
+
+**Metadata double-JSON-encoding fix** — the `StructureFuelReserves` model has `protected $casts = ['metadata' => 'array']`, which means Laravel handles JSON-encoding on save and decoding on read. Three call sites in `TrackFuelConsumption` (`trackStructureReserves`, `trackExternalReserves`, `reconcileDepletedReserves`) were passing `json_encode([...])` to the `metadata` column, which Laravel then encoded AGAIN. The column ended up holding a JSON string that wrapped a JSON object (`"{\"tracking_method\":\"nested_office\",...}"`), which made `JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.tracking_method'))` return NULL in MariaDB and silently broke downstream queries — cleanup, diagnostic forensic candidate lookup, and audit reports. Now passes the array directly so the cast can do its job.
+
+#### Fuel Withdrawals — pagination + division names
+
+The Fuel Withdrawals table on the Reserves page was unpaginated, returning the full 30-day event list as a single JSON blob. For active alliance installs with hourly refuel cadence this could be thousands of rows. Now:
+
+- **Server-side pagination** with operator-selectable page size (25 / 50 / 100 / 200 per page).
+- **First / Prev / Next / Last** controls + row-count info ("Showing 1-50 of 1,247 withdrawals").
+- **"From Location" column renamed to "From Hangar"** and shows both the `CORPSAG3` flag AND the in-game custom hangar name (resolved from `corporation_divisions`).
+- **"Quantity Withdrawn" renamed to "Quantity Change"** and now shows the signed delta (green `+N` for refuels, red `−N` for withdrawals) plus a `before → after` sub-line. A row that reads `−57,000` with `58,000 → 1,000` underneath makes it instantly obvious whether a large number is a real movement or a phantom snapshot. A `Reconciled` badge marks synthetic rows written by the corp-wide depletion reconciliation pass (fuel moved out, last positive snapshot closed to zero) so operators can distinguish them from primary ESI-detected withdrawals.
+- Auto-refresh preserves the operator's current page.
+
+#### Settings UI — hangar names in Reserves Tracking
+
+The Reserves Tracking section of Settings listed hangars as plain `Division 1..7`. Operators had to remember which division corresponded to which in-game hangar tab. Each checkbox now shows three stacked lines:
+
+```
+☑  Division 1
+   FUEL HANGAR              ← in-game name (resolved from corporation_divisions)
+   CorpSAG1                  ← ESI location_flag (monospace)
+```
+
+When the operator straddles multiple corps with different names for the same division, all distinct names render joined with " / ".
+
+#### Webhook Delivery Telemetry
+
+The #1 ops question — *"did my Discord webhook actually fire?"* — is now visible at a glance on the Health Checks diagnostic tab without grepping `laravel.log`. v1.x dispatched via raw `Http::post()` and threw the result on the floor; v2.0.0 routes every dispatch through `WebhookDeliveryService` which writes a telemetry row to `structure_manager_webhook_deliveries` capturing:
+
+- HTTP status code (0 = connection failure / timeout)
+- Success flag
+- Round-trip duration in ms
+- Notification category that triggered the dispatch
+- Payload summary (e.g. *"structure_under_attack: 3AE-CP Fortizar"*)
+- Error message on failure (truncated to 500 chars)
+
+**Diagnostic surface** — new *"Webhook Delivery Health (Last 24h)"* section on the Health Checks tab. Per-webhook table showing status badge, attempts count (with ok/fail breakdown), 24h success rate (color-coded ≥95% green / ≥50% yellow / <50% red), average response time, last attempt time, last failure with HTTP code + error preview.
+
+**Retention** — 30 days, pruned by the existing daily `structure-manager:cleanup-history` 3 AM tick. Active alliance installs producing thousands of dispatches per day stay bounded at <100k rows.
+
+**Refactored 5 dispatchers** to use the centralized service: `NotifyPosLowFuel`, `NotifyUpwellLowFuel`, `StructureEventHandler`, `PreTimerReminderHandler`, `DispatchAttackerThreatIntel`.
+
+#### Diagnostic Page Overhaul
+
+Comprehensive improvements to the `/diagnostic` admin page (10 tabs, admin-only, intentionally not in sidebar):
+
+- **Default landing tab is always Health Checks.** Pre-fix the JS restored the last-clicked tab from localStorage — operators who clicked into Test Data once kept landing there. Now every fresh visit opens on Health Checks; URL deep-links (`?diag_tab=X`) still win.
+- **Lazy-load for heavy tabs** — System Validation, Settings Health, and Data Integrity now follow the same pattern Fuel Trace has used since launch. Tab data only computes when its tab is active. Cold-load is much faster (Health Checks only); heavy tabs pay on first click then cache for repeat visits. Cache TTLs: 1800s / 300s / 30s respectively.
+- **Per-tab intro boxes** — every tab opens with a uniform "What this tab does / When to use / Heads up" intro. Diagnostic page is intentionally NOT in Help & Documentation, so tab intros are the only place operators learn each surface's purpose.
+- **Hidden deprecated-at-default settings** — Settings Health audits deprecated keys (e.g. `pos_webhook_url`, `pos_webhook_enabled`) but suppresses them from the rendered list when at default. They'd only show if an operator accidentally set a value, with a loud WARN. A small footer lists what's been hidden.
+- **N+1 fix + 60s caching** on the heavy `check*` methods (ESI coverage, notification state, polling state, pricing integration, webhook delivery). Eliminated synchronous SDE lookups in the test-lab loop.
+- **Notification Lab gains the danger-zone warning banner** that Test Data has — Lab is arguably MORE dangerous because forgetting to set the Test webhook URL sends fake injections to real Discord channels.
+- **Fuel Trace v2 surfaces** — two new steps for Upwell structures: event classification breakdown (last 30 polls) and forensic candidates list (for the latest withdrawal event).
+- **Sample Alert form moved** from Notification Testing → Notification Lab. Testing now contains only real-job triggers; Lab contains all synthetic-data dispatch paths.
+
+### 📦 Migration
+
+All v2 schema changes ship as **six forward-only migrations** with the `2026_05_01_*` date prefix:
+
+- `2026_05_01_000001_create_structure_manager_v2_core_schema` — all v2 table CREATE statements, drops the dormant `structure_manager_esi_key_holders` table (Manager Core owns the key pool now)
+- `2026_05_01_000002_seed_structure_manager_v2_notification_categories` — seeds all 18 categories with sensible defaults
+- `2026_05_01_000003_run_structure_manager_v2_forward_cleanups` — forward-only data cleanups (legacy POS strontium board rows, stale mislabeled under_attack rows from pre-v2 mapping)
+- `2026_05_01_000004_extend_structure_fuel_schema_for_v2` — Part A: adds `event_type`, `expected_consumption`, `unexplained_delta`, `reserves_delta` columns to `structure_fuel_history` + creates `structure_fuel_event_candidates` table for Tier 2 forensics. Part B: adds `location_type`, `location_name`, `location_system_id`, `location_system_name` columns to `structure_fuel_reserves` (backfills existing rows as `owned_structure`)
+- `2026_05_01_000005_create_webhook_delivery_telemetry_table` — creates `structure_manager_webhook_deliveries` for per-dispatch telemetry (status code, duration, success, category, error message)
+- `2026_05_01_000006_cleanup_phantom_dual_stack_pairs` — forward-only cleanup of phantom mirror-pair + first-poll-phantom rows in `structure_fuel_reserves` from the pre-v2.0.0 dual-stack-not-aggregated bug. Runs automatically during the upgrade. Capped at 100k rows per signature for migration speed
+
+Forward-only, additive, defensively guarded with `Schema::hasTable` / `Schema::hasColumn` checks. Upgrades from v1.x preserve all settings, webhooks, fuel history, POS data, and structure presence tracking. The legacy `esi_attack_role_mention` setting is auto-migrated to the new `events.structure_attack` category role_mention on first run.
+
+### 🤝 Companion Plugins
+
+- **Manager Core** (`mattfalahe/manager-core`) — the optional hub. Adds 10-15x faster ESI detection via the shared key holder pool, MC pricing service for the Fuel Economics page, EventBus for cross-plugin events, SDE service, REST API, comprehensive diagnostic dashboard.
+- **Mining Manager** (`mattfalahe/mining-manager`) — already integrated. Subscribes to `structure.alert.*` events for extraction-at-risk alerts on reinforced moon-mining refineries. Uses MC's pricing service and the shared director key pool.
+- **SeAT Broadcast** (`mattfalahe/seat-discord-pings`) — already integrated with Manager Core's EventBus. A planned calendar build will consume Structure Manager's tactical-planning events to render a fleet-coverage calendar with configurable pre-timer reminder pings (24h / 2h / 30min before reinforce / anchoring timers).
+- **Corp Wallet Manager** (`mattfalahe/corp-wallet-manager`) — integrated with Manager Core for cross-plugin wallet events.
+- **HR Manager** (`mattfalahe/hr-manager`) — integrated with Manager Core for cross-plugin member-lifecycle events.
+
+### Limitations & honest disclosure
+
+- **Calendar / ICS export will not ship.** Timer data is tactical intelligence in EVE; exporting it to third-party calendar services (Google, Apple, Outlook) is an opsec failure mode. The reasoning is documented in-product. The in-app Structure Board + the existing Discord webhook channels are the operator-controlled trust zones for timer info.
+- **Fast-poll detection requires director characters** in Manager Core's shared ESI key pool. Without enrolled directors, MC's poll exits cleanly each minute with nothing to do; SM's native sweep fills in.
+- **First-time attacker resolution adds ~250ms** to alert dispatch when the attacker isn't in any local cache. Acceptable for a critical security ping. Subsequent attacks by the same pilot resolve instantly. Worst case (CCP's public ESI is down): the embed renders the ID-only "Pilot ID #N (name not cached)" form exactly as before.
+
+---
+
+## Version 1.0.11 — *November 2025*
 
 ### 🐛 Bug Fixes
 

@@ -20,11 +20,19 @@ class PosManagerController extends Controller
 {
     /**
      * Get user's accessible corporation IDs
+     *
+     * Returns null when the user has explicit structure-manager.admin permission
+     * (full cross-corporation access). Otherwise returns an array of corp IDs the
+     * user's linked characters belong to, which may be empty.
      */
     private function getUserCorporations()
     {
-        // Get corporation IDs from user's characters
-        $corporationIds = DB::table('refresh_tokens')
+        // SECURITY: Only users with explicit admin permission get cross-corp access.
+        if (auth()->user() && auth()->user()->can('structure-manager.admin')) {
+            return null;
+        }
+
+        return DB::table('refresh_tokens')
             ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
             ->where('refresh_tokens.user_id', auth()->id())
             ->whereNull('refresh_tokens.deleted_at')
@@ -32,10 +40,54 @@ class PosManagerController extends Controller
             ->unique()
             ->filter()
             ->toArray();
-        
-        return !empty($corporationIds) ? $corporationIds : null;
     }
-    
+
+    /**
+     * The corporations the CURRENT VIEW should be filtered to.
+     *
+     * Distinct from getUserCorporations() — that reports actual access
+     * RIGHTS (admin = null = everything). This reports the current VIEW
+     * SCOPE: it defaults to the user's own corporations even for admins,
+     * so an admin landing on the POS list sees their own corp(s) first
+     * instead of every corp on the install.
+     *
+     *   ?scope=mine     (default) -> user's own corporations
+     *   ?scope=all                -> null (all corps) — admins only
+     *   ?scope=<corpId>           -> that single corp (admins: any;
+     *                                others: only their own, else own)
+     */
+    private function getScopedCorporations()
+    {
+        $user    = auth()->user();
+        $isAdmin = $user && $user->can('structure-manager.admin');
+
+        $ownCorps = DB::table('refresh_tokens')
+            ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
+            ->where('refresh_tokens.user_id', auth()->id())
+            ->whereNull('refresh_tokens.deleted_at')
+            ->pluck('character_affiliations.corporation_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $scope = (string) request()->query('scope', 'mine');
+
+        if ($scope === 'all') {
+            return $isAdmin ? null : $ownCorps;
+        }
+
+        if ($scope !== 'mine' && ctype_digit($scope)) {
+            $corpId = (int) $scope;
+            if ($isAdmin || in_array($corpId, $ownCorps)) {
+                return [$corpId];
+            }
+            return $ownCorps;
+        }
+
+        return $ownCorps;
+    }
+
     /**
      * Display POS list
      */
@@ -70,8 +122,10 @@ class PosManagerController extends Controller
     public function getPosesData(Request $request)
     {
         try {
-            $userCorpIds = $this->getUserCorporations();
-            
+            // Corp scope for THIS view — own corps by default (admins
+            // included); ?scope=all / ?scope=<corpId> override.
+            $userCorpIds = $this->getScopedCorporations();
+
             // Build query for POSes
             $query = DB::table('corporation_starbases as cs')
                 ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
@@ -93,16 +147,21 @@ class PosManagerController extends Controller
                     'ca.map_name as location_name'
                 );
             
-            // Filter by corporation if user is not superadmin
+            // Scope filter — own corps by default, single corp or all
+            // depending on ?scope. null = admin explicitly chose scope=all.
             if ($userCorpIds !== null) {
                 $query->whereIn('cs.corporation_id', $userCorpIds);
             }
-            
-            // Filter by selected corporation
-            if ($request->has('corporation_id') && $request->corporation_id != '') {
-                $query->where('cs.corporation_id', $request->corporation_id);
-            }
-            
+
+            // NOTE: the stale-structure hide (stale_structure_threshold_days)
+            // is deliberately NOT applied to POSes. A corporation_starbases
+            // row only changes when the tower's state or settings change, so
+            // a stable or offline POS keeps a static row and its updated_at
+            // legitimately freezes even while ESI polling is perfectly
+            // healthy. Hiding on updated_at age would drop healthy towers.
+            // The POS state column (online / offline / reinforced) is the
+            // correct signal for tower activity and is already shown per row.
+
             $poses = $query->get();
             
             // Enrich with fuel data from latest history
@@ -145,13 +204,17 @@ class PosManagerController extends Controller
                     $pos->space_type = $history->space_type;
                     $pos->last_updated = $history->created_at;
                     
-                    // Determine overall fuel status
-                    if ($history->actual_days_remaining < 7) {
+                    // POS fuel status — thresholds read live from settings via
+                    // FuelThresholds::posFuelCritical() / posFuelWarning(),
+                    // so admin-configured values (different per deployment,
+                    // e.g. wormhole POSes need higher thresholds) are
+                    // respected on this list page just as they are by the
+                    // notification job.
+                    $T = \StructureManager\Helpers\FuelThresholds::class;
+                    if ($history->actual_days_remaining < $T::posFuelCritical()) {
                         $pos->fuel_status = 'critical';
-                    } elseif ($history->actual_days_remaining < 14) {
+                    } elseif ($history->actual_days_remaining < $T::posFuelWarning()) {
                         $pos->fuel_status = 'warning';
-                    } elseif ($history->actual_days_remaining < 30) {
-                        $pos->fuel_status = 'normal';
                     } else {
                         $pos->fuel_status = 'good';
                     }
@@ -176,7 +239,8 @@ class PosManagerController extends Controller
             \Log::error('PosManagerController::getPosesData error: ' . $e->getMessage());
             return response()->json([
                 'data' => [],
-                'error' => $e->getMessage(),
+                'error' => 'Failed to load POS data',
+                'debug' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -347,44 +411,50 @@ class PosManagerController extends Controller
     {
         $userCorpIds = $this->getUserCorporations();
         
-        // FIXED: Get POSes with critical fuel (< 7 days) - ONLY ONLINE (state = 4) and REINFORCED (state = 3)
-        // Query the state from starbase_fuel_history which stores it as integer, not from corporation_starbases which stores it as string
+        // POSes with critical fuel — thresholds read live from settings (configurable
+        // per install, defaults to 7d/6h/7d). Wormhole POSes can configure
+        // higher critical thresholds for extended response time.
+        $T = \StructureManager\Helpers\FuelThresholds::class;
+        $criticalFuelDays = $T::posFuelCritical();
+        $criticalStrontiumHours = $T::posStrontiumCritical();
+        $criticalCharterDays = $T::posCharterCritical();
+
         $criticalFuel = StarbaseFuelHistory::whereIn('id', function($query) {
                 $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
-            ->whereIn('starbase_fuel_history.state', [3, 4]) // FIXED: Use state from history table (integers)
-            ->where('actual_days_remaining', '<', 7)
+            ->whereIn('starbase_fuel_history.state', [3, 4])
+            ->where('actual_days_remaining', '<', $criticalFuelDays)
             ->when($userCorpIds !== null, function($query) use ($userCorpIds) {
                 return $query->whereIn('starbase_fuel_history.corporation_id', $userCorpIds);
             })
             ->orderBy('actual_days_remaining', 'asc')
             ->get();
-        
-        // FIXED: Get POSes with critical strontium (< 6 hours) - ONLY ONLINE (state = 4) and REINFORCED (state = 3)
+
+        // POSes with critical strontium — threshold from FuelThresholds (6h locked).
         $criticalStrontium = StarbaseFuelHistory::whereIn('id', function($query) {
                 $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
-            ->whereIn('starbase_fuel_history.state', [3, 4]) // FIXED: Use state from history table (integers)
-            ->where('strontium_hours_available', '<', 6)
+            ->whereIn('starbase_fuel_history.state', [3, 4])
+            ->where('strontium_hours_available', '<', $criticalStrontiumHours)
             ->when($userCorpIds !== null, function($query) use ($userCorpIds) {
                 return $query->whereIn('starbase_fuel_history.corporation_id', $userCorpIds);
             })
             ->orderBy('strontium_hours_available', 'asc')
             ->get();
-        
-        // FIXED: Get POSes with low charters (< 7 days, high-sec only) - ONLY ONLINE (state = 4) and REINFORCED (state = 3)
+
+        // POSes with low charters (high-sec only) — threshold from FuelThresholds (7d locked).
         $criticalCharters = StarbaseFuelHistory::whereIn('id', function($query) {
                 $query->select(DB::raw('MAX(id)'))
                     ->from('starbase_fuel_history')
                     ->groupBy('starbase_id');
             })
-            ->whereIn('starbase_fuel_history.state', [3, 4]) // FIXED: Use state from history table (integers)
+            ->whereIn('starbase_fuel_history.state', [3, 4])
             ->where('requires_charters', true)
-            ->where('charter_days_remaining', '<', 7)
+            ->where('charter_days_remaining', '<', $criticalCharterDays)
             ->when($userCorpIds !== null, function($query) use ($userCorpIds) {
                 return $query->whereIn('starbase_fuel_history.corporation_id', $userCorpIds);
             })

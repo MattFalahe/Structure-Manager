@@ -25,6 +25,21 @@ class AnalyzePosConsumption implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable;
 
     /**
+     * Max seconds the job is allowed to run before the worker kills it.
+     */
+    public $timeout = 600;
+
+    /**
+     * Retry count on unhandled exceptions.
+     */
+    public $tries = 3;
+
+    /**
+     * Retry back-off schedule in seconds.
+     */
+    public $backoff = [60, 300, 900];
+
+    /**
      * Execute the job.
      */
     public function handle()
@@ -90,7 +105,7 @@ class AnalyzePosConsumption implements ShouldQueue
             
             // Calculate fuel consumption
             $fuelConsumed = $firstRecord->fuel_blocks_quantity - $lastRecord->fuel_blocks_quantity;
-            $hoursPassed = $lastRecord->created_at->diffInHours($firstRecord->created_at);
+            $hoursPassed = $lastRecord->created_at->diffInHours($firstRecord->created_at, true);
             
             $fuelDailyConsumption = $hoursPassed > 0 ? ($fuelConsumed / $hoursPassed) * 24 : 0;
             $fuelHourlyRate = $hoursPassed > 0 ? $fuelConsumed / $hoursPassed : 0;
@@ -123,8 +138,12 @@ class AnalyzePosConsumption implements ShouldQueue
                 }
             }
             
-            // Calculate charter consumption (if required)
-            $charterConsumed = $firstRecord->charter_quantity - $lastRecord->charter_quantity;
+            // Calculate charter consumption (if required).
+            // Clamp to >= 0: on days with a refuel event the naive (first - last)
+            // subtraction can go negative, which would then be stored as negative
+            // daily consumption. Refuel amounts are tracked separately below.
+            $charterConsumedRaw = $firstRecord->charter_quantity - $lastRecord->charter_quantity;
+            $charterConsumed = max(0, $charterConsumedRaw);
             $requiredCharters = $firstRecord->requires_charters;
             
             // Detect charter refuels
@@ -150,9 +169,14 @@ class AnalyzePosConsumption implements ShouldQueue
             // Detect anomalies
             $hasAnomaly = false;
             $anomalyDetails = null;
-            
-            // Check if POS was offline (zero consumption)
-            if ($fuelConsumed == 0 && $hoursPassed >= 12) {
+
+            // State 3 = reinforced. Reinforced POSes legitimately burn zero fuel
+            // blocks and burn strontium instead, so they must be exempt from the
+            // "zero consumption = offline" and "deviation from expected" checks.
+            $wasReinforcedAll = ($firstRecord->state === 3 && $lastRecord->state === 3);
+
+            // Check if POS was offline (zero consumption) - skip if reinforced.
+            if (!$wasReinforcedAll && $fuelConsumed == 0 && $hoursPassed >= 12) {
                 $hasAnomaly = true;
                 $anomalyDetails = [
                     'type' => 'offline',
@@ -161,12 +185,14 @@ class AnalyzePosConsumption implements ShouldQueue
                     'actual_consumption' => 0,
                 ];
             }
-            
-            // Check for consumption spike (>20% deviation)
-            if ($fuelDailyConsumption > 0) {
+
+            // Check for consumption spike (>20% deviation) - skip if reinforced
+            // or if expected consumption is zero/unknown (prevents division by zero
+            // when the SDE has no control-tower-resources row for this tower type).
+            if (!$wasReinforcedAll && $fuelDailyConsumption > 0 && $expectedDailyConsumption > 0) {
                 $deviation = abs($fuelDailyConsumption - $expectedDailyConsumption);
                 $deviationPercent = ($deviation / $expectedDailyConsumption) * 100;
-                
+
                 if ($deviationPercent > 20) {
                     $hasAnomaly = true;
                     $anomalyDetails = [

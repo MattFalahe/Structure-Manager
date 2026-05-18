@@ -16,6 +16,21 @@ class AnalyzeFuelConsumption implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
 
+    /**
+     * Max seconds the job is allowed to run before the worker kills it.
+     */
+    public $timeout = 600;
+
+    /**
+     * Retry count on unhandled exceptions.
+     */
+    public $tries = 3;
+
+    /**
+     * Retry back-off schedule in seconds.
+     */
+    public $backoff = [60, 300, 900];
+
     protected $structureId;
     protected $corporationId;
 
@@ -36,36 +51,49 @@ class AnalyzeFuelConsumption implements ShouldQueue
         try {
             if ($this->structureId) {
                 // Analyze specific structure
-                $this->analyzeStructure($this->structureId);
+                $this->analyzeStructureSafely($this->structureId);
             } elseif ($this->corporationId) {
                 // Analyze all structures for a corporation
                 $structures = DB::table('corporation_structures')
                     ->where('corporation_id', $this->corporationId)
                     ->whereNotNull('fuel_expires')
                     ->pluck('structure_id');
-                
+
                 foreach ($structures as $structureId) {
-                    $this->analyzeStructure($structureId);
+                    $this->analyzeStructureSafely($structureId);
                 }
             } else {
                 // Analyze all structures
                 $structures = DB::table('corporation_structures')
                     ->whereNotNull('fuel_expires')
                     ->pluck('structure_id');
-                
+
                 foreach ($structures as $structureId) {
-                    $this->analyzeStructure($structureId);
+                    $this->analyzeStructureSafely($structureId);
                 }
             }
-            
+
             Log::info('Structure Manager: Fuel consumption analysis completed');
         } catch (\Exception $e) {
             Log::error('Structure Manager: Failed to analyze fuel consumption', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             throw $e; // Re-throw to mark job as failed
+        }
+    }
+
+    /**
+     * Run analyzeStructure with a try/catch so one bad structure does not abort
+     * the rest of the batch.
+     */
+    private function analyzeStructureSafely($structureId)
+    {
+        try {
+            $this->analyzeStructure($structureId);
+        } catch (\Throwable $e) {
+            Log::error("Structure Manager: Error analyzing structure {$structureId}: " . $e->getMessage());
         }
     }
     
@@ -146,7 +174,7 @@ class AnalyzeFuelConsumption implements ShouldQueue
             return;
         }
         
-        $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
+        $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
         
         // Get current fuel status from analysis
         $fuelStatus = $analysis['current_status'] ?? null;

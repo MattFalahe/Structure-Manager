@@ -1,40 +1,300 @@
-/**
- * Structure Manager Plugin - Scoped CSS
- * Version: 3.0 (Wrapper Approach)
- * 
- * Uses a wrapper div to scope all custom styles to the plugin only
- * Keeps original Bootstrap classes but isolates custom overrides
- * 
- * Usage: Wrap plugin content in <div class="structure-manager-wrapper">
- */
+/* ============================================
+   Structure Manager - Complete Design System CSS
+   Version: 4.0 - SCOPED (sibling of mining-manager-dashboard.css)
 
-/* ==================== SCOPED CUSTOM STYLES ==================== */
-/* All styles are scoped to .structure-manager-wrapper to prevent conflicts */
+   This file is the SM equivalent of Mining Manager's
+   `mining-manager-dashboard.css`. It provides the same
+   canonical chrome (cards, buttons, badges, alerts, tables,
+   forms, help page chrome, etc.) but namespaced for SM:
+       --mm-*  -> --sm-*
+       .mm-*  -> .sm-*
+       .btn-mm-primary -> .btn-sm-primary
 
-/* Fuel status colors - Better contrast for all themes */
-.structure-manager-wrapper .fuel-critical { 
-    color: #dc3545; 
-    font-weight: bold; 
+   Used by: ALL Structure Manager pages
+
+   IMPORTANT: All views MUST wrap content in one of these classes:
+   - .structure-manager-dashboard (for dashboard pages)
+   - .structure-manager-wrapper   (for other pages — primary)
+
+   This prevents SeAT CSS from overriding our styles.
+   ============================================ */
+
+/* ============================================
+   CSS Variables & Color Palette
+   ============================================ */
+:root {
+    /* Primary Colors */
+    --sm-primary-start: #667eea;
+    --sm-primary-end: #764ba2;
+    --sm-dark-bg: #1a1d24;
+    --sm-dark-card: #23262d;
+    --sm-border: #2c3138;
+
+    /* Text Colors */
+    --sm-text-light: #d1d1d1;
+    --sm-text-muted: #9ca3af;
+    --sm-text-white: #ffffff;
+
+    /* Structure-Manager Domain Tokens */
+    --sm-fuel-blocks: #17a2b8;   /* cyan — fuel block type indicator */
+    --sm-magmatic-gas: #9c27b0;  /* purple — Metenox magmatic gas */
+    --sm-metenox: #9c27b0;       /* Metenox highlighting */
+
+    /* Status Colors */
+    --sm-success: #28a745;
+    --sm-warning: #ffc107;
+    --sm-danger: #dc3545;
+    --sm-info: #17a2b8;
+
+    /* Spacing */
+    --sm-spacing-xs: 5px;
+    --sm-spacing-sm: 10px;
+    --sm-spacing-md: 15px;
+    --sm-spacing-lg: 20px;
+    --sm-spacing-xl: 30px;
+
+    /* Border Radius */
+    --sm-radius-sm: 3px;
+    --sm-radius-md: 5px;
+    --sm-radius-lg: 10px;
+    --sm-radius-xl: 15px;
+
+    /* Transitions */
+    --sm-transition-fast: 0.15s;
+    --sm-transition-normal: 0.3s;
+    --sm-transition-slow: 0.5s;
 }
 
-.structure-manager-wrapper .fuel-warning { 
-    color: #ffc107; 
-    font-weight: bold; 
+/* ============================================
+   Base Styles
+   ============================================ */
+.structure-manager-dashboard .structure-manager,
+.structure-manager-wrapper .structure-manager {
+    font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--sm-text-light);
 }
 
-.structure-manager-wrapper .fuel-normal { 
-    color: #28a745; 
+.structure-manager-dashboard .structure-manager a,
+.structure-manager-wrapper .structure-manager a {
+    transition: all var(--sm-transition-fast) ease;
 }
 
-.structure-manager-wrapper .fuel-good { 
-    color: #17a2b8; 
+.structure-manager-dashboard .structure-manager a:hover,
+.structure-manager-wrapper .structure-manager a:hover {
+    text-decoration: none;
 }
 
-.structure-manager-wrapper .fuel-unknown { 
-    color: #6c757d; 
+/* ============================================
+   Cards & Containers
+   ============================================ */
+.structure-manager-dashboard .card-dark,
+.structure-manager-wrapper .card-dark {
+    background-color: var(--sm-dark-bg);
+    border: 1px solid var(--sm-border);
+    transition: all var(--sm-transition-normal) ease;
 }
 
-/* Status badges */
+.structure-manager-dashboard .card-dark:hover,
+.structure-manager-wrapper .card-dark:hover {
+    border-color: rgba(102, 126, 234, 0.3);
+}
+
+.structure-manager-dashboard .card-dark .card-header,
+.structure-manager-wrapper .card-dark .card-header {
+    background-color: var(--sm-dark-card);
+    border-bottom: 1px solid var(--sm-border);
+    color: var(--sm-text-white);
+    padding: var(--sm-spacing-md) var(--sm-spacing-lg);
+}
+
+.structure-manager-dashboard .card-dark .card-header h3,
+.structure-manager-dashboard .card-dark .card-header h4,
+.structure-manager-dashboard .card-dark .card-header h5,
+.structure-manager-wrapper .card-dark .card-header h3,
+.structure-manager-wrapper .card-dark .card-header h4,
+.structure-manager-wrapper .card-dark .card-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.structure-manager-dashboard .card-dark .card-header .card-title,
+.structure-manager-wrapper .card-dark .card-header .card-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-spacing-sm);
+    /* Keep the title on one line. Without this, when the card-header
+       flexes and card-tools carries a filter <select>, the title
+       collapses to its longest word ("Fuel / Reserves / by / System").
+       nowrap also raises the flex min-content to the full string so a
+       flex layout can no longer squish it. */
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.structure-manager-dashboard .card-dark .card-body,
+.structure-manager-wrapper .card-dark .card-body {
+    color: var(--sm-text-light);
+    padding: var(--sm-spacing-lg);
+}
+
+.structure-manager-dashboard .card-dark .card-footer,
+.structure-manager-wrapper .card-dark .card-footer {
+    background-color: var(--sm-dark-card);
+    border-top: 1px solid var(--sm-border);
+    padding: var(--sm-spacing-md) var(--sm-spacing-lg);
+}
+
+/* Card with gradient header */
+.structure-manager-dashboard .card-gradient-header .card-header,
+.structure-manager-wrapper .card-gradient-header .card-header {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    border: none;
+}
+
+/* Card hover effect */
+.structure-manager-dashboard .card-hover,
+.structure-manager-wrapper .card-hover {
+    transition: transform var(--sm-transition-normal) ease, box-shadow var(--sm-transition-normal) ease;
+}
+
+.structure-manager-dashboard .card-hover:hover,
+.structure-manager-wrapper .card-hover:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+.structure-manager-dashboard .btn-sm-primary,
+.structure-manager-wrapper .btn-sm-primary {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    border: none;
+    color: var(--sm-text-white);
+    transition: all var(--sm-transition-normal) ease;
+}
+
+.structure-manager-dashboard .btn-sm-primary:hover,
+.structure-manager-wrapper .btn-sm-primary:hover {
+    background: linear-gradient(135deg, #5568d3 0%, #6a3d8f 100%);
+    color: var(--sm-text-white);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.structure-manager-dashboard .btn-sm-primary:active,
+.structure-manager-wrapper .btn-sm-primary:active {
+    transform: translateY(0);
+}
+
+.structure-manager-dashboard .btn-sm-secondary,
+.structure-manager-wrapper .btn-sm-secondary {
+    background-color: var(--sm-dark-card);
+    border: 1px solid var(--sm-border);
+    color: var(--sm-text-light);
+}
+
+.structure-manager-dashboard .btn-sm-secondary:hover,
+.structure-manager-wrapper .btn-sm-secondary:hover {
+    background-color: #2c3138;
+    border-color: rgba(102, 126, 234, 0.5);
+    color: var(--sm-text-white);
+}
+
+/* Button with icon */
+.structure-manager-dashboard .btn-icon,
+.structure-manager-wrapper .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sm-spacing-xs);
+}
+
+/* Button loading state */
+.structure-manager-dashboard .btn-loading,
+.structure-manager-wrapper .btn-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.structure-manager-dashboard .btn-loading::after,
+.structure-manager-wrapper .btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    border-top-color: currentColor;
+    animation: spin 0.6s linear infinite;
+}
+
+/* ============================================
+   Badges & Labels
+   ============================================ */
+.structure-manager-dashboard .badge-sm,
+.structure-manager-wrapper .badge-sm {
+    padding: 4px 8px;
+    border-radius: var(--sm-radius-sm);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.structure-manager-dashboard .badge-paid,
+.structure-manager-wrapper .badge-paid {
+    background-color: var(--sm-success);
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .badge-pending,
+.structure-manager-wrapper .badge-pending {
+    background-color: var(--sm-warning);
+    color: var(--sm-dark-bg);
+}
+
+.structure-manager-dashboard .badge-overdue,
+.structure-manager-wrapper .badge-overdue {
+    background-color: var(--sm-danger);
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .badge-live,
+.structure-manager-wrapper .badge-live {
+    background-color: var(--sm-success);
+    color: var(--sm-text-white);
+    animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+    0% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+    }
+}
+
+/* SM-specific Metenox badge */
+.structure-manager-dashboard .badge-metenox,
+.structure-manager-wrapper .badge-metenox {
+    background-color: var(--sm-metenox);
+    color: var(--sm-text-white);
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: var(--sm-radius-sm);
+}
+
+/* Status badges (online/offline/shield_vulnerable) — DARK-THEME-SAFE */
+.structure-manager-dashboard .status-badge,
 .structure-manager-wrapper .status-badge {
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
@@ -42,312 +302,273 @@
     font-weight: 600;
 }
 
+.structure-manager-dashboard .status-online,
 .structure-manager-wrapper .status-online {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: rgba(40, 167, 69, 0.15);
+    color: #51cf66;
+    border: 1px solid rgba(40, 167, 69, 0.3);
 }
 
+.structure-manager-dashboard .status-offline,
 .structure-manager-wrapper .status-offline {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background-color: rgba(220, 53, 69, 0.15);
+    color: #ff6b6b;
+    border: 1px solid rgba(220, 53, 69, 0.3);
 }
 
+.structure-manager-dashboard .status-shield_vulnerable,
 .structure-manager-wrapper .status-shield_vulnerable {
-    background-color: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeaa7;
+    background-color: rgba(255, 193, 7, 0.15);
+    color: #ffd43b;
+    border: 1px solid rgba(255, 193, 7, 0.3);
 }
 
-/* Consumption stats display */
-.structure-manager-wrapper .consumption-stats {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    flex-wrap: wrap;
-}
-
-.structure-manager-wrapper .stat-item {
-    padding: 0.25rem 0.5rem;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    white-space: nowrap;
-}
-
-.structure-manager-wrapper .stat-item i {
-    margin-right: 0.25rem;
-    opacity: 0.7;
-}
-
-/* Metenox indicators */
-.structure-manager-wrapper .metenox-indicator {
-    display: inline-block;
-    padding: 0.15rem 0.4rem;
-    font-size: 0.75rem;
-    border-radius: 0.25rem;
-    margin-left: 0.25rem;
-}
-
-.structure-manager-wrapper .limiting-fuel {
-    background-color: #d1ecf1;
-    color: #0c5460;
-    border: 1px solid #bee5eb;
-}
-
-.structure-manager-wrapper .limiting-gas {
-    background-color: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeaa7;
-}
-
-/* Metenox tooltips */
-.structure-manager-wrapper .metenox-tooltip {
-    position: relative;
-    cursor: help;
-}
-
-.structure-manager-wrapper .metenox-tooltip .tooltip-content {
-    visibility: hidden;
-    background-color: rgba(0, 0, 0, 0.9);
-    color: #fff;
-    text-align: left;
-    border-radius: 0.25rem;
-    padding: 0.5rem;
-    position: absolute;
-    z-index: 1;
-    bottom: 125%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 250px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.structure-manager-wrapper .metenox-tooltip:hover .tooltip-content {
-    visibility: visible;
-    opacity: 1;
-}
-
-/* Metenox badge */
-.structure-manager-wrapper .badge-metenox {
-    background-color: #9c27b0;
-    color: #ffffff;
-    font-weight: bold;
-}
-
-/* Security status colors */
-.structure-manager-wrapper .sec-high { 
-    background-color: #28a745; 
-    color: #fff; 
-}
-
-.structure-manager-wrapper .sec-low { 
-    background-color: #ffc107; 
-    color: #000; 
-}
-
-.structure-manager-wrapper .sec-null { 
-    background-color: #dc3545; 
-    color: #fff; 
-}
-
-/* Alert cards for critical alerts page */
-.structure-manager-wrapper .alert-card {
-    margin-bottom: 1rem;
-    border-radius: 0.5rem;
-    transition: transform 0.2s ease;
-}
-
-.structure-manager-wrapper .alert-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.structure-manager-wrapper .alert-critical {
-    border-left: 4px solid #dc3545;
-}
-
-.structure-manager-wrapper .alert-warning {
-    border-left: 4px solid #ffc107;
-}
-
-/* Stat boxes */
-.structure-manager-wrapper .stat-box {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    padding: 1rem;
-    margin-bottom: 1rem;
-}
-
-/* List group items with hover */
-.structure-manager-wrapper .list-group-item {
-    transition: background-color 0.2s ease;
-}
-
-.structure-manager-wrapper .list-group-item:hover {
-    background-color: #f8f9fa;
-}
-
-/* Custom badge sizing */
-.structure-manager-wrapper .badge-custom {
-    padding: 0.35rem 0.65rem;
-    font-size: 0.875rem;
-}
-
-/* Refuel event cards */
-.structure-manager-wrapper .refuel-event-card {
-    margin-bottom: 1.5rem;
-}
-
-.structure-manager-wrapper .refuel-event-card .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-}
-
-/* Metenox structure highlighting */
-.structure-manager-wrapper .metenox-structure .card-header {
-    background: rgba(156, 39, 176, 0.1);
-    border-left: 4px solid #9c27b0;
-}
-
-/* Dual fuel display for Metenox */
-.structure-manager-wrapper .metenox-dual-fuel {
-    display: flex;
-    gap: 1rem;
-    padding: 0.5rem;
-    background: #f8f9fa;
-    border-radius: 0.25rem;
-    margin: 0.5rem 0;
-}
-
-.structure-manager-wrapper .fuel-type-display {
-    flex: 1;
-    padding: 0.5rem;
-    border-radius: 0.25rem;
-}
-
-.structure-manager-wrapper .fuel-blocks-display {
-    background: rgba(0, 123, 255, 0.1);
-    border: 1px solid rgba(0, 123, 255, 0.2);
-}
-
-.structure-manager-wrapper .magmatic-gas-display {
-    background: rgba(255, 193, 7, 0.1);
-    border: 1px solid rgba(255, 193, 7, 0.2);
-}
-
-/* No-print class for buttons that shouldn't appear in printouts */
-.structure-manager-wrapper .no-print {
-    /* Inherits from Bootstrap but ensures it's scoped */
-}
-
-@media print {
-    .structure-manager-wrapper .no-print {
-        display: none !important;
-    }
-}
-
-/* Empty state styling */
-.structure-manager-wrapper .empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: #6c757d;
-}
-
-.structure-manager-wrapper .empty-state i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.5;
-}
-
-/* ============================================
-   POS Detail View Styles for Structure Manager
-   ============================================ */
-
-/* Fuel status cards */
-.structure-manager-wrapper .fuel-card {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 0.5rem;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.structure-manager-wrapper .fuel-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* Progress bars - POS style */
-.structure-manager-wrapper .progress {
-    background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.structure-manager-wrapper .progress-bar {
-    transition: width 0.6s ease;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Status colors for text */
-.structure-manager-wrapper .text-success-bright {
-    color: #51cf66 !important;
-}
-
-.structure-manager-wrapper .text-warning-bright {
-    color: #ffd43b !important;
-}
-
-.structure-manager-wrapper .text-danger-bright {
-    color: #ff6b6b !important;
-}
-
-.structure-manager-wrapper .text-info-bright {
-    color: #5dade2 !important;
-}
-
-/* LIMITING badge */
+/* Bootstrap-style badge colors (used by POS detail view) */
+.structure-manager-dashboard .badge-danger,
 .structure-manager-wrapper .badge-danger {
     background-color: #ff6b6b;
-    color: #ffffff;
+    color: var(--sm-text-white);
     font-weight: bold;
     font-size: 11px;
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
 }
 
+.structure-manager-dashboard .badge-warning,
 .structure-manager-wrapper .badge-warning {
     background-color: #ffd43b;
     color: #000000;
     font-weight: bold;
 }
 
+.structure-manager-dashboard .badge-success,
 .structure-manager-wrapper .badge-success {
     background-color: #51cf66;
-    color: #ffffff;
+    color: var(--sm-text-white);
     font-weight: bold;
 }
 
+.structure-manager-dashboard .badge-info,
 .structure-manager-wrapper .badge-info {
     background-color: #5dade2;
-    color: #ffffff;
+    color: var(--sm-text-white);
     font-weight: bold;
 }
 
+.structure-manager-dashboard .badge-secondary,
 .structure-manager-wrapper .badge-secondary {
     background-color: #6c757d;
-    color: #ffffff;
+    color: var(--sm-text-white);
     font-weight: bold;
 }
 
-/* Alert boxes */
+/* Custom badge sizing */
+.structure-manager-dashboard .badge-custom,
+.structure-manager-wrapper .badge-custom {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.875rem;
+}
+
+/* ============================================
+   Tables
+   ============================================ */
+.structure-manager-dashboard .table-sm-styled,
+.structure-manager-wrapper .table-sm-styled {
+    background-color: transparent;
+    color: var(--sm-text-light);
+    margin-bottom: 0;
+}
+
+.structure-manager-dashboard .table-sm-styled thead th,
+.structure-manager-wrapper .table-sm-styled thead th {
+    border-bottom: 2px solid var(--sm-border);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    color: var(--sm-text-white);
+    padding: var(--sm-spacing-md);
+    white-space: nowrap;
+}
+
+.structure-manager-dashboard .table-sm-styled tbody td,
+.structure-manager-wrapper .table-sm-styled tbody td {
+    border-bottom: 1px solid var(--sm-border);
+    padding: var(--sm-spacing-md);
+    vertical-align: middle;
+}
+
+.structure-manager-dashboard .table-sm-styled tbody tr,
+.structure-manager-wrapper .table-sm-styled tbody tr {
+    transition: background-color var(--sm-transition-fast) ease;
+}
+
+.structure-manager-dashboard .table-sm-styled tbody tr:hover,
+.structure-manager-wrapper .table-sm-styled tbody tr:hover {
+    background-color: rgba(102, 126, 234, 0.1);
+}
+
+.structure-manager-dashboard .table-sm-styled tbody tr.table-highlight,
+.structure-manager-wrapper .table-sm-styled tbody tr.table-highlight {
+    background-color: rgba(102, 126, 234, 0.2);
+}
+
+.structure-manager-dashboard .table-sm-styled tbody tr.table-highlight:hover,
+.structure-manager-wrapper .table-sm-styled tbody tr.table-highlight:hover {
+    background-color: rgba(102, 126, 234, 0.3);
+}
+
+/* Striped table */
+.structure-manager-dashboard .table-sm-styled.table-striped tbody tr:nth-of-type(odd),
+.structure-manager-wrapper .table-sm-styled.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Compact table */
+.structure-manager-dashboard .table-sm-styled.table-compact thead th,
+.structure-manager-wrapper .table-sm-styled.table-compact thead th,
+.structure-manager-dashboard .table-sm-styled.table-compact tbody td,
+.structure-manager-wrapper .table-sm-styled.table-compact tbody td {
+    padding: var(--sm-spacing-xs) var(--sm-spacing-sm);
+    font-size: 0.875rem;
+}
+
+/* Responsive table wrapper */
+.structure-manager-dashboard .table-responsive-sm-wrap,
+.structure-manager-wrapper .table-responsive-sm-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.structure-manager-dashboard .table-responsive-sm-wrap::-webkit-scrollbar,
+.structure-manager-wrapper .table-responsive-sm-wrap::-webkit-scrollbar {
+    height: 8px;
+}
+
+.structure-manager-dashboard .table-responsive-sm-wrap::-webkit-scrollbar-track,
+.structure-manager-wrapper .table-responsive-sm-wrap::-webkit-scrollbar-track {
+    background: var(--sm-dark-bg);
+}
+
+.structure-manager-dashboard .table-responsive-sm-wrap::-webkit-scrollbar-thumb,
+.structure-manager-wrapper .table-responsive-sm-wrap::-webkit-scrollbar-thumb {
+    background: var(--sm-border);
+    border-radius: 4px;
+}
+
+.structure-manager-dashboard .table-responsive-sm-wrap::-webkit-scrollbar-thumb:hover,
+.structure-manager-wrapper .table-responsive-sm-wrap::-webkit-scrollbar-thumb:hover {
+    background: #3a3f48;
+}
+
+/* ============================================
+   Forms
+   ============================================ */
+.structure-manager-dashboard .form-control-sm-styled,
+.structure-manager-wrapper .form-control-sm-styled {
+    background-color: var(--sm-dark-card);
+    border: 1px solid var(--sm-border);
+    color: var(--sm-text-light);
+    border-radius: var(--sm-radius-md);
+    padding: 8px 12px;
+    transition: all var(--sm-transition-fast) ease;
+}
+
+.structure-manager-dashboard .form-control-sm-styled:focus,
+.structure-manager-wrapper .form-control-sm-styled:focus {
+    background-color: var(--sm-dark-bg);
+    border-color: var(--sm-primary-start);
+    color: var(--sm-text-white);
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.structure-manager-dashboard .form-control-sm-styled::placeholder,
+.structure-manager-wrapper .form-control-sm-styled::placeholder {
+    color: var(--sm-text-muted);
+}
+
+.structure-manager-dashboard .form-control-sm-styled:disabled,
+.structure-manager-wrapper .form-control-sm-styled:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Custom select */
+.structure-manager-dashboard .custom-select-sm-styled,
+.structure-manager-wrapper .custom-select-sm-styled {
+    background-color: var(--sm-dark-card);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='4' height='5' viewBox='0 0 4 5'%3e%3cpath fill='%23667eea' d='M2 0L0 2h4zm0 5L0 3h4z'/%3e%3c/svg%3e");
+    border: 1px solid var(--sm-border);
+    color: var(--sm-text-light);
+}
+
+.structure-manager-dashboard .custom-select-sm-styled:focus,
+.structure-manager-wrapper .custom-select-sm-styled:focus {
+    border-color: var(--sm-primary-start);
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* Form labels */
+.structure-manager-dashboard .form-label-sm-styled,
+.structure-manager-wrapper .form-label-sm-styled {
+    color: var(--sm-text-white);
+    font-weight: 600;
+    margin-bottom: var(--sm-spacing-xs);
+}
+
+/* Input groups */
+.structure-manager-dashboard .input-group-sm-styled .input-group-text,
+.structure-manager-wrapper .input-group-sm-styled .input-group-text {
+    background-color: var(--sm-dark-card);
+    border: 1px solid var(--sm-border);
+    color: var(--sm-text-muted);
+}
+
+/* ============================================
+   Alert Boxes (canonical .alert-sm-* variants)
+   ============================================ */
+.structure-manager-dashboard .alert-sm-styled,
+.structure-manager-wrapper .alert-sm-styled {
+    border-radius: var(--sm-radius-md);
+    padding: var(--sm-spacing-md);
+    margin-bottom: var(--sm-spacing-lg);
+    border-left: 4px solid;
+}
+
+.structure-manager-dashboard .alert-sm-info,
+.structure-manager-wrapper .alert-sm-info {
+    background-color: rgba(23, 162, 184, 0.15);
+    border-left-color: var(--sm-info);
+    color: var(--sm-text-light);
+}
+
+.structure-manager-dashboard .alert-sm-success,
+.structure-manager-wrapper .alert-sm-success {
+    background-color: rgba(40, 167, 69, 0.15);
+    border-left-color: var(--sm-success);
+    color: var(--sm-text-light);
+}
+
+.structure-manager-dashboard .alert-sm-warning,
+.structure-manager-wrapper .alert-sm-warning {
+    background-color: rgba(255, 193, 7, 0.15);
+    border-left-color: var(--sm-warning);
+    color: var(--sm-text-light);
+}
+
+.structure-manager-dashboard .alert-sm-danger,
+.structure-manager-wrapper .alert-sm-danger {
+    background-color: rgba(220, 53, 69, 0.15);
+    border-left-color: var(--sm-danger);
+    color: var(--sm-text-light);
+}
+
+.structure-manager-dashboard .alert-sm-styled i,
+.structure-manager-wrapper .alert-sm-styled i {
+    margin-right: var(--sm-spacing-sm);
+}
+
+/* Bootstrap-style alert boxes — preserved from existing SM CSS */
 .structure-manager-wrapper .alert-info {
     background: rgba(93, 173, 226, 0.1);
     border: 1px solid rgba(93, 173, 226, 0.2);
@@ -380,7 +601,1590 @@
     padding: 1rem;
 }
 
-/* Definition lists (dl/dt/dd) for consumption rates */
+/* ============================================
+   Progress Bars
+   ============================================ */
+.structure-manager-dashboard .progress-sm-styled,
+.structure-manager-wrapper .progress-sm-styled {
+    background-color: var(--sm-dark-card);
+    border-radius: var(--sm-radius-lg);
+    height: 20px;
+    overflow: hidden;
+}
+
+.structure-manager-dashboard .progress-sm-bar,
+.structure-manager-wrapper .progress-sm-bar {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    height: 100%;
+    transition: width var(--sm-transition-slow) ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sm-text-white);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.structure-manager-dashboard .progress-sm-bar.progress-success,
+.structure-manager-wrapper .progress-sm-bar.progress-success {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.structure-manager-dashboard .progress-sm-bar.progress-warning,
+.structure-manager-wrapper .progress-sm-bar.progress-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+}
+
+.structure-manager-dashboard .progress-sm-bar.progress-danger,
+.structure-manager-wrapper .progress-sm-bar.progress-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+/* Animated progress bar */
+.structure-manager-dashboard .progress-sm-bar.animated,
+.structure-manager-wrapper .progress-sm-bar.animated {
+    background-size: 20px 20px;
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+    0% { background-position: 20px 0; }
+    100% { background-position: 0 0; }
+}
+
+/* Uniform progress bars — bar + percentage label to the right */
+.sm-progress-wrap {
+    display: flex;
+    align-items: center;
+}
+.sm-progress-wrap .progress {
+    flex: 1;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+.sm-progress-wrap .progress .progress-bar {
+    border-radius: 3px;
+}
+.sm-progress-wrap .sm-pct-label {
+    min-width: 45px;
+    text-align: right;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ccc;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+/* Progress bars — POS-style overrides preserved from existing SM CSS */
+.structure-manager-wrapper .progress {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.structure-manager-wrapper .progress-bar {
+    transition: width 0.6s ease;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================
+   Stat Cards
+   ============================================ */
+.structure-manager-dashboard .stat-card,
+.structure-manager-wrapper .stat-card {
+    background: var(--sm-dark-bg);
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius-lg);
+    padding: var(--sm-spacing-lg);
+    transition: all var(--sm-transition-normal) ease;
+}
+
+.structure-manager-dashboard .stat-card:hover,
+.structure-manager-wrapper .stat-card:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.structure-manager-dashboard .stat-card-icon,
+.structure-manager-wrapper .stat-card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--sm-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    margin-bottom: var(--sm-spacing-md);
+}
+
+.structure-manager-dashboard .stat-card-icon.gradient,
+.structure-manager-wrapper .stat-card-icon.gradient {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .stat-card-label,
+.structure-manager-wrapper .stat-card-label {
+    font-size: 0.875rem;
+    color: var(--sm-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--sm-spacing-xs);
+}
+
+.structure-manager-dashboard .stat-card-value,
+.structure-manager-wrapper .stat-card-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--sm-text-white);
+    margin-bottom: var(--sm-spacing-xs);
+}
+
+.structure-manager-dashboard .stat-card-change,
+.structure-manager-wrapper .stat-card-change {
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: var(--sm-spacing-xs);
+}
+
+.structure-manager-dashboard .stat-card-change.positive,
+.structure-manager-wrapper .stat-card-change.positive {
+    color: var(--sm-success);
+}
+
+.structure-manager-dashboard .stat-card-change.negative,
+.structure-manager-wrapper .stat-card-change.negative {
+    color: var(--sm-danger);
+}
+
+/* Stat boxes (preserved from existing SM CSS — modernized to dark theme) */
+.structure-manager-dashboard .stat-box,
+.structure-manager-wrapper .stat-box {
+    background: var(--sm-dark-card);
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* ============================================
+   Pagination
+   ============================================ */
+.structure-manager-dashboard .pagination-sm-styled .page-link,
+.structure-manager-wrapper .pagination-sm-styled .page-link {
+    background-color: var(--sm-dark-card);
+    border: 1px solid var(--sm-border);
+    color: var(--sm-text-light);
+    padding: 8px 12px;
+}
+
+.structure-manager-dashboard .pagination-sm-styled .page-link:hover,
+.structure-manager-wrapper .pagination-sm-styled .page-link:hover {
+    background-color: rgba(102, 126, 234, 0.2);
+    border-color: var(--sm-primary-start);
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .pagination-sm-styled .page-item.active .page-link,
+.structure-manager-wrapper .pagination-sm-styled .page-item.active .page-link {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    border-color: var(--sm-primary-start);
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .pagination-sm-styled .page-item.disabled .page-link,
+.structure-manager-wrapper .pagination-sm-styled .page-item.disabled .page-link {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   Tooltips (Bootstrap Override)
+   ============================================ */
+.structure-manager-dashboard .tooltip-sm-styled .tooltip-inner,
+.structure-manager-wrapper .tooltip-sm-styled .tooltip-inner {
+    background-color: var(--sm-dark-card);
+    color: var(--sm-text-white);
+    border: 1px solid var(--sm-border);
+    padding: 8px 12px;
+    border-radius: var(--sm-radius-md);
+}
+
+/* ============================================
+   Loading States
+   ============================================ */
+.structure-manager-dashboard .loading-overlay,
+.structure-manager-wrapper .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(26, 29, 36, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    border-radius: var(--sm-radius-lg);
+}
+
+.structure-manager-dashboard .spinner-sm-styled,
+.structure-manager-wrapper .spinner-sm-styled {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(102, 126, 234, 0.2);
+    border-top-color: var(--sm-primary-start);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ============================================
+   Empty States
+   ============================================ */
+.structure-manager-dashboard .empty-state,
+.structure-manager-wrapper .empty-state {
+    text-align: center;
+    padding: var(--sm-spacing-xl) var(--sm-spacing-lg);
+    color: var(--sm-text-muted);
+}
+
+.structure-manager-dashboard .empty-state-icon,
+.structure-manager-wrapper .empty-state-icon {
+    font-size: 4rem;
+    color: rgba(102, 126, 234, 0.3);
+    margin-bottom: var(--sm-spacing-lg);
+}
+
+.structure-manager-dashboard .empty-state-title,
+.structure-manager-wrapper .empty-state-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--sm-text-light);
+    margin-bottom: var(--sm-spacing-sm);
+}
+
+.structure-manager-dashboard .empty-state-description,
+.structure-manager-wrapper .empty-state-description {
+    font-size: 1rem;
+    margin-bottom: var(--sm-spacing-lg);
+}
+
+.structure-manager-dashboard .empty-state i,
+.structure-manager-wrapper .empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* ============================================
+   Timeline
+   ============================================ */
+.structure-manager-dashboard .timeline-sm-styled,
+.structure-manager-wrapper .timeline-sm-styled {
+    position: relative;
+    padding-left: 30px;
+}
+
+.structure-manager-dashboard .timeline-sm-styled::before,
+.structure-manager-wrapper .timeline-sm-styled::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+}
+
+.structure-manager-dashboard .timeline-item,
+.structure-manager-wrapper .timeline-item {
+    position: relative;
+    margin-bottom: var(--sm-spacing-lg);
+}
+
+.structure-manager-dashboard .timeline-item::before,
+.structure-manager-wrapper .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -26px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    border: 2px solid var(--sm-dark-bg);
+}
+
+.structure-manager-dashboard .timeline-date,
+.structure-manager-wrapper .timeline-date {
+    color: var(--sm-text-muted);
+    font-size: 0.875rem;
+    margin-bottom: var(--sm-spacing-xs);
+}
+
+.structure-manager-dashboard .timeline-content,
+.structure-manager-wrapper .timeline-content {
+    background-color: var(--sm-dark-card);
+    padding: var(--sm-spacing-md);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid var(--sm-border);
+}
+
+/* ============================================
+   Utilities
+   ============================================ */
+.structure-manager-dashboard .text-gradient,
+.structure-manager-wrapper .text-gradient {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.structure-manager-dashboard .bg-gradient-primary,
+.structure-manager-wrapper .bg-gradient-primary {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%) !important;
+}
+
+.structure-manager-dashboard .shadow-sm-styled,
+.structure-manager-wrapper .shadow-sm-styled {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.structure-manager-dashboard .shadow-sm-lg,
+.structure-manager-wrapper .shadow-sm-lg {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+}
+
+.structure-manager-dashboard .border-gradient,
+.structure-manager-wrapper .border-gradient {
+    border: 2px solid;
+    border-image: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%) 1;
+}
+
+/* Character portrait */
+.structure-manager-dashboard .character-portrait,
+.structure-manager-wrapper .character-portrait {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--sm-border);
+    object-fit: cover;
+    transition: all var(--sm-transition-normal) ease;
+}
+
+.structure-manager-dashboard .character-portrait:hover,
+.structure-manager-wrapper .character-portrait:hover {
+    border-color: var(--sm-primary-start);
+    transform: scale(1.1);
+}
+
+.structure-manager-dashboard .character-portrait.large,
+.structure-manager-wrapper .character-portrait.large {
+    width: 64px;
+    height: 64px;
+}
+
+/* ISK value formatting */
+.structure-manager-dashboard .isk-value,
+.structure-manager-wrapper .isk-value {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 600;
+}
+
+.structure-manager-dashboard .isk-value::after,
+.structure-manager-wrapper .isk-value::after {
+    content: ' ISK';
+    font-weight: normal;
+    color: var(--sm-text-muted);
+    font-size: 0.875em;
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+.structure-manager-dashboard .sr-only-sm,
+.structure-manager-wrapper .sr-only-sm {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.structure-manager-dashboard .focus-visible-sm:focus,
+.structure-manager-wrapper .focus-visible-sm:focus {
+    outline: 2px solid var(--sm-primary-start);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.structure-manager-dashboard .fade-in,
+.structure-manager-wrapper .fade-in {
+    animation: fadeIn var(--sm-transition-normal) ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.structure-manager-dashboard .slide-in,
+.structure-manager-wrapper .slide-in {
+    animation: slideIn var(--sm-transition-normal) ease;
+}
+
+/* ============================================
+   DASHBOARD-SPECIFIC STYLES
+   ============================================ */
+
+/* ============================================
+   Info Boxes
+   ============================================ */
+.structure-manager-dashboard .info-box,
+.structure-manager-wrapper .info-box {
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0.125), 0 1px 3px rgba(0, 0, 0, 0.2);
+    border-radius: 0.25rem;
+    display: flex;
+    margin-bottom: 1rem;
+    min-height: 80px;
+    padding: 0.5rem;
+    position: relative;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.structure-manager-dashboard .info-box:hover,
+.structure-manager-wrapper .info-box:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Stat-card icon box (AdminLTE .info-box component). The !important
+   flags + the explicit <i> rule keep the icon correctly sized and
+   centered even when the host SeAT theme is a custom layout that does
+   not ship — or actively overrides — AdminLTE's own .info-box CSS.
+   Symptom this fixes: icons rendering small and pinned to the top of
+   the colored square on custom themes. */
+.structure-manager-dashboard .info-box .info-box-icon,
+.structure-manager-wrapper .info-box .info-box-icon {
+    border-radius: 0.25rem;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 2rem !important;
+    width: 70px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Force the FontAwesome glyph size — a custom theme carrying a global
+   `i { font-size: ... }` reset would otherwise shrink the icon. */
+.structure-manager-dashboard .info-box .info-box-icon i,
+.structure-manager-wrapper .info-box .info-box-icon i {
+    font-size: 2rem !important;
+    line-height: 1 !important;
+}
+
+/* The stat-card .info-box must flex + stretch so the icon box fills
+   the full card height (and the icon ends up vertically centered).
+   `:has(> .info-box-icon)` targets ONLY the AdminLTE stat-card variant
+   — the help-callout .info-box shares the class name but has no
+   .info-box-icon child, so it is left untouched. */
+.structure-manager-dashboard .info-box:has(> .info-box-icon),
+.structure-manager-wrapper .info-box:has(> .info-box-icon) {
+    display: flex !important;
+    align-items: stretch !important;
+}
+
+.structure-manager-dashboard .info-box .info-box-content,
+.structure-manager-wrapper .info-box .info-box-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.8;
+    flex: 1;
+    padding: 0 10px;
+}
+
+.structure-manager-dashboard .info-box .info-box-text,
+.structure-manager-wrapper .info-box .info-box-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-dashboard .info-box .info-box-number,
+.structure-manager-wrapper .info-box .info-box-number {
+    display: block;
+    font-weight: 700;
+    font-size: 1.5rem;
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-dashboard .info-box small,
+.structure-manager-wrapper .info-box small {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* ============================================
+   Info Box Gradient Variants
+   ============================================ */
+.structure-manager-dashboard .info-box.bg-gradient-primary,
+.structure-manager-wrapper .info-box.bg-gradient-primary {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(102, 126, 234, 0.2) !important;
+}
+
+.structure-manager-dashboard .info-box.bg-gradient-secondary,
+.structure-manager-wrapper .info-box.bg-gradient-secondary {
+    background: linear-gradient(135deg, rgba(134, 143, 150, 0.3) 0%, rgba(89, 97, 100, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(134, 143, 150, 0.2) !important;
+}
+
+.structure-manager-dashboard .info-box.bg-gradient-success,
+.structure-manager-wrapper .info-box.bg-gradient-success {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.3) 0%, rgba(32, 201, 151, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(40, 167, 69, 0.2) !important;
+}
+
+.structure-manager-dashboard .info-box.bg-gradient-info,
+.structure-manager-wrapper .info-box.bg-gradient-info {
+    background: linear-gradient(135deg, rgba(144, 223, 254, 0.3) 0%, rgba(56, 163, 204, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(144, 223, 254, 0.2) !important;
+}
+
+.structure-manager-dashboard .info-box.bg-gradient-warning,
+.structure-manager-wrapper .info-box.bg-gradient-warning {
+    background: linear-gradient(135deg, rgba(240, 147, 251, 0.3) 0%, rgba(245, 87, 108, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(240, 147, 251, 0.2) !important;
+}
+
+.structure-manager-dashboard .info-box.bg-gradient-danger,
+.structure-manager-wrapper .info-box.bg-gradient-danger {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.3) 0%, rgba(153, 27, 36, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(220, 53, 69, 0.2) !important;
+}
+
+/* SM domain-specific info-box variants (replaces MM ore-type variants) */
+.structure-manager-dashboard .info-box.bg-gradient-fuel-blocks,
+.structure-manager-wrapper .info-box.bg-gradient-fuel-blocks {
+    background: linear-gradient(135deg, rgba(23, 162, 184, 0.3) 0%, rgba(0, 168, 204, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(23, 162, 184, 0.2) !important;
+}
+
+.structure-manager-dashboard .info-box.bg-gradient-magmatic-gas,
+.structure-manager-wrapper .info-box.bg-gradient-magmatic-gas {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.3) 0%, rgba(123, 31, 162, 0.3) 100%) !important;
+    color: var(--sm-text-white) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(156, 39, 176, 0.2) !important;
+}
+
+/* ============================================
+   Small Boxes
+   ============================================ */
+.structure-manager-dashboard .small-box {
+    border-radius: 0.25rem;
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0.125), 0 1px 3px rgba(0, 0, 0, 0.2);
+    display: block;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.structure-manager-dashboard .small-box:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.structure-manager-dashboard .small-box > .inner {
+    padding: 10px;
+}
+
+.structure-manager-dashboard .small-box > .small-box-footer {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: rgba(255, 255, 255, 0.8) !important;
+    display: block;
+    padding: 3px 0;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    z-index: 10;
+    transition: all 0.3s ease;
+}
+
+.structure-manager-dashboard .small-box > .small-box-footer:hover {
+    background-color: rgba(0, 0, 0, 0.15);
+    color: var(--sm-text-white) !important;
+    text-decoration: none;
+}
+
+.structure-manager-dashboard .small-box h3 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding: 0;
+    white-space: nowrap;
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-dashboard .small-box p {
+    font-size: 1rem;
+    margin: 0;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.structure-manager-dashboard .small-box p > small {
+    color: rgba(255, 255, 255, 0.8) !important;
+    display: block;
+    font-size: 0.9rem;
+    margin-top: 5px;
+    opacity: 0.9;
+}
+
+.structure-manager-dashboard .small-box .icon {
+    color: rgba(0, 0, 0, 0.15);
+    z-index: 0;
+}
+
+.structure-manager-dashboard .small-box .icon > i {
+    font-size: 70px;
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    transition: all 0.3s linear;
+}
+
+.structure-manager-dashboard .small-box:hover .icon > i {
+    font-size: 95px;
+    opacity: 0.8;
+}
+
+/* ============================================
+   Dashboard Tables
+   ============================================ */
+.structure-manager-dashboard .table-dark,
+.structure-manager-wrapper .table-dark {
+    background-color: var(--sm-dark-bg);
+    color: var(--sm-text-light);
+    margin-bottom: 0;
+}
+
+.structure-manager-dashboard .table-dark thead th,
+.structure-manager-wrapper .table-dark thead th {
+    border-bottom: 2px solid var(--sm-border);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    color: var(--sm-text-white);
+    padding: 12px 15px;
+    vertical-align: middle;
+}
+
+.structure-manager-dashboard .table-dark tbody td,
+.structure-manager-wrapper .table-dark tbody td {
+    border-bottom: 1px solid var(--sm-border);
+    padding: 12px 15px;
+    vertical-align: middle;
+}
+
+.structure-manager-dashboard .table-dark tbody tr,
+.structure-manager-wrapper .table-dark tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.structure-manager-dashboard .table-dark tbody tr:hover,
+.structure-manager-wrapper .table-dark tbody tr:hover {
+    background-color: var(--sm-dark-card);
+}
+
+.structure-manager-dashboard .table-dark.table-striped tbody tr:nth-of-type(odd),
+.structure-manager-wrapper .table-dark.table-striped tbody tr:nth-of-type(odd) {
+    background-color: #1e2127;
+}
+
+/* Highlighted row (current user) */
+.structure-manager-dashboard .table-primary,
+.structure-manager-wrapper .table-primary {
+    background-color: rgba(0, 123, 255, 0.2) !important;
+}
+
+.structure-manager-dashboard .table-primary:hover,
+.structure-manager-wrapper .table-primary:hover {
+    background-color: rgba(0, 123, 255, 0.3) !important;
+}
+
+/* Table with compact spacing */
+.structure-manager-dashboard .table-dark.table-compact thead th,
+.structure-manager-wrapper .table-dark.table-compact thead th,
+.structure-manager-dashboard .table-dark.table-compact tbody td,
+.structure-manager-wrapper .table-dark.table-compact tbody td {
+    padding: 8px 12px;
+}
+
+/* List group items (preserved from existing SM CSS) */
+.structure-manager-wrapper .list-group-item {
+    transition: background-color 0.2s ease;
+}
+
+.structure-manager-wrapper .list-group-item:hover {
+    background-color: rgba(102, 126, 234, 0.05);
+}
+
+/* ============================================
+   Bronze / Silver / Gold Badges
+   ============================================ */
+.structure-manager-dashboard .badge-bronze,
+.structure-manager-wrapper .badge-bronze {
+    background-color: #cd7f32;
+    color: var(--sm-text-white);
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+.structure-manager-dashboard .badge-silver,
+.structure-manager-wrapper .badge-silver {
+    background-color: #c0c0c0;
+    color: #333333;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+.structure-manager-dashboard .badge-gold,
+.structure-manager-wrapper .badge-gold {
+    background-color: #ffd700;
+    color: #333333;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+/* ============================================
+   Chart Containers
+   ============================================ */
+.structure-manager-dashboard .chart-container,
+.structure-manager-wrapper .chart-container {
+    position: relative;
+    width: 100%;
+    min-height: 300px;
+}
+
+.structure-manager-dashboard .chart-container canvas,
+.structure-manager-wrapper .chart-container canvas {
+    max-height: 100%;
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* Loading state for charts */
+.structure-manager-dashboard .chart-container.loading,
+.structure-manager-wrapper .chart-container.loading {
+    opacity: 0.5;
+    pointer-events: none;
+    min-height: 300px;
+}
+
+.structure-manager-dashboard .chart-container.loading::after,
+.structure-manager-wrapper .chart-container.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    margin: -20px 0 0 -20px;
+    border: 4px solid rgba(102, 126, 234, 0.2);
+    border-top: 4px solid var(--sm-primary-start);
+    border-radius: 50%;
+    animation: spin-chart 1s linear infinite;
+}
+
+@keyframes spin-chart {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Chart legend styling */
+.structure-manager-dashboard .chart-legend,
+.structure-manager-wrapper .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--sm-border);
+}
+
+.structure-manager-dashboard .chart-legend-item,
+.structure-manager-wrapper .chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+}
+
+.structure-manager-dashboard .chart-legend-color,
+.structure-manager-wrapper .chart-legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+/* Chart canvas size cap (preserved from existing SM CSS) */
+.structure-manager-wrapper canvas {
+    max-height: 400px;
+}
+
+/* ============================================
+   Card Tools
+   ============================================ */
+.structure-manager-dashboard .card-tools,
+.structure-manager-wrapper .card-tools {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    /* Never let the header tools (filter selects + buttons) be
+       compressed; on a genuinely narrow viewport they wrap instead. */
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.structure-manager-dashboard .card-tools .btn-tool,
+.structure-manager-wrapper .card-tools .btn-tool {
+    color: #adb5bd;
+    background: transparent;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    transition: color 0.15s ease;
+    cursor: pointer;
+}
+
+.structure-manager-dashboard .card-tools .btn-tool:hover,
+.structure-manager-wrapper .card-tools .btn-tool:hover {
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .card-tools .btn-tool:focus,
+.structure-manager-wrapper .card-tools .btn-tool:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* ============================================
+   Image Styling
+   ============================================ */
+.structure-manager-dashboard .img-circle,
+.structure-manager-wrapper .img-circle {
+    border-radius: 50%;
+    border: 2px solid var(--sm-border);
+    transition: border-color 0.3s ease;
+}
+
+.structure-manager-dashboard .img-circle:hover,
+.structure-manager-wrapper .img-circle:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+}
+
+/* ============================================
+   Dashboard Spacing
+   ============================================ */
+.structure-manager-dashboard .row {
+    margin-bottom: 0;
+}
+
+.structure-manager-dashboard .card {
+    margin-bottom: 20px;
+}
+
+.structure-manager-dashboard .col,
+.structure-manager-dashboard [class*="col-"] {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
+.structure-manager-dashboard ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.structure-manager-dashboard ::-webkit-scrollbar-track {
+    background: var(--sm-dark-bg);
+    border-radius: 4px;
+}
+
+.structure-manager-dashboard ::-webkit-scrollbar-thumb {
+    background: var(--sm-border);
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.structure-manager-dashboard ::-webkit-scrollbar-thumb:hover {
+    background: #3a3f48;
+}
+
+/* Firefox scrollbar */
+.structure-manager-dashboard .structure-manager-dashboard,
+.structure-manager-wrapper .structure-manager-dashboard {
+    scrollbar-width: thin;
+    scrollbar-color: var(--sm-border) var(--sm-dark-bg);
+}
+
+/* ============================================
+   Tooltips (preserved + extended from existing SM CSS)
+   ============================================ */
+.structure-manager-dashboard [data-toggle="tooltip"],
+.structure-manager-wrapper [data-toggle="tooltip"] {
+    cursor: help;
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.3);
+}
+
+.structure-manager-dashboard .tooltip-inner,
+.structure-manager-wrapper .tooltip-inner {
+    background-color: var(--sm-dark-card);
+    color: var(--sm-text-white);
+    border: 1px solid var(--sm-border);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 0.875rem;
+}
+
+.structure-manager-dashboard .tooltip.bs-tooltip-top .arrow::before,
+.structure-manager-wrapper .tooltip.bs-tooltip-top .arrow::before {
+    border-top-color: var(--sm-dark-card);
+}
+
+.structure-manager-dashboard .tooltip.bs-tooltip-bottom .arrow::before,
+.structure-manager-wrapper .tooltip.bs-tooltip-bottom .arrow::before {
+    border-bottom-color: var(--sm-dark-card);
+}
+
+.structure-manager-dashboard .tooltip.bs-tooltip-left .arrow::before,
+.structure-manager-wrapper .tooltip.bs-tooltip-left .arrow::before {
+    border-left-color: var(--sm-dark-card);
+}
+
+.structure-manager-dashboard .tooltip.bs-tooltip-right .arrow::before,
+.structure-manager-wrapper .tooltip.bs-tooltip-right .arrow::before {
+    border-right-color: var(--sm-dark-card);
+}
+
+/* Metenox tooltip — preserved + modernized from existing SM CSS */
+.structure-manager-wrapper .metenox-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.structure-manager-wrapper .metenox-tooltip .tooltip-content {
+    visibility: hidden;
+    background-color: rgba(0, 0, 0, 0.9);
+    color: var(--sm-text-white);
+    text-align: left;
+    border-radius: var(--sm-radius-sm);
+    padding: 0.5rem;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 250px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.structure-manager-wrapper .metenox-tooltip:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* ============================================
+   Activity Feed
+   ============================================ */
+.structure-manager-dashboard .activity-feed,
+.structure-manager-wrapper .activity-feed {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.structure-manager-dashboard .activity-feed-item,
+.structure-manager-wrapper .activity-feed-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--sm-border);
+    display: flex;
+    gap: 12px;
+    transition: background-color 0.15s ease;
+}
+
+.structure-manager-dashboard .activity-feed-item:last-child,
+.structure-manager-wrapper .activity-feed-item:last-child {
+    border-bottom: none;
+}
+
+.structure-manager-dashboard .activity-feed-item:hover,
+.structure-manager-wrapper .activity-feed-item:hover {
+    background-color: rgba(102, 126, 234, 0.05);
+}
+
+.structure-manager-dashboard .activity-feed-icon,
+.structure-manager-wrapper .activity-feed-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(102, 126, 234, 0.1);
+    color: var(--sm-primary-start);
+}
+
+.structure-manager-dashboard .activity-feed-content,
+.structure-manager-wrapper .activity-feed-content {
+    flex: 1;
+}
+
+.structure-manager-dashboard .activity-feed-title,
+.structure-manager-wrapper .activity-feed-title {
+    font-weight: 600;
+    color: var(--sm-text-white);
+    margin-bottom: 4px;
+}
+
+.structure-manager-dashboard .activity-feed-time,
+.structure-manager-wrapper .activity-feed-time {
+    font-size: 0.875rem;
+    color: var(--sm-text-muted);
+}
+
+/* ============================================
+   Statistics Grid
+   ============================================ */
+.structure-manager-dashboard .dashboard-stats-grid,
+.structure-manager-wrapper .dashboard-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* ============================================
+   Quick Actions
+   ============================================ */
+.structure-manager-dashboard .quick-actions,
+.structure-manager-wrapper .quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.structure-manager-dashboard .quick-action-btn,
+.structure-manager-wrapper .quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    color: var(--sm-text-white);
+    border: none;
+    border-radius: 5px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.structure-manager-dashboard .quick-action-btn:hover,
+.structure-manager-wrapper .quick-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    color: var(--sm-text-white);
+    text-decoration: none;
+}
+
+/* ============================================
+   Tab Navigation
+   ============================================ */
+.structure-manager-dashboard .nav-tabs {
+    border-bottom: 2px solid #454d55;
+}
+
+.structure-manager-dashboard .nav-tabs .nav-link {
+    color: #c2c7d0;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    margin-right: 8px;
+    border-radius: 8px 8px 0 0;
+    transition: all 0.3s ease;
+}
+
+.structure-manager-dashboard .nav-tabs .nav-link:hover {
+    color: var(--sm-text-white);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.structure-manager-dashboard .nav-tabs .nav-link.active {
+    background-color: #343a40;
+    border: 2px solid #454d55;
+    border-bottom: 2px solid #343a40;
+    color: var(--sm-text-white) !important;
+    font-weight: 600;
+}
+
+.structure-manager-dashboard .nav-tabs .nav-link.active i {
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-dashboard .nav-tabs .nav-link.active .badge {
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-dashboard .tab-content {
+    padding-top: 20px;
+}
+
+/* Tab Navigation (nav-tabs-custom for all pages) */
+.structure-manager-wrapper .nav-tabs-custom {
+    margin-bottom: 0 !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs {
+    border-bottom: 2px solid #454d55 !important;
+    background-color: transparent !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li {
+    margin-right: 8px !important;
+    margin-bottom: -2px !important;
+    border: none !important;
+    background: none !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li > a {
+    color: #c2c7d0 !important;
+    font-size: 1.1rem !important;
+    font-weight: 500 !important;
+    padding: 12px 24px !important;
+    border: none !important;
+    background: transparent !important;
+    border-radius: 8px 8px 0 0 !important;
+    transition: all 0.3s ease !important;
+    display: inline-block !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li > a:hover {
+    color: var(--sm-text-white) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    text-decoration: none !important;
+    border: none !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li.active > a,
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li.active > a:hover,
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li.active > a:focus {
+    background-color: #343a40 !important;
+    border: 2px solid #454d55 !important;
+    border-bottom: 2px solid #343a40 !important;
+    color: var(--sm-text-white) !important;
+    font-weight: 600 !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li.active > a > i {
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom > .nav-tabs > li.active > a > .badge {
+    color: var(--sm-text-white) !important;
+}
+
+.structure-manager-wrapper .nav-tabs-custom .tab-content {
+    padding-top: 20px !important;
+    background-color: transparent !important;
+}
+
+/* ============================================
+   Tab Content & Background Enhancement (ULTRA-SPECIFIC)
+   ============================================ */
+
+/* Make tab-content background much darker */
+div.structure-manager-dashboard div.tab-content,
+div.structure-manager-wrapper div.tab-content {
+    background-color: #0f1115 !important;
+    padding: 20px !important;
+    border-radius: 5px !important;
+}
+
+/* Card backgrounds — ULTRA SPECIFIC */
+div.structure-manager-dashboard div.card.card-dark,
+div.structure-manager-dashboard div.card.card-dark.card-tabs,
+div.structure-manager-wrapper div.card.card-dark,
+div.structure-manager-wrapper div.card.card-dark.card-tabs {
+    background-color: #161922 !important;
+    border: 1px solid var(--sm-border) !important;
+}
+
+/* Card headers — ULTRA SPECIFIC */
+div.structure-manager-dashboard div.card.card-dark div.card-header,
+div.structure-manager-dashboard div.card.card-dark.card-tabs div.card-header,
+div.structure-manager-wrapper div.card.card-dark div.card-header,
+div.structure-manager-wrapper div.card.card-dark.card-tabs div.card-header {
+    background-color: var(--sm-dark-bg) !important;
+    border-bottom: 1px solid var(--sm-border) !important;
+    color: var(--sm-text-white) !important;
+}
+
+/* Card body — ULTRA SPECIFIC */
+div.structure-manager-dashboard div.card-body,
+div.structure-manager-dashboard div.card.card-dark div.card-body,
+div.structure-manager-dashboard div.card.card-dark.card-tabs div.card-body,
+div.structure-manager-wrapper div.card-body,
+div.structure-manager-wrapper div.card.card-dark div.card-body,
+div.structure-manager-wrapper div.card.card-dark.card-tabs div.card-body {
+    background-color: #161922 !important;
+    color: #e8e8e8 !important;
+}
+
+/* Charts more visible */
+div.structure-manager-dashboard div.card-body canvas,
+div.structure-manager-wrapper div.card-body canvas {
+    background-color: rgba(26, 29, 36, 0.5) !important;
+    border-radius: 5px !important;
+    padding: 10px !important;
+}
+
+/* Tables in dark background */
+div.structure-manager-dashboard table.table,
+div.structure-manager-wrapper table.table {
+    color: #e8e8e8 !important;
+    background-color: transparent !important;
+}
+
+div.structure-manager-dashboard table.table thead th,
+div.structure-manager-wrapper table.table thead th {
+    color: var(--sm-text-white) !important;
+    background-color: var(--sm-dark-bg) !important;
+    border-color: var(--sm-border) !important;
+}
+
+div.structure-manager-dashboard table.table tbody tr,
+div.structure-manager-wrapper table.table tbody tr {
+    background-color: transparent !important;
+}
+
+div.structure-manager-dashboard table.table-striped tbody tr:nth-of-type(odd),
+div.structure-manager-wrapper table.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+div.structure-manager-dashboard table.table td,
+div.structure-manager-wrapper table.table td {
+    border-color: var(--sm-border) !important;
+    color: #e8e8e8 !important;
+}
+
+/* Muted text */
+div.structure-manager-dashboard .text-muted,
+div.structure-manager-wrapper .text-muted {
+    color: var(--sm-text-muted) !important;
+}
+
+/* Tab panes darker background */
+div.structure-manager-dashboard div.tab-pane,
+div.structure-manager-wrapper div.tab-pane {
+    background-color: transparent !important;
+}
+
+/* ============================================
+   Personal & Corporation Badges
+   ============================================ */
+.structure-manager-dashboard .personal-badge {
+    background: linear-gradient(to right, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.structure-manager-dashboard .corporation-badge {
+    background: linear-gradient(to right, #f093fb 0%, #f5576c 100%);
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* ============================================
+   STRUCTURE MANAGER DOMAIN STYLES
+   ============================================ */
+
+/* ============================================
+   Fuel Status Colors (preserved from existing SM CSS)
+   ============================================ */
+.structure-manager-dashboard .fuel-critical,
+.structure-manager-wrapper .fuel-critical {
+    color: var(--sm-danger);
+    font-weight: bold;
+}
+
+.structure-manager-dashboard .fuel-warning,
+.structure-manager-wrapper .fuel-warning {
+    color: var(--sm-warning);
+    font-weight: bold;
+}
+
+.structure-manager-dashboard .fuel-normal,
+.structure-manager-wrapper .fuel-normal {
+    color: var(--sm-success);
+}
+
+.structure-manager-dashboard .fuel-good,
+.structure-manager-wrapper .fuel-good {
+    color: var(--sm-info);
+}
+
+.structure-manager-dashboard .fuel-unknown,
+.structure-manager-wrapper .fuel-unknown {
+    color: #6c757d;
+}
+
+/* ============================================
+   Consumption Stats (preserved + modernized)
+   ============================================ */
+.structure-manager-dashboard .consumption-stats,
+.structure-manager-wrapper .consumption-stats {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    flex-wrap: wrap;
+}
+
+.structure-manager-dashboard .stat-item,
+.structure-manager-wrapper .stat-item {
+    padding: 0.25rem 0.5rem;
+    background: var(--sm-dark-card);
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius-sm);
+    white-space: nowrap;
+}
+
+.structure-manager-dashboard .stat-item i,
+.structure-manager-wrapper .stat-item i {
+    margin-right: 0.25rem;
+    opacity: 0.7;
+}
+
+/* ============================================
+   Metenox Indicators (preserved + dark-theme-safe)
+   ============================================ */
+.structure-manager-dashboard .metenox-indicator,
+.structure-manager-wrapper .metenox-indicator {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    border-radius: var(--sm-radius-sm);
+    margin-left: 0.25rem;
+}
+
+.structure-manager-dashboard .limiting-fuel,
+.structure-manager-wrapper .limiting-fuel {
+    background-color: rgba(23, 162, 184, 0.15);
+    color: #5dade2;
+    border: 1px solid rgba(23, 162, 184, 0.3);
+}
+
+.structure-manager-dashboard .limiting-gas,
+.structure-manager-wrapper .limiting-gas {
+    background-color: rgba(255, 193, 7, 0.15);
+    color: #ffd43b;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+/* ============================================
+   Security Status Colors (preserved from existing SM CSS)
+   ============================================ */
+.structure-manager-dashboard .sec-high,
+.structure-manager-wrapper .sec-high {
+    background-color: var(--sm-success);
+    color: var(--sm-text-white);
+}
+
+.structure-manager-dashboard .sec-low,
+.structure-manager-wrapper .sec-low {
+    background-color: var(--sm-warning);
+    color: #000;
+}
+
+.structure-manager-dashboard .sec-null,
+.structure-manager-wrapper .sec-null {
+    background-color: var(--sm-danger);
+    color: var(--sm-text-white);
+}
+
+/* ============================================
+   Alert Cards (preserved + modernized)
+   ============================================ */
+.structure-manager-dashboard .alert-card,
+.structure-manager-wrapper .alert-card {
+    margin-bottom: 1rem;
+    border-radius: var(--sm-radius-md);
+    transition: transform 0.2s ease;
+}
+
+.structure-manager-dashboard .alert-card:hover,
+.structure-manager-wrapper .alert-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.structure-manager-dashboard .alert-critical,
+.structure-manager-wrapper .alert-critical {
+    border-left: 4px solid var(--sm-danger);
+}
+
+.structure-manager-dashboard .alert-warning,
+.structure-manager-wrapper .alert-warning {
+    border-left: 4px solid var(--sm-warning);
+}
+
+/* ============================================
+   Refuel Event Cards (preserved + modernized)
+   ============================================ */
+.structure-manager-dashboard .refuel-event-card,
+.structure-manager-wrapper .refuel-event-card {
+    margin-bottom: 1.5rem;
+}
+
+.structure-manager-dashboard .refuel-event-card .card-header,
+.structure-manager-wrapper .refuel-event-card .card-header {
+    background-color: var(--sm-dark-card);
+    border-bottom: 1px solid var(--sm-border);
+}
+
+/* ============================================
+   POS Detail View Styles
+   (preserved from existing SM CSS — modernized)
+   ============================================ */
+
+/* Fuel status cards */
+.structure-manager-dashboard .fuel-card,
+.structure-manager-wrapper .fuel-card {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: var(--sm-radius-md);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.structure-manager-dashboard .fuel-card:hover,
+.structure-manager-wrapper .fuel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Bright text colors for POS readability */
+.structure-manager-dashboard .text-success-bright,
+.structure-manager-wrapper .text-success-bright {
+    color: #51cf66 !important;
+}
+
+.structure-manager-dashboard .text-warning-bright,
+.structure-manager-wrapper .text-warning-bright {
+    color: #ffd43b !important;
+}
+
+.structure-manager-dashboard .text-danger-bright,
+.structure-manager-wrapper .text-danger-bright {
+    color: #ff6b6b !important;
+}
+
+.structure-manager-dashboard .text-info-bright,
+.structure-manager-wrapper .text-info-bright {
+    color: #5dade2 !important;
+}
+
+/* Status text colors (preserved from existing SM CSS) */
+.structure-manager-wrapper .text-success {
+    color: #51cf66 !important;
+}
+
+.structure-manager-wrapper .text-warning {
+    color: #ffd43b !important;
+}
+
+.structure-manager-wrapper .text-danger {
+    color: #ff6b6b !important;
+}
+
+.structure-manager-wrapper .text-info {
+    color: #5dade2 !important;
+}
+
+.structure-manager-wrapper .text-muted {
+    color: #a0a0a0 !important;
+}
+
+/* Definition lists for consumption rates */
 .structure-manager-wrapper dl.row {
     margin-bottom: 0.5rem;
 }
@@ -395,11 +2199,11 @@
     margin-bottom: 0.5rem;
 }
 
-/* Card styling */
+/* Card / card-header / card-body / card-title (Bootstrap-style fallback) */
 .structure-manager-wrapper .card {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
+    border-radius: var(--sm-radius-md);
     margin-bottom: 1rem;
 }
 
@@ -422,13 +2226,7 @@
     margin: 0;
 }
 
-.structure-manager-wrapper .card-tools {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Borders for sections */
+/* Borders and rounded utility classes */
 .structure-manager-wrapper .border {
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
@@ -437,62 +2235,13 @@
     border-radius: 0.5rem !important;
 }
 
-/* Text colors */
-.structure-manager-wrapper .text-success {
-    color: #51cf66 !important;
-}
-
-.structure-manager-wrapper .text-warning {
-    color: #ffd43b !important;
-}
-
-.structure-manager-wrapper .text-danger {
-    color: #ff6b6b !important;
-}
-
-.structure-manager-wrapper .text-info {
-    color: #5dade2 !important;
-}
-
-.structure-manager-wrapper .text-muted {
-    color: #a0a0a0 !important;
-}
-
 /* Small text */
 .structure-manager-wrapper small {
     font-size: 0.875rem;
     color: #a0a0a0;
 }
 
-/* Tooltips */
-.structure-manager-wrapper [data-toggle="tooltip"] {
-    cursor: help;
-    border-bottom: 1px dotted rgba(255, 255, 255, 0.3);
-}
-
-/* Chart containers */
-.structure-manager-wrapper canvas {
-    max-height: 400px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .structure-manager-wrapper .fuel-card {
-        margin-bottom: 1rem;
-    }
-    
-    .structure-manager-wrapper .card-body {
-        padding: 1rem;
-    }
-    
-    .structure-manager-wrapper dl.row dt,
-    .structure-manager-wrapper dl.row dd {
-        width: 100% !important;
-        margin-left: 0 !important;
-    }
-}
-
-/* Icon colors */
+/* Icon colors (preserved from existing SM CSS) */
 .structure-manager-wrapper .fas.fa-fire {
     color: #5dade2;
 }
@@ -513,38 +2262,68 @@
     color: #51cf66;
 }
 
-/* POS-specific spacing */
-.structure-manager-wrapper .mb-0 {
-    margin-bottom: 0 !important;
+/* ============================================
+   Metenox Structure Highlighting
+   (preserved + modernized — uses --sm-metenox token)
+   ============================================ */
+.structure-manager-dashboard .metenox-structure .card-header,
+.structure-manager-wrapper .metenox-structure .card-header {
+    background: rgba(156, 39, 176, 0.1);
+    border-left: 4px solid var(--sm-metenox);
 }
 
-.structure-manager-wrapper .mb-1 {
-    margin-bottom: 0.25rem !important;
+/* Dual fuel display for Metenox */
+.structure-manager-dashboard .metenox-dual-fuel,
+.structure-manager-wrapper .metenox-dual-fuel {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem;
+    background: var(--sm-dark-card);
+    border-radius: var(--sm-radius-sm);
+    margin: 0.5rem 0;
 }
 
-.structure-manager-wrapper .mb-2 {
-    margin-bottom: 0.5rem !important;
+.structure-manager-dashboard .fuel-type-display,
+.structure-manager-wrapper .fuel-type-display {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: var(--sm-radius-sm);
 }
 
-.structure-manager-wrapper .mb-3 {
-    margin-bottom: 1rem !important;
+.structure-manager-dashboard .fuel-blocks-display,
+.structure-manager-wrapper .fuel-blocks-display {
+    background: rgba(23, 162, 184, 0.1);
+    border: 1px solid rgba(23, 162, 184, 0.2);
 }
 
-.structure-manager-wrapper .mt-1 {
-    margin-top: 0.25rem !important;
+.structure-manager-dashboard .magmatic-gas-display,
+.structure-manager-wrapper .magmatic-gas-display {
+    background: rgba(156, 39, 176, 0.1);
+    border: 1px solid rgba(156, 39, 176, 0.2);
 }
 
-.structure-manager-wrapper .mt-2 {
-    margin-top: 0.5rem !important;
+/* ============================================
+   No-Print + Margin/Padding Utilities
+   (preserved from existing SM CSS)
+   ============================================ */
+.structure-manager-wrapper .no-print {
+    /* Inherits from Bootstrap but ensures it's scoped */
 }
 
-.structure-manager-wrapper .mt-3 {
-    margin-top: 1rem !important;
+@media print {
+    .structure-manager-wrapper .no-print {
+        display: none !important;
+    }
 }
 
-.structure-manager-wrapper .p-3 {
-    padding: 1rem !important;
-}
+.structure-manager-wrapper .mb-0 { margin-bottom: 0 !important; }
+.structure-manager-wrapper .mb-1 { margin-bottom: 0.25rem !important; }
+.structure-manager-wrapper .mb-2 { margin-bottom: 0.5rem !important; }
+.structure-manager-wrapper .mb-3 { margin-bottom: 1rem !important; }
+.structure-manager-wrapper .mt-1 { margin-top: 0.25rem !important; }
+.structure-manager-wrapper .mt-2 { margin-top: 0.5rem !important; }
+.structure-manager-wrapper .mt-3 { margin-top: 1rem !important; }
+.structure-manager-wrapper .p-3 { padding: 1rem !important; }
 
 /* D-flex utilities */
 .structure-manager-wrapper .d-flex {
@@ -559,12 +2338,11 @@
     align-items: center !important;
 }
 
-/* Text alignment */
 .structure-manager-wrapper .text-center {
     text-align: center !important;
 }
 
-/* Row and column spacing */
+/* Row and column spacing (preserved from existing SM CSS) */
 .structure-manager-wrapper .row {
     margin-left: -0.5rem;
     margin-right: -0.5rem;
@@ -575,9 +2353,715 @@
     padding-right: 0.5rem;
 }
 
-/* ==================== THAT'S IT! ==================== */
-/* 
- * All other styling comes from SeAT's loaded Bootstrap CSS
- * No need to redefine cards, buttons, badges, tables, etc.
- * They work perfectly as-is!
- */
+.structure-manager-wrapper .card-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* ============================================
+   HELP PAGE STYLES
+   (mirrors MM's help-page convention)
+   ============================================ */
+
+.help-wrapper {
+    display: flex;
+    gap: 20px;
+}
+
+.help-sidebar {
+    flex: 0 0 280px;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+.help-content {
+    flex: 1;
+    min-width: 0;
+    color: var(--sm-text-light) !important;
+}
+
+.help-nav .nav-link {
+    color: #e2e8f0 !important;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    padding: 8px 14px;
+    transition: all 0.3s;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.help-nav .nav-link:hover {
+    background: rgba(102, 126, 234, 0.2);
+}
+
+.help-nav .nav-link.active {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+}
+
+.help-nav .nav-link i {
+    width: 24px;
+    text-align: center;
+    margin-right: 10px;
+}
+
+.help-section {
+    display: none;
+    animation: fadeIn 0.3s;
+}
+
+.help-section.active {
+    display: block;
+}
+
+.help-card {
+    background: var(--sm-dark-card);
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.help-card h3 {
+    color: var(--sm-primary-start) !important;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.help-card h4 {
+    color: #9ca3af !important;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.help-card h5 {
+    color: #e2e8f0 !important;
+    margin-top: 15px;
+    margin-bottom: 8px;
+}
+
+.help-card p {
+    color: #d1d5db !important;
+    line-height: 1.6;
+}
+
+.help-card ul,
+.help-card ol {
+    color: #d1d5db !important;
+    line-height: 1.8;
+    margin-left: 20px;
+}
+
+.help-card strong {
+    color: #e2e8f0 !important;
+}
+
+.help-card li {
+    color: #d1d5db !important;
+}
+
+.help-card code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #fbbf24 !important;
+    font-size: 0.9em;
+}
+
+.help-card pre {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+    color: #d1d5db !important;
+}
+
+/* Step-by-step (gradient circle counters) */
+.step-by-step {
+    counter-reset: step-counter;
+    list-style: none;
+    padding-left: 0;
+}
+
+.step-by-step li {
+    counter-increment: step-counter;
+    margin-bottom: 20px;
+    padding-left: 50px;
+    position: relative;
+    color: #d1d5db !important;
+}
+
+.step-by-step li::before {
+    content: counter(step-counter);
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    color: white;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+/* Help page callouts (info / warning / success / purple) */
+.info-box,
+.warning-box,
+.success-box,
+.purple-box {
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 5px;
+    color: #d1d5db !important;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.info-box {
+    background: rgba(23, 162, 184, 0.15);
+    border-left: 4px solid var(--sm-info);
+}
+
+.warning-box {
+    background: rgba(255, 193, 7, 0.15);
+    border-left: 4px solid var(--sm-warning);
+}
+
+.success-box {
+    background: rgba(28, 200, 138, 0.15);
+    border-left: 4px solid #1cc88a;
+}
+
+/* SM-specific Metenox magmatic-gas callout */
+.purple-box {
+    background: rgba(156, 39, 176, 0.15);
+    border-left: 4px solid var(--sm-magmatic-gas);
+}
+
+.info-box > i,
+.warning-box > i,
+.success-box > i,
+.purple-box > i {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+.info-box > i { color: var(--sm-info); }
+.warning-box > i { color: var(--sm-warning); }
+.success-box > i { color: #1cc88a; }
+.purple-box > i { color: var(--sm-magmatic-gas); }
+
+/* Override the inherited .help-card h4/h5/p/ul/ol/li/small/strong colours
+   so text inside a tinted box has high contrast. The default
+   .help-card h4 (#9ca3af medium grey) is barely readable on the
+   info/warning/success/purple 15%-opacity tint backgrounds; this
+   lifts every text element inside a tinted box to a near-white that
+   pops against any of the four background tints uniformly.
+
+   Bootstrap's `.text-muted` is `color: #6c757d !important` and ties on
+   specificity with the bare-element overrides — the chained-class
+   selector below (.success-box .text-muted) beats it on specificity
+   so muted-but-still-readable copy stays legible inside boxes too.
+
+   See `feedback_help_docs_visual_design.md` in project memory for the
+   recurring pattern + the MM equivalent at index.blade.php inline
+   styles. */
+.info-box h3, .info-box h4, .info-box h5,
+.warning-box h3, .warning-box h4, .warning-box h5,
+.success-box h3, .success-box h4, .success-box h5,
+.purple-box h3, .purple-box h4, .purple-box h5,
+.alert h3, .alert h4, .alert h5 {
+    color: #f9fafb !important;
+}
+.info-box p, .info-box ul, .info-box ol, .info-box li, .info-box small,
+.warning-box p, .warning-box ul, .warning-box ol, .warning-box li, .warning-box small,
+.success-box p, .success-box ul, .success-box ol, .success-box li, .success-box small,
+.purple-box p, .purple-box ul, .purple-box ol, .purple-box li, .purple-box small,
+.alert p, .alert ul, .alert ol, .alert li, .alert small {
+    color: #f3f4f6 !important;
+}
+.info-box strong, .warning-box strong, .success-box strong, .purple-box strong,
+.alert strong {
+    color: #ffffff !important;
+}
+/* Same overrides also cover Bootstrap `.alert.alert-info/.alert-secondary`
+   etc. which the help blade may use interchangeably with the custom box
+   classes. Caught in MM where 6 .alert.alert-info/.alert-secondary boxes
+   were rendering low-contrast text despite the per-box overrides. */
+.info-box .text-muted,
+.warning-box .text-muted,
+.success-box .text-muted,
+.purple-box .text-muted,
+.alert .text-muted,
+.info-box small.text-muted,
+.warning-box small.text-muted,
+.success-box small.text-muted,
+.purple-box small.text-muted,
+.alert small.text-muted {
+    color: #d1d5db !important;
+    opacity: 0.95;
+}
+
+/* Feature grid + items */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.feature-item {
+    background: rgba(102, 126, 234, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+/* Scoped to direct-child icons only (the big feature-card top icon).
+   Pre-fix this selector hit ALL nested icons too — including <i>
+   elements inside badges — which forced badge icons to render in the
+   primary indigo regardless of the badge background. On a green
+   badge-success or red badge-danger the indigo icon was barely
+   visible. The "> i" direct-child combinator leaves badge / inline
+   icons alone so they inherit the badge's white text colour as
+   intended. Same fix lives in MM (mirrored here for consistency). */
+.feature-item > i {
+    font-size: 2rem;
+    color: var(--sm-primary-start);
+    margin-bottom: 10px;
+}
+
+.feature-item h5 {
+    color: #e2e8f0 !important;
+    margin-bottom: 8px;
+}
+
+.feature-item p {
+    color: #9ca3af !important;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* Search box */
+.search-box {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 12px 45px 12px 15px;
+    background: #2d3748;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 8px;
+    color: #e2e8f0 !important;
+}
+
+.search-box i {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+}
+
+/* Quick links (gradient quick-link buttons) */
+.quick-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.quick-link {
+    background: linear-gradient(135deg, var(--sm-primary-start) 0%, var(--sm-primary-end) 100%);
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    color: white;
+    text-decoration: none;
+    transition: transform 0.2s;
+}
+
+.quick-link:hover {
+    transform: translateY(-2px);
+    color: white;
+    text-decoration: none;
+}
+
+.quick-link i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* FAQ accordion */
+.faq-item {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.faq-question {
+    padding: 15px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+    color: #e2e8f0 !important;
+}
+
+.faq-question:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.faq-question i {
+    transition: transform 0.3s;
+}
+
+.faq-item.open .faq-question i {
+    transform: rotate(180deg);
+}
+
+.faq-answer {
+    padding: 0 15px;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s;
+    color: #d1d5db !important;
+}
+
+.faq-item.open .faq-answer {
+    padding: 15px;
+    max-height: 500px;
+}
+
+/* Plugin info table */
+.plugin-info-table {
+    width: 100%;
+    color: #d1d5db !important;
+}
+
+.plugin-info-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.plugin-info-table td:first-child {
+    color: #9ca3af !important;
+    width: 120px;
+    font-weight: 600;
+}
+
+.plugin-info-table td:last-child {
+    color: #e2e8f0 !important;
+}
+
+/* ============================================
+   SM-Specific v2 Markers + What's-New Callout
+   ============================================ */
+
+/* Inline v2 badge — appears next to a feature title */
+.v2-badge,
+.v2-badge-inline {
+    display: inline-block;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: var(--sm-text-white);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+}
+
+/* v2 badge inside a nav link */
+.v2-badge-nav {
+    display: inline-block;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: var(--sm-text-white);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: auto;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* "Requires Manager Core" badge — indigo gradient so it reads as a
+   different kind of marker than the green "NEW in v2.0.0" badge.
+   Used next to feature titles that only function with the optional
+   Manager Core companion plugin installed. */
+.mc-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: var(--sm-text-white);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+}
+
+/* "What's new in this version" green callout */
+.whats-new-box {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(32, 201, 151, 0.1) 100%);
+    border-left: 4px solid var(--sm-success);
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin: 20px 0;
+    color: #d1d5db !important;
+}
+
+.whats-new-box h4,
+.whats-new-box h5 {
+    color: #51cf66 !important;
+    margin-top: 0;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ============================================
+   Fuel-Type Indicators (inside content)
+   ============================================ */
+.fuel-type-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.fuel-blocks {
+    background: rgba(23, 162, 184, 0.15);
+    color: var(--sm-fuel-blocks);
+    border: 1px solid rgba(23, 162, 184, 0.3);
+}
+
+.magmatic-gas {
+    background: rgba(156, 39, 176, 0.15);
+    color: var(--sm-magmatic-gas);
+    border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+/* ============================================
+   Responsive Utilities (canonical)
+   ============================================ */
+@media (max-width: 768px) {
+    .help-wrapper {
+        flex-direction: column;
+    }
+
+    .help-sidebar {
+        position: relative;
+        max-height: none;
+    }
+
+    .feature-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .card-dark .card-body {
+        padding: var(--sm-spacing-md);
+    }
+
+    .stat-card {
+        padding: var(--sm-spacing-md);
+    }
+
+    .stat-card-value {
+        font-size: 1.5rem;
+    }
+
+    .table-sm-styled thead th,
+    .structure-manager-dashboard .table-sm-styled tbody td,
+    .structure-manager-wrapper .table-sm-styled tbody td {
+        padding: var(--sm-spacing-sm);
+        font-size: 0.875rem;
+    }
+
+    .btn-sm-primary,
+    .btn-sm-secondary {
+        width: 100%;
+        margin-bottom: var(--sm-spacing-sm);
+    }
+
+    /* POS detail responsive (preserved from existing SM CSS) */
+    .structure-manager-wrapper .fuel-card {
+        margin-bottom: 1rem;
+    }
+
+    .structure-manager-wrapper .card-body {
+        padding: 1rem;
+    }
+
+    .structure-manager-wrapper dl.row dt,
+    .structure-manager-wrapper dl.row dd {
+        width: 100% !important;
+        margin-left: 0 !important;
+    }
+
+    /* Info boxes stack on mobile */
+    .info-box {
+        display: block;
+        text-align: center;
+    }
+
+    .structure-manager-dashboard .info-box .info-box-icon,
+    .structure-manager-wrapper .info-box .info-box-icon {
+        width: 100%;
+        height: 80px;
+        margin-bottom: 10px;
+    }
+
+    .structure-manager-dashboard .info-box .info-box-content,
+    .structure-manager-wrapper .info-box .info-box-content {
+        text-align: center;
+        padding: 0;
+    }
+
+    /* Small box icon adjustments */
+    .small-box .icon > i {
+        font-size: 50px;
+    }
+
+    .small-box:hover .icon > i {
+        font-size: 60px;
+    }
+
+    .small-box h3 {
+        font-size: 1.5rem;
+    }
+
+    /* Dashboard grid becomes single column */
+    .dashboard-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Tables get horizontal scroll */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Charts adjust height */
+    .chart-container {
+        min-height: 250px;
+    }
+}
+
+@media (max-width: 576px) {
+    :root {
+        --sm-spacing-lg: 15px;
+        --sm-spacing-xl: 20px;
+    }
+
+    .stat-card-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+    }
+
+    .info-box .info-box-number {
+        font-size: 1.25rem;
+    }
+
+    .info-box .info-box-text {
+        font-size: 0.75rem;
+    }
+
+    .small-box h3 {
+        font-size: 1.25rem;
+    }
+
+    .small-box p {
+        font-size: 0.875rem;
+    }
+
+    .quick-actions {
+        flex-direction: column;
+    }
+
+    .quick-action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+    .btn,
+    .card-tools,
+    .pagination-sm-styled,
+    .quick-actions,
+    .small-box-footer {
+        display: none !important;
+    }
+
+    .card-dark {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .table-sm-styled,
+    .table-dark {
+        font-size: 0.875rem;
+    }
+
+    .info-box,
+    .small-box {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+
+    .chart-container {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+}
+
+/* ============================================
+   Reduced motion
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+    .structure-manager-dashboard *,
+    .info-box,
+    .small-box,
+    .structure-manager-dashboard .chart-container.loading::after,
+    .structure-manager-wrapper .chart-container.loading::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ============================================
+   End of Structure Manager design system
+   ============================================ */

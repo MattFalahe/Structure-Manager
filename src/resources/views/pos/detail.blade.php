@@ -4,13 +4,19 @@
 @section('page_header', $pos->starbase_name ?? 'Player Owned Starbase')
 
 @push('head')
+<link rel="stylesheet" href="{{ asset('vendor/structure-manager/css/structure-manager.css') }}?v=17">
 <style>
-    /* Dark theme compatible styles */
+    /* === POS detail — page-specific chrome ===
+       Generic card / button / fuel-status / progress-bar come from the
+       canonical structure-manager.css. The bespoke colored text classes
+       and POS resource-card primitives below are functional to this view.
+       SEMANTIC severity colors — DO NOT CHANGE. */
     .text-success-bright { color: #51cf66; }
     .text-warning-bright { color: #ffd43b; }
-    .text-danger-bright { color: #ff6b6b; }
-    .text-info-bright { color: #5dade2; }
-    
+    .text-danger-bright  { color: #ff6b6b; }
+    .text-info-bright    { color: #5dade2; }
+
+    /* Stat boxes for fuel/charter/strontium quantities */
     .stat-box {
         background: rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -18,18 +24,16 @@
         padding: 0.75rem;
         margin-bottom: 0.75rem;
     }
-    
     .stat-number {
         font-size: 1.3rem;
         font-weight: bold;
     }
-    
     .stat-label {
         font-size: 0.8rem;
         color: #a0a0a0;
     }
-    
-    /* POS-specific banner */
+
+    /* SEMANTIC POS info banner — DO NOT CHANGE */
     .pos-banner {
         background: rgba(255, 152, 0, 0.1);
         border-left: 4px solid #ff9800;
@@ -38,7 +42,6 @@
         border-radius: 0.25rem;
         font-size: 0.9rem;
     }
-    
     .pos-badge {
         background-color: rgba(255, 152, 0, 0.2);
         color: #ff9800;
@@ -49,8 +52,8 @@
         font-weight: bold;
         margin-left: 0.5rem;
     }
-    
-    /* Dual fuel resource cards */
+
+    /* Resource cards (fuel blocks / charters / strontium) */
     .resource-card {
         background: rgba(0, 0, 0, 0.3);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -59,12 +62,11 @@
         margin-bottom: 0.75rem;
         position: relative;
     }
-    
+    /* SEMANTIC limiting-factor outline — DO NOT CHANGE */
     .limiting-factor {
         border: 2px solid #ff6b6b;
         background: rgba(220, 53, 69, 0.1);
     }
-    
     .limiting-badge {
         position: absolute;
         top: 0.4rem;
@@ -77,19 +79,19 @@
         font-size: 0.7rem;
         font-weight: bold;
     }
-    
     .resource-card h5 {
         margin-bottom: 0.5rem;
-        color: #17a2b8;
+        color: var(--sm-info);
         font-size: 0.95rem;
     }
-    
     .resource-icon {
         font-size: 1.5rem;
         opacity: 0.7;
         margin-bottom: 0.3rem;
     }
-    
+
+    /* Custom progress bar primitive (different from canonical .progress
+       which is the AdminLTE bootstrap one). */
     .progress-bar-wrapper {
         background: rgba(0, 0, 0, 0.4);
         border-radius: 0.25rem;
@@ -97,7 +99,6 @@
         margin-top: 0.4rem;
         overflow: hidden;
     }
-    
     .progress-bar-fill {
         height: 100%;
         background: linear-gradient(90deg, #28a745, #17a2b8);
@@ -109,26 +110,25 @@
         font-weight: bold;
         font-size: 0.8rem;
     }
-    
+    /* SEMANTIC progress-bar fill states — DO NOT CHANGE */
     .progress-bar-fill.critical {
         background: linear-gradient(90deg, #dc3545, #c82333);
     }
-    
     .progress-bar-fill.warning {
         background: linear-gradient(90deg, #ffc107, #e0a800);
     }
-    
-    /* Strontium card */
+
+    /* SEMANTIC strontium card tints — DO NOT CHANGE */
     .strontium-card {
         background: rgba(138, 43, 226, 0.1);
         border: 1px solid rgba(138, 43, 226, 0.3);
     }
-    
     .strontium-critical {
         border: 2px solid #dc3545;
         background: rgba(220, 53, 69, 0.1);
     }
-    
+
+    /* SEMANTIC banner stripes — DO NOT CHANGE */
     .danger-banner {
         background: rgba(220, 53, 69, 0.1);
         border-left: 4px solid #dc3545;
@@ -137,7 +137,6 @@
         border-radius: 0.25rem;
         font-size: 0.9rem;
     }
-    
     .warning-banner {
         background: rgba(255, 193, 7, 0.1);
         border-left: 4px solid #ffc107;
@@ -146,21 +145,19 @@
         border-radius: 0.25rem;
         font-size: 0.9rem;
     }
-    
-    /* Compact layout */
+
+    /* Compact dl layout inside POS detail card bodies */
     .structure-manager-wrapper .card-body dl {
         margin-bottom: 0;
         font-size: 0.9rem;
     }
-    
     .structure-manager-wrapper .card-body dl dt {
         font-weight: 600;
     }
-    
     .structure-manager-wrapper .card-body dl dd {
         margin-bottom: 0.3rem;
     }
-    
+
     .charter-not-required {
         background: rgba(108, 117, 125, 0.1);
         border: 1px solid rgba(108, 117, 125, 0.2);
@@ -168,6 +165,10 @@
 </style>
 @endpush
 
+@php
+    // Locked fuel/strontium thresholds — single source of truth.
+    $T = \StructureManager\Helpers\FuelThresholds::class;
+@endphp
 @section('content')
 <div class="structure-manager-wrapper">
 
@@ -208,7 +209,7 @@
         <div class="row">
             <!-- POS Info Card -->
             <div class="col-md-6">
-                <div class="card">
+                <div class="card card-dark">
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-broadcast-tower"></i> Control Tower
@@ -221,7 +222,7 @@
                             <dd class="col-sm-7">
                                 <strong>{{ $pos->starbase_name ?? 'Unnamed' }}</strong>
                             </dd>
-                            
+
                             <dt class="col-sm-5">Tower Type:</dt>
                             <dd class="col-sm-7">
                                 {{ $pos->tower_type }}
@@ -229,22 +230,22 @@
                                 <span class="badge badge-info badge-sm">{{ $rates['bonus_type'] }}</span>
                                 @endif
                             </dd>
-                            
+
                             @if($pos->location_name)
                             <dt class="col-sm-5">Location:</dt>
                             <dd class="col-sm-7">
                                 <i class="fas fa-map-marker-alt text-info"></i> {{ $pos->location_name }}
                             </dd>
                             @endif
-                            
+
                             <dt class="col-sm-5">System:</dt>
                             <dd class="col-sm-7">
-                                {{ $pos->system_name }} 
+                                {{ $pos->system_name }}
                                 <span class="{{ $pos->system_security >= 0.5 ? 'text-success-bright' : ($pos->system_security > 0 ? 'text-warning-bright' : 'text-danger-bright') }}">
                                     ({{ number_format($pos->system_security, 2) }})
                                 </span>
                             </dd>
-                            
+
                             <dt class="col-sm-5">Space Type:</dt>
                             <dd class="col-sm-7">
                                 @if($latestHistory)
@@ -253,10 +254,10 @@
                                     </span>
                                 @endif
                             </dd>
-                            
+
                             <dt class="col-sm-5">Corporation:</dt>
                             <dd class="col-sm-7">{{ $pos->corporation_name }}</dd>
-                            
+
                             <dt class="col-sm-5">State:</dt>
                             <dd class="col-sm-7">
                                 @php
@@ -266,7 +267,7 @@
                                     {{ ucfirst($state) }}
                                 </span>
                             </dd>
-                            
+
                             @if($latestHistory)
                             <dt class="col-sm-5">Last Updated:</dt>
                             <dd class="col-sm-7">{{ $latestHistory->created_at->diffForHumans() }}</dd>
@@ -275,11 +276,11 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Consumption Rates Card -->
             <div class="col-md-6">
                 @if($rates)
-                <div class="card">
+                <div class="card card-dark">
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-tachometer-alt"></i> Consumption</h3>
                     </div>
@@ -287,20 +288,20 @@
                         <dl class="row">
                             <dt class="col-sm-6">Fuel/Hour:</dt>
                             <dd class="col-sm-6">{{ number_format($rates['fuel_per_hour']) }}</dd>
-                            
+
                             <dt class="col-sm-6">Fuel/Day:</dt>
                             <dd class="col-sm-6">{{ number_format($rates['fuel_per_day']) }}</dd>
-                            
+
                             <dt class="col-sm-6">Fuel/Month:</dt>
                             <dd class="col-sm-6">{{ number_format($rates['fuel_per_month']) }}</dd>
-                            
+
                             @if($rates['has_fuel_bonus'])
                             <dt class="col-sm-6">Reduction:</dt>
                             <dd class="col-sm-6">
                                 <span class="text-success-bright">{{ $rates['fuel_reduction_percent'] }}%</span>
                             </dd>
                             @endif
-                            
+
                             <dt class="col-sm-6">Charters:</dt>
                             <dd class="col-sm-6">
                                 @if($rates['requires_charters'])
@@ -309,28 +310,28 @@
                                     <span class="text-muted">1/hr (not req.)</span>
                                 @endif
                             </dd>
-                            
+
                             <dt class="col-sm-6">Strontium:</dt>
                             <dd class="col-sm-6">{{ number_format($rates['strontium_for_reinforced']) }}/hr</dd>
-                            
+
                             <dt class="col-sm-6">Shared Bay:</dt>
                             <dd class="col-sm-6">
                                 <strong>{{ number_format($rates['shared_bay_capacity'] ?? 0) }} m³</strong>
                             </dd>
-                            
+
                             <dt class="col-sm-6">Max Fuel:</dt>
                             <dd class="col-sm-6">{{ number_format($rates['fuel_bay_capacity'] ?? 0) }} blocks</dd>
-                            
+
                             <dt class="col-sm-6">Max Charters:</dt>
                             <dd class="col-sm-6">{{ number_format($rates['charter_bay_capacity'] ?? 0) }}</dd>
-                            
+
                             <dt class="col-sm-6">Stront Bay:</dt>
                             <dd class="col-sm-6">
                                 {{ number_format($rates['strontium_bay_capacity'] ?? 0) }} units
                                 <small class="text-muted d-block">({{ number_format($rates['strontium_bay_capacity_m3'] ?? 0) }} m³ @ 3m³/unit)</small>
                             </dd>
                         </dl>
-                        
+
                         <div class="alert alert-info mb-0" style="background: rgba(23, 162, 184, 0.1); border-color: rgba(23, 162, 184, 0.2); padding: 0.5rem; font-size: 0.85rem;">
                             <i class="fas fa-info-circle"></i>
                             <strong>Shared Bay:</strong> Fuel blocks and charters compete for the same {{ number_format($rates['shared_bay_capacity'] ?? 0) }} m³ cargo space.
@@ -340,7 +341,7 @@
                 @endif
             </div>
         </div>
-        
+
         <!-- Fuel Status Row -->
         @if($latestHistory)
         <div class="row">
@@ -357,29 +358,29 @@
                     Strontium provides reinforcement timer when attacked.
                 </div>
             </div>
-            
+
             <!-- Fuel Blocks -->
             <div class="col-md-6">
                 <div class="resource-card {{ ($latestHistory->requires_charters && $latestHistory->limiting_factor == 'fuel') ? 'limiting-factor' : '' }}">
                     @if($latestHistory->requires_charters && $latestHistory->limiting_factor == 'fuel')
                     <span class="limiting-badge">LIMITING</span>
                     @endif
-                    
+
                     <div class="text-center resource-icon">
                         <i class="fas fa-gas-pump text-info-bright"></i>
                     </div>
-                    
+
                     <h5 class="text-center">Fuel Blocks</h5>
-                    
+
                     <div class="stat-box text-center">
-                        <div class="stat-number {{ $latestHistory->fuel_days_remaining < 7 ? 'text-danger-bright' : ($latestHistory->fuel_days_remaining < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                        <div class="stat-number {{ $latestHistory->fuel_days_remaining < $T::posFuelCritical() ? 'text-danger-bright' : ($latestHistory->fuel_days_remaining < $T::posFuelWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
                             {{ number_format($latestHistory->fuel_blocks_quantity) }}
                         </div>
                         <div class="stat-label">Blocks in Bay</div>
                     </div>
-                    
+
                     <div class="stat-box text-center">
-                        <div class="stat-number {{ $latestHistory->fuel_days_remaining < 7 ? 'text-danger-bright' : ($latestHistory->fuel_days_remaining < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                        <div class="stat-number {{ $latestHistory->fuel_days_remaining < $T::posFuelCritical() ? 'text-danger-bright' : ($latestHistory->fuel_days_remaining < $T::posFuelWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
                             @php
                                 $fuelDays = floor($latestHistory->fuel_days_remaining);
                                 $fuelHours = floor(($latestHistory->fuel_days_remaining - $fuelDays) * 24);
@@ -392,7 +393,7 @@
                         </div>
                         <div class="stat-label">Days Remaining</div>
                     </div>
-                    
+
                     @if($rates)
                     <div class="progress-bar-wrapper">
                         @php
@@ -415,7 +416,7 @@
                         </div>
                     </div>
                     <small class="text-muted">
-                        Bay Usage: {{ number_format($rates['fuel_per_hour']) }}/hr | 
+                        Bay Usage: {{ number_format($rates['fuel_per_hour']) }}/hr |
                         @if($latestHistory->requires_charters)
                             Shares {{ number_format($rates['shared_bay_capacity'] ?? 0) }} m³ with charters
                         @else
@@ -425,7 +426,7 @@
                     @endif
                 </div>
             </div>
-            
+
             <!-- Charters (always show) -->
             <div class="col-md-6">
                 @if($latestHistory->requires_charters)
@@ -433,22 +434,22 @@
                         @if($latestHistory->limiting_factor == 'charters')
                         <span class="limiting-badge">LIMITING</span>
                         @endif
-                        
+
                         <div class="text-center resource-icon">
                             <i class="fas fa-certificate text-warning-bright"></i>
                         </div>
-                        
+
                         <h5 class="text-center">Starbase Charters</h5>
-                        
+
                         <div class="stat-box text-center">
-                            <div class="stat-number {{ $latestHistory->charter_days_remaining < 7 ? 'text-danger-bright' : ($latestHistory->charter_days_remaining < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                            <div class="stat-number {{ $latestHistory->charter_days_remaining < $T::posCharterCritical() ? 'text-danger-bright' : ($latestHistory->charter_days_remaining < $T::posFuelWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
                                 {{ number_format($latestHistory->charter_quantity) }}
                             </div>
                             <div class="stat-label">Charters in Bay</div>
                         </div>
-                        
+
                         <div class="stat-box text-center">
-                            <div class="stat-number {{ $latestHistory->charter_days_remaining < 7 ? 'text-danger-bright' : ($latestHistory->charter_days_remaining < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                            <div class="stat-number {{ $latestHistory->charter_days_remaining < $T::posCharterCritical() ? 'text-danger-bright' : ($latestHistory->charter_days_remaining < $T::posFuelWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
                                 @php
                                     $charterDays = floor($latestHistory->charter_days_remaining);
                                     $charterHours = floor(($latestHistory->charter_days_remaining - $charterDays) * 24);
@@ -461,7 +462,7 @@
                             </div>
                             <div class="stat-label">Days Remaining</div>
                         </div>
-                        
+
                         @if($rates)
                         <div class="progress-bar-wrapper">
                             @php
@@ -494,9 +495,9 @@
                         <div class="text-center resource-icon">
                             <i class="fas fa-certificate" style="color: #6c757d;"></i>
                         </div>
-                        
+
                         <h5 class="text-center" style="color: #6c757d;">Starbase Charters</h5>
-                        
+
                         <div class="stat-box text-center">
                             <div style="font-size: 2rem; color: #6c757d; margin: 2rem 0;">
                                 <i class="fas fa-times-circle"></i>
@@ -506,27 +507,27 @@
                                 Charters only needed in<br>High-Sec (≥0.5 security)
                             </div>
                         </div>
-                        
+
                         <small class="text-muted text-center d-block">
                             Consumption: 1/hr (static) | Not needed in {{ $latestHistory->space_type }}
                         </small>
                     </div>
                 @endif
             </div>
-            
+
             <!-- Strontium Clathrates -->
             <div class="col-md-12">
                 <div class="resource-card strontium-card {{ $latestHistory->hasCriticalStrontium() ? 'strontium-critical' : '' }}">
                     <div class="text-center resource-icon">
                         <i class="fas fa-shield-alt {{ $latestHistory->hasCriticalStrontium() ? 'text-danger-bright' : 'text-info-bright' }}"></i>
                     </div>
-                    
+
                     <h5 class="text-center">Strontium Clathrates (Reinforcement)</h5>
-                    
+
                     <div class="row">
                         <div class="col-md-3">
                             <div class="stat-box text-center">
-                                <div class="stat-number {{ $latestHistory->strontium_hours_available < 6 ? 'text-danger-bright' : ($latestHistory->strontium_hours_available < 12 ? 'text-warning-bright' : 'text-success-bright') }}">
+                                <div class="stat-number {{ $latestHistory->strontium_hours_available < $T::posStrontiumCritical() ? 'text-danger-bright' : ($latestHistory->strontium_hours_available < $T::posStrontiumWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
                                     {{ number_format($latestHistory->strontium_quantity) }}
                                 </div>
                                 <div class="stat-label">Units in Bay</div>
@@ -534,7 +535,7 @@
                         </div>
                         <div class="col-md-3">
                             <div class="stat-box text-center">
-                                <div class="stat-number {{ $latestHistory->strontium_hours_available < 6 ? 'text-danger-bright' : ($latestHistory->strontium_hours_available < 12 ? 'text-warning-bright' : 'text-success-bright') }}">
+                                <div class="stat-number {{ $latestHistory->strontium_hours_available < $T::posStrontiumCritical() ? 'text-danger-bright' : ($latestHistory->strontium_hours_available < $T::posStrontiumWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
                                     {{ number_format($latestHistory->strontium_hours_available, 1) }}h
                                 </div>
                                 <div class="stat-label">Reinforcement Timer</div>
@@ -560,7 +561,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     @if($rates)
                     {{-- Bar 1: Bay Capacity Usage --}}
                     <div class="mt-3">
@@ -587,7 +588,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Bar 2: Good Level Coverage --}}
                     <div class="mt-2">
                         <div class="d-flex justify-content-between mb-1">
@@ -617,9 +618,9 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <small class="text-muted d-block text-center mt-2">
-                        Status: <strong>{{ strtoupper($latestHistory->strontium_status) }}</strong> | 
+                        Status: <strong>{{ strtoupper($latestHistory->strontium_status) }}</strong> |
                         Consumption: {{ number_format($rates['strontium_for_reinforced']) }}/hr when reinforced
                     </small>
                     @endif
@@ -633,7 +634,7 @@
         </div>
         @endif
     </div>
-    
+
     <!-- Right Column: Empty for now, chart moved to bottom -->
     <div class="col-md-4">
         <!-- Reserved for future use -->
@@ -644,7 +645,7 @@
 @if($history && $history->count() > 0)
 <div class="row mt-3">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-line"></i> Fuel History (30 Days)</h3>
             </div>
@@ -660,7 +661,7 @@
 @endsection
 
 @push('javascript')
-<script src="{{ asset('web/css/structure-manager/js/chart.min.js') }}"></script>
+<script src="{{ asset('vendor/structure-manager/js/chart.min.js') }}"></script>
 <script>
 @if($history && $history->count() > 0)
 // Prepare chart data

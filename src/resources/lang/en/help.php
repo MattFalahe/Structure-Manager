@@ -16,6 +16,7 @@ return [
     'commands' => 'Commands',
     'faq' => 'FAQ',
     'troubleshooting' => 'Troubleshooting',
+    'admin_diagnostics_nav' => 'Admin Diagnostics',
 
     // Plugin Information
     'plugin_info_title' => 'Plugin Information',
@@ -36,6 +37,37 @@ return [
         <li>🌟 Share with other SeAT users</li>
     </ul>',
 
+    // v2.0.0 — The Ecosystem Era (2026-05-12)
+    // This is the public canonical release that supersedes the internal
+    // dev versions (v2/v3.0/v3.1). The framing is "Structure Manager is
+    // now part of a connected plugin ecosystem, not a standalone tool" —
+    // Manager Core is the optional hub, Mining Manager consumes the
+    // tactical events, SeAT Broadcast calendars them, and SM still works fully
+    // standalone for installs that don't want the ecosystem layer.
+    'v2_badge' => 'NEW in v2.0.0',
+    'whats_new_v2_title' => 'What\'s New in v2.0.0 — The Ecosystem Era',
+    'whats_new_v2_intro' => 'Structure Manager v2.0.0 is the first public canonical release of the ecosystem-era plugin family. Where the original Structure Manager was a single-purpose fuel tracker, v2.0.0 sits at the centre of a connected plugin suite: Manager Core provides shared infrastructure (fast-poll, pricing, EventBus), Mining Manager consumes Structure Manager\'s combat events, and SeAT Broadcast [<code>seat-discord-pings</code>] (when its calendar feature lands) consumes the tactical-planning events. <strong>Structure Manager still works fully standalone</strong> when none of these are installed — every ecosystem feature is purely additive. Look for the <span class="v2-badge">NEW in v2.0.0</span> badge throughout this documentation to find sections covering ecosystem features in detail.',
+    'whats_new_v2_list' => '<p><strong>Headline features:</strong></p>
+        <ul>
+            <li><strong>Plugin ecosystem integration</strong> — Structure Manager publishes a documented family of <code>structure.alert.*</code> events on Manager Core\'s EventBus. Mining Manager already subscribes (for extraction-at-risk alerts on reinforced structures); SeAT Broadcast will subscribe (calendar view + pre-timer FC reminders). Every ecosystem feature degrades to "harmless no-op" when companion plugins are absent. <a href="#notifications">Tactical events contract →</a></li>
+            <li><strong>Three-path ESI detection</strong> — Manager Core fast-poll (~2 min per corp via adaptive per-corp rotation), MC sweep fallback (~10 min via SeAT bucket + MC routing), and SM-native sweep (~15-20 min, standalone fallback). Each path is identifiable from the Discord embed footer ("Fast Poll (Manager Core)" / "SeAT Sweep (Manager Core)" / "SeAT Native"). <a href="#notifications">Detection paths →</a></li>
+            <li><strong>Attacker name resolution via public ESI</strong> — when an attacker isn\'t in SeAT\'s local cache, SM looks them up through CCP\'s public ESI endpoint with a 7-day result cache. Embeds show real character names + clickable zKillboard links instead of "Pilot ID #N (name not cached)". Same three-tier chain for corporations and alliances.</li>
+            <li><strong>Operational security policy</strong> — formal documentation of trust zones (SeAT auth + operator-controlled webhooks) and explicit rejection of feature classes that would leak tactical data outside those zones. ICS / calendar export, third-party data feeds, etc. will not ship — the reasoning is documented in-product so the same conversation does not get relitigated. <a href="#notifications">Operational Security →</a></li>
+            <li><strong>Fuel Economics page</strong> — when Manager Core is installed, a dedicated page shows weekly / monthly / quarterly / yearly fuel ISK projections with per-system and per-structure breakdowns, daily-trend chart, cheapest-fuel-block suggestion, and optimization savings. Uses MC\'s pricing service; market and price method configurable in MC → Pricing Preferences. <a href="#economics">Fuel Economics →</a></li>
+            <li><strong>Manager Core Plugin Bridge diagnostic improvements</strong> — the MC admin dashboard now shows worker-context registry snapshots (handlers registered, key pool size, plugins contributing) plus per-plugin integration badges (pricing types, EventBus subs, ESI handlers, recent publishes) and last-activity timestamps. Surfaces cross-plugin health visually so silent failures become obvious.</li>
+            <li><strong>Notifications page architecture</strong> — webhooks, notification categories, and Discord role mentions are three separate concerns on a dedicated sidebar page. 18 shipped categories across 3 namespaces (Upwell / Structure Events / POS Legacy). Per-binding role overrides + category defaults + webhook legacy fallback. <a href="#notifications">Notifications →</a></li>
+            <li><strong>Discord role picker</strong> — multi-source union from <code>mattfalahe/seat-discord-pings</code> and <code>warlof/seat-connector</code>. Searchable, deduplicated, source-badged dropdown next to every role-mention input.</li>
+            <li><strong>Enhanced test infrastructure</strong> — symmetric <code>create-test-*</code> commands paired with the new <code>cleanup-test-data</code> command. Inject-test-notification command for synchronous end-to-end webhook verification. All test data lives in declared safe ID ranges so production data cannot be accidentally affected. <a href="#commands">Commands →</a></li>
+            <li><strong>POS namespace isolation</strong> — POS categories are kept separate from Upwell + Structure Events so CCP\'s eventual POS removal will be a clean uninstall path.</li>
+        </ul>
+        <p style="margin-top:12px;"><strong>Companion plugins (all optional):</strong></p>
+        <ul>
+            <li><strong>Manager Core</strong> — the optional hub. Adds 10-15x faster ESI detection, shared director key pool, pricing service, cross-plugin EventBus, SDE service, REST API. <a href="#manager-core">Learn more →</a></li>
+            <li><strong>Mining Manager</strong> — when installed alongside, automatically flags moon extractions as at-risk when their parent structure goes into reinforce.</li>
+            <li><strong>SeAT Broadcast [<code>seat-discord-pings</code>]</strong> — already integrated with Manager Core\'s EventBus; a planned calendar build will consume SM\'s tactical-planning event family (anchoring + sov + reinforce timers) to populate a fleet-coverage calendar with configurable pre-timer reminder pings.</li>
+        </ul>',
+    'whats_new_v2_upgrade_note' => 'Upgrading from v1.x is seamless. The v2 migrations run additively on top of your existing schema, preserving all settings, webhooks, fuel history, and POS data. The legacy <code>esi_attack_role_mention</code> setting is auto-migrated to the new <code>events.structure_attack</code> category role mention. Notification categories (18 total across upwell/events/pos namespaces) are seeded with sensible enabled/disabled defaults but NOT auto-bound to webhooks — you bind each category explicitly via the Notifications panel to avoid surprise routing. Companion plugins (Manager Core, Mining Manager) can be installed at any time after the upgrade and Structure Manager detects them automatically at boot.',
+
     // Overview
     'welcome_title' => 'Welcome to Structure Manager',
     'welcome_desc' => 'Your comprehensive fuel management and monitoring system for EVE Online corporation structures.',
@@ -51,7 +83,7 @@ return [
     'feature_analytics_title' => 'Consumption Analytics',
     'feature_analytics_desc' => 'Track historical fuel usage patterns, consumption rates, and detect anomalies in fuel consumption.',
     'feature_reserves_title' => 'Reserve Management',
-    'feature_reserves_desc' => 'Monitor staged fuel in corporation hangars with selective hangar tracking. Choose which hangars to include in reserves calculations, track reserve movements, manage fuel distribution, and exclude hangars used for market trading or logistics. Supports both Upwell Structures and legacy POS reserves including strontium and charters.',
+    'feature_reserves_desc' => 'Monitor staged fuel sitting in your Upwell corporation CorpSAG hangars — the fuel waiting to be hauled into a structure\'s fuel bay. Selective tracking lets you exclude hangars used for market trading or logistics so they don\'t inflate your reserve totals. POS towers do not have CorpSAG hangars; their fuel/strontium/charter inventories are tracked separately on the POS detail pages, not on the Reserves page. <strong>v2.0.0</strong> adds tracking for CorpSAG fuel staged outside your own structures — both NPC station Office rentals AND foreign Upwell structures where your corp has CorpSAG access. These appear as "External" badged cards under each system with the resolved location name. Custom in-game hangar names (set per-corp in the EVE client) are resolved and displayed alongside the <code>CorpSAG{N}</code> flag everywhere.',
     'feature_logistics_title' => 'Logistics Planning',
     'feature_logistics_desc' => 'Generate comprehensive fuel requirements reports by system with hauling calculations and export capabilities.',
     'feature_metenox_title' => 'Metenox Moon Drill Support',
@@ -59,7 +91,13 @@ return [
     'feature_automated_title' => 'Automated Tracking',
     'feature_automated_desc' => 'Upwell structures tracked hourly with 30-minute analysis intervals. POSes tracked every 10 minutes for real-time monitoring. Automatic historical data retention with 90-day POS cleanup.',
     'feature_pos_title' => 'Legacy Player Owned Starbases (POS towers) Support',
-    'feature_pos_desc' => 'Comprehensive POS monitoring with fuel blocks, strontium clathrates, and starbase charter tracking. Automatically detects security space, identifies the limiting factor, tracks reserves in corporate hangars, and calculates reinforcement timers. Full support for faction and officer tower fuel efficiency bonuses.',
+    'feature_pos_desc' => 'Comprehensive POS monitoring with fuel blocks, strontium clathrates, and starbase charter tracking. Automatically detects security space, identifies the limiting factor (whichever resource runs out first), and calculates reinforcement timers from the strontium bay. Full support for faction and officer tower fuel efficiency bonuses. POS towers do not have CorpSAG hangars — their fuel/stront/charter inventories live on the POS detail pages, not on the Upwell Reserves page.',
+
+    'feature_forensics_title' => 'Fuel Forensics (v2.0.0)',
+    'feature_forensics_desc' => 'Every fuel-tracking poll is classified into one of eight event types (normal consumption, anomaly, internal/external refuel, bay/reserves withdrawal, unexplained gain, unclassified) and rendered as a color-coded badge in Recent Fuel Records. For withdrawal events, an async forensics job builds a per-event candidate list scoring corp members on collateral signals (online window, asset gain match, has corp title, market sales) into HIGH / MEDIUM / LOW confidence buckets. <strong>Honest limitation</strong>: ESI does not expose actor identity for asset moves — these candidates are probabilistic inferences, not "who did it". False positives are inevitable (logistics alts look like thieves). The system catches lazy thieves; careful market-alt thieves escape detection.',
+
+    'feature_webhook_delivery_title' => 'Webhook Delivery Telemetry (v2.0.0)',
+    'feature_webhook_delivery_desc' => 'Every Discord/Slack webhook dispatch is recorded with HTTP status code, latency, success flag, error message, and the notification category that triggered it. The Diagnostic page\'s Health Checks tab includes a "Webhook Delivery Health (Last 24h)" section showing per-webhook attempt counts, success rate (color-coded), average response time, and the most recent failure. Catches "the webhook URL silently 404\'d two weeks ago and no one noticed" failure modes. 30-day retention, pruned by the daily cleanup-history command.',
 
     // Quick Links
     'quick_links_title' => 'Quick Links',
@@ -69,25 +107,20 @@ return [
 
     // Getting Started
     'getting_started_title' => 'Getting Started',
-    'getting_started_desc' => 'Follow these steps to install and configure Structure Manager for your corporation.',
-    'installation_title' => 'Installation',
-    'install_step1_title' => 'Install via Composer',
-    'install_step1_desc' => 'Run the following command in your SeAT directory:',
-    'install_step2_title' => 'Run Migrations',
-    'install_step2_desc' => 'After installation, run the database migrations:',
-    'install_step3_title' => 'Wait for Data Sync',
-    'install_step3_desc' => 'The plugin will automatically start tracking fuel levels on the next scheduled run. Wait for SeAT to sync your corporation structures data.',
-    
-    'first_time_setup_title' => 'First-Time Setup',
-    'setup_step1_title' => 'Verify Permissions',
-    'setup_step1_desc' => 'Make sure your user has the "structure-manager.view" permission in SeAT\'s permission system.',
-    'setup_step2_title' => 'Check Your Dashboard',
-    'setup_step2_desc' => 'Navigate to Structure Manager in the sidebar. You should see your corporation structures with fuel levels.',
-    'setup_step3_title' => 'Configure Alerts',
-    'setup_step3_desc' => 'Visit the Critical Alerts page to see which structures need immediate attention. Structures with less than 14 days of fuel are highlighted.',
-    
-    'success_tip' => 'Success Tip',
-    'success_desc' => 'Upwell structures are tracked hourly with consumption analysis every 30 minutes. POSes are tracked every 10 minutes for real-time monitoring. Historical data is retained for 6 months for Upwell structures and 90 days for POSes.',
+    'getting_started_desc' => 'Structure Manager is already installed on this SeAT instance — if you can read this page, the plugin and its database migrations are in place. This section covers the minimal configuration needed to get useful fuel tracking and alerts for your corporation. Most of it is sensible-default out of the box; the one thing that needs a deliberate decision is notification routing.',
+
+    'first_time_setup_title' => 'Minimal Setup',
+    'setup_step1_title' => 'Verify access and data sync',
+    'setup_step1_desc' => 'Confirm your SeAT role grants the <code>structure-manager.view</code> permission, then open Structure Manager from the sidebar. You should see your corporation\'s structures with fuel levels. An empty list usually just means SeAT has not finished its first corporation structures + assets sync — that can take 1-2 hours after a corporation token is first added.',
+    'setup_step2_title' => 'Kickstart the first fuel poll (optional)',
+    'setup_step2_desc' => 'Fuel data populates automatically on the next scheduled run (Upwell hourly, POS every 10 minutes). If you would rather not wait, trigger an immediate poll by hand from your SeAT directory. The first command covers Upwell structures + CorpSAG reserves; the second covers POS towers (only needed if your corp runs POSes):',
+    'setup_step3_title' => 'Review fuel thresholds',
+    'setup_step3_desc' => 'Open the Settings page and check the warning / critical day thresholds. Defaults are 14 days (warning) and 7 days (critical) — adjust them to match how long your corp\'s refuel logistics realistically take. Reserves Tracking and ESI Detection Mode also live on Settings, but both ship with working defaults and can be left alone initially.',
+    'setup_step4_title' => 'Configure notifications',
+    'setup_step4_desc' => 'Discord / Slack alerts are opt-in. Open the Notifications page and (1) add a webhook URL, (2) bind the notification categories you care about to that webhook, (3) optionally set a role mention per binding. Nothing is auto-bound — no alerts fire until you bind a category, so there is no surprise routing on first install. See the Notifications section of this page for the full walkthrough.',
+
+    'success_tip' => 'Good to know',
+    'success_desc' => 'Upwell structures are tracked hourly with consumption analysis every 30 minutes. POSes are tracked every 10 minutes for real-time monitoring. Historical data is retained for 6 months for Upwell structures and 90 days for POSes. All of this runs automatically via SeAT\'s scheduler — no cron setup beyond SeAT\'s standard configuration.',
 
     // Features
     'features_overview' => 'Features Overview',
@@ -114,14 +147,15 @@ return [
 
     'reserve_management' => 'Reserve Management',
     'reserve_management_desc' => '<ul>
-        <li><strong>Corporation hangar tracking:</strong> Monitors fuel stored in CorpSAG hangars</li>
+        <li><strong>Corporation hangar tracking:</strong> Monitors fuel staged in Upwell CorpSAG hangars</li>
         <li><strong>Structure-level reserves:</strong> See which structures have staged fuel ready</li>
         <li><strong>Division tracking:</strong> Identifies which hangar divisions contain fuel</li>
         <li><strong>Custom division names:</strong> Shows your corporation\'s custom hangar division names</li>
+        <li><strong>External reserves (v2.0.0):</strong> CorpSAG fuel staged in NPC station Office rentals and foreign Upwell structures appears as "External" badged cards under each system, with the real location name resolved</li>
         <li><strong>Reserve history:</strong> 3 months of reserve movement tracking</li>
         <li><strong>Purple badges:</strong> Special indicators for magmatic gas reserves (Metenox support)</li>
         <li><strong>Selective Tracking:</strong> Configure which hangars to exclude from tracking (see Settings)</li>
-        <p><strong>Note:</strong> Reserves tracking respects your hangar exclusion settings. Excluded hangars will not appear in reserves calculations.</p>
+        <p><strong>Note:</strong> Reserve tracking is Upwell-only — POS towers have no CorpSAG hangars. Tracking also respects your hangar exclusion settings; excluded hangars will not appear in reserve calculations.</p>
     </ul>',
  
     'logistics_planning' => 'Logistics Planning',
@@ -151,6 +185,36 @@ return [
         <li><strong>Correct moon drill rates:</strong> 120 blocks/day for traditional drills, no bonuses</li>
         <li><strong>Metenox dual-fuel:</strong> 120 fuel blocks + 4,800 magmatic gas per day</li>
         <li><strong>Refinery bonuses:</strong> Accurate Athanor (-20%) and Tatara (-25%) fuel reductions</li>
+    </ul>',
+
+    // v2.0.0 feature-overview entries
+    'mc_required_badge' => 'Manager Core Required',
+
+    'structure_events_feature' => 'Structure Event Notifications (ESI)',
+    'structure_events_feature_desc' => '<ul>
+        <li><strong>Combat alerts:</strong> Discord / Slack notifications for structures under attack, shield reinforced, armor reinforced, and destroyed</li>
+        <li><strong>Lifecycle events:</strong> Anchoring, unanchoring, ownership transfer, low-power and high-power transitions</li>
+        <li><strong>Sovereignty events:</strong> Entosis capture started, sov reinforced, command nodes spawning</li>
+        <li><strong>Attacker name resolution:</strong> Embeds show real character / corporation / alliance names (resolved via CCP public ESI with a 7-day cache) plus clickable zKillboard links</li>
+        <li><strong>Webhook delivery telemetry:</strong> Every dispatch records HTTP status, latency, and success so a silently-broken webhook is visible at a glance on the diagnostic page</li>
+    </ul>',
+
+    'fuel_forensics_feature' => 'Fuel Forensics',
+    'fuel_forensics_feature_desc' => '<ul>
+        <li><strong>Event classification:</strong> Every fuel poll is tagged as normal consumption, anomaly, internal / external refuel, bay / reserves withdrawal, or unexplained gain</li>
+        <li><strong>Color-coded badges:</strong> Recent Fuel Records shows the classification per row with an explanatory tooltip</li>
+        <li><strong>Withdrawal forensics:</strong> For each withdrawal event, a candidate list scores corp members on collateral signals (online during the window, personal-hangar gain, has corp title, matching market sales) into HIGH / MEDIUM / LOW buckets</li>
+        <li><strong>Honest limitation:</strong> ESI does not expose actor identity for asset moves — candidates are probabilistic inference, not proof. The system catches lazy thieves; careful market-alt thieves escape detection.</li>
+    </ul>',
+
+    'fuel_economics_feature' => 'Fuel Economics',
+    'fuel_economics_feature_desc' => '<p style="margin-bottom:8px;"><em>This feature only works when the optional <strong>Manager Core</strong> companion plugin is installed. Without Manager Core the Fuel Economics page is hidden from the sidebar and the rest of Structure Manager works exactly as before.</em></p>
+    <ul>
+        <li><strong>ISK cost projections:</strong> Projected fuel spend across weekly / monthly / quarterly / yearly windows</li>
+        <li><strong>Per-system and per-structure breakdowns:</strong> See exactly where the fuel budget goes</li>
+        <li><strong>Daily-trend chart:</strong> Visualise spend over time</li>
+        <li><strong>Cheapest-fuel-block suggestion:</strong> An optimization banner highlights potential savings</li>
+        <li><strong>Pricing source:</strong> Uses Manager Core\'s pricing service; the market and price method are configurable in Manager Core &gt; Pricing Preferences</li>
     </ul>',
 
     // Fuel Mechanics
@@ -338,8 +402,745 @@ return [
     
     // Notifications Section
     'notifications_title' => 'Discord & Slack Notifications',
-    'notifications_intro' => 'Configure automated webhook notifications to receive real-time alerts for critical POS fuel levels directly in your Discord or Slack channels.',
-    
+    'notifications_intro' => 'Structure Manager sends real-time alerts to Discord or Slack for POS fuel, Upwell structure fuel, and ESI-driven structure events (attacks, lifecycle, CCP fuel alerts). Notification configuration lives on a dedicated <strong>Notifications</strong> page (sidebar entry between Critical Alerts and Settings) where you manage categories, webhook bindings, and Discord role mentions independently.',
+
+    // Notifications architecture overview — the three-concept design that
+    // separates webhook delivery from category routing from role mentions.
+    'v31_redesign_title' => 'The Notifications Page Architecture',
+    'v31_redesign_intro' => 'Webhook delivery, notification categories, and role mentions are three separate concerns. This separation makes multi-corp and multi-channel setups dramatically easier than a flat per-webhook configuration.',
+    'v31_redesign_concepts' => '<ul>
+        <li><strong>Webhooks</strong> are pure delivery endpoints: a URL, an optional corporation filter, a description. Managed in Settings.</li>
+        <li><strong>Notification categories</strong> are master toggles for each alert type (e.g. "Structure Under Attack", "POS Fuel", "Upwell Magmatic Gas"). Each category has its own default Discord role mention.</li>
+        <li><strong>Bindings</strong> connect categories to webhooks. Each binding can override the category\'s default role mention for that specific webhook — so a single "Under Attack" notification can ping <code>@corp-fc</code> in the Corp Discord and <code>@alliance-fc</code> in the Alliance Discord simultaneously.</li>
+    </ul>',
+    'v31_category_namespaces_title' => 'Category Namespaces',
+    'v31_category_namespaces_desc' => 'Categories are grouped into three namespaces for clarity and clean isolation:',
+    'v31_category_namespaces_list' => '<ul>
+        <li><strong>Upwell Structures</strong> — fuel + magmatic gas alerts for citadels, engineering complexes, refineries, Metenox moon drills. Driven by periodic fuel-bay polling.</li>
+        <li><strong>Structure Events (ESI)</strong> — attack alerts, anchoring, ownership transfers, fuel events. Driven by EVE\'s notification stream via Manager Core fast-poll (or SeAT native if MC is absent).</li>
+        <li><strong>POS (Legacy)</strong> — Player Owned Starbases. CCP legacy structures, marked with a LEGACY badge in the UI. Kept isolated so they can be cleanly removed if CCP eventually deprecates them.</li>
+    </ul>',
+    'v31_role_precedence_title' => 'Role Mention Precedence',
+    'v31_role_precedence_desc' => 'When a notification fires, Structure Manager picks the role to ping from three tiers, L1 then L2 then L3. The first non-empty tier wins:',
+    'v31_role_precedence_list' => '<ol>
+        <li><strong>L1 (Binding role):</strong> the role set on the specific category-to-webhook binding, a per-webhook override</li>
+        <li><strong>L2 (Category default role):</strong> the role set on the category itself</li>
+        <li><strong>L3 (Webhook legacy role):</strong> the <code>role_mention</code> column on the webhook itself, carried over from the original release for backward compatibility</li>
+        <li>No mention if all three tiers are empty</li>
+    </ol>
+    <p>The <strong>Routing Map</strong> tab in Settings shows the resolved tier (L1 / L2 / L3) for every category-to-webhook binding at a glance. Role-mention inputs also translate raw Discord role IDs into readable role names when a Discord role source is installed.</p>',
+    'v31_role_picker_title' => 'Discord Role Picker',
+    'v31_role_picker_desc' => 'When one or more Discord role sources are detected on your SeAT install, the Notifications page shows a role picker button next to every role-mention input. Clicking it opens a searchable dropdown populated from every installed source, deduplicated by Discord role ID and tagged with a source badge.',
+    'v31_role_picker_sources' => '<strong>Supported sources (union all installed):</strong>
+        <ul>
+            <li><strong>mattfalahe/seat-discord-pings</strong> — reads the <code>discord_roles</code> table. Curated list with colors and pre-built mention strings. Preferred when roles exist in both sources.</li>
+            <li><strong>warlof/seat-connector</strong> + <strong>warlof/seat-discord-connector</strong> — reads <code>seat_connector_sets</code> rows with <code>connector_type=\'discord\'</code>. Full guild-synced list, no colors.</li>
+            <li><strong>Manual input</strong> — if no source is installed, the role-mention field accepts raw <code>&lt;@&amp;ROLE_ID&gt;</code> or numeric IDs.</li>
+        </ul>',
+    'v31_role_picker_behavior' => '<strong>Picker behavior when multiple sources are installed:</strong>
+        <ul>
+            <li>Both sources contribute roles — nothing is filtered out</li>
+            <li>Roles appearing in both sources are shown once, using the richer source\'s data (color, name) and tagged with a "+N" indicator listing the other sources</li>
+            <li>A source filter dropdown appears inside the picker so you can narrow by provider</li>
+            <li>Picking a role stores the exact mention string from the source — if a source is uninstalled later, previously-picked roles keep working because the string is static</li>
+        </ul>',
+    'v31_category_list_title' => 'Shipped Categories (seeded on install)',
+    'v31_category_list_desc' => 'v2.0.0 ships with 18 categories across three namespaces (upwell / events / pos). The eight listed below are the core set covering Upwell fuel, structure events, and POS legacy alerts. The remaining ten (cyno_reagents, services_offline, sovereignty, the six pre_timer_* reminders, and attacker_threat_intel) are documented in the dedicated feature sections of this help page. No webhooks are auto-bound on install — operator explicitly binds each category via the Notifications panel.',
+    'v31_category_list' => '<table style="width:100%; border-collapse:collapse;">
+        <thead><tr><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Namespace</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Category</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">What triggers it</th></tr></thead>
+        <tbody>
+            <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>fuel</code></td><td style="padding:6px;">Upwell fuel bay below warning/critical/1h thresholds</td></tr>
+            <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>magmatic_gas</code></td><td style="padding:6px;">Metenox gas supply below thresholds</td></tr>
+            <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_attack</code></td><td style="padding:6px;">UnderAttack, LostShields, LostArmor, Destroyed, Skyhook variants</td></tr>
+            <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_lifecycle</code></td><td style="padding:6px;">Anchoring, unanchoring, ownership transferred, skyhook deployed</td></tr>
+            <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_fuel_events</code></td><td style="padding:6px;">Low power, high power restored, services offline, CCP fuel alerts</td></tr>
+            <tr><td style="padding:6px;">pos</td><td style="padding:6px;"><code>fuel</code></td><td style="padding:6px;">POS fuel blocks + sovereignty charter low-alerts</td></tr>
+            <tr><td style="padding:6px;">pos</td><td style="padding:6px;"><code>strontium</code></td><td style="padding:6px;">Strontium clathrate reinforcement alerts</td></tr>
+            <tr><td style="padding:6px;">pos</td><td style="padding:6px;"><code>lifecycle</code></td><td style="padding:6px;">POS state changes (online/offline/reinforced)</td></tr>
+        </tbody>
+    </table>',
+
+    // ============================================================
+    // Manager Core — overview (what it is, why install it, optional)
+    // ============================================================
+    'mc_overview_title' => 'Manager Core — Recommended Companion',
+    'mc_overview_positioning' => '<strong>Important upgrade, not a hard requirement.</strong> Structure Manager v2.0.0 works perfectly on its own. Installing <a href="https://github.com/MattFalahe/Manager-Core" target="_blank" rel="noopener">Manager Core</a> alongside it unlocks faster detection, cross-plugin event broadcasting, and shared infrastructure that becomes more valuable as you add other Structure Manager-ecosystem plugins.',
+
+    'mc_what_it_is_title' => 'What Manager Core Is',
+    'mc_what_it_is_desc' => 'Manager Core is a foundational plugin for the Structure Manager ecosystem. Think of it as two things bundled together:',
+    'mc_what_it_is_list' => '<ul>
+        <li><strong>A central Event Bus</strong> — a pub/sub system plugins use to announce things (a structure got attacked, prices updated, a notification was received) and react to announcements from other plugins. With this, plugins stop having to integrate pairwise and instead integrate through one shared channel.</li>
+        <li><strong>A shared ESI tool layer</strong> — fast-polling infrastructure, a director key holder pool, an ESI notification registry, pricing/appraisal/SDE services. Multiple plugins use these without each having to implement their own version.</li>
+    </ul>',
+
+    'mc_benefits_for_sm_title' => 'What Manager Core Gives Structure Manager',
+    'mc_benefits_for_sm_list' => '<ul>
+        <li><strong>~2-minute ESI attack detection</strong> via the shared fast-poll (vs. SeAT\'s native 20&ndash;30 minute bucket). Shield-down / armor-down / destroyed alerts land roughly 10x faster than SeAT\'s native cadence. Detection time depends on pool <em>composition</em> — adding directors from different corps speeds detection per corp; adding directors from the same corp adds fault tolerance. See the table in the ESI Events section for specifics. Authoritative architectural reference: <a href="https://github.com/MattFalahe/Manager-Core#-esi-fast-poll-deep-dive" target="_blank" rel="noopener">Manager Core README → ESI Fast-Poll deep dive</a>.</li>
+        <li><strong>Shared director key pool</strong> — add your directors to Manager Core once; every MC-aware plugin uses the same pool. Adding a second or third plugin doesn\'t require reconfiguring directors. Auto-recovery on transient token failures plus a manual "Resume" button mean operators don\'t have to babysit the pool.</li>
+        <li><strong>Fuel Economics page</strong>: weekly / monthly / quarterly / yearly fuel ISK projections, per-system + per-structure breakdowns, daily-trend chart, cheapest-fuel-block suggestion with optimization savings banner. Uses MC\'s pricing service for ISK conversion. Configurable market and price method per plugin in MC &rsaquo; Pricing Preferences. See the Fuel Economics section for details.</li>
+        <li><strong>Cross-plugin events</strong> — Structure Manager publishes notification events on Manager Core\'s EventBus; other plugins (Mining Manager, SeAT Broadcast, Corp Wallet, HR Manager) subscribe and react via the same bus. Mining Manager already consumes <code>structure.alert.*</code> events for extraction-at-risk alerting; SeAT Broadcast will consume them for fleet-coverage calendaring. Unlocks features like automated FC pings at T-24h before a structure reinforces.</li>
+        <li><strong>Better diagnostics</strong>: Structure Manager\'s diagnostic page queries MC\'s shared tables to show you the combined health picture (shared pool status, notification counts by source, registered handlers, pricing-integration status).</li>
+        <li><strong>Future-proofing</strong> — as Structure Manager adds features like the Command Board (planned), the event-bus integration becomes the conduit for SeAT Broadcast calendar sync and other cross-plugin coordination.</li>
+    </ul>',
+
+    'mc_without_title' => 'If You Don\'t Install Manager Core',
+    'mc_without_desc' => '<p>Structure Manager still does everything it documents:</p>
+        <ul>
+            <li>Full POS + Upwell fuel tracking</li>
+            <li>All notification categories fire to all configured webhooks</li>
+            <li>Critical alerts, logistics reports, fuel reserves, Metenox dual-fuel (unchanged)</li>
+            <li>ESI attack notifications still detected via SeAT\'s native <code>character_notifications</code> sweep (15-20 min cadence)</li>
+        </ul>
+        <p>The only thing you lose is <strong>fast-poll speed</strong> and the <strong>cross-plugin integrations</strong> that ride on MC\'s event bus (Mining Manager extraction-at-risk alerts, SeAT Broadcast notification routing, upcoming fleet calendar). Nothing breaks, no data is lost, every current feature keeps working.</p>',
+
+    'mc_install_title' => 'Installing Manager Core',
+    'mc_install_steps' => '<p>SeAT Docker installs plugins from a list in the <code>.env</code> file at the root of your <code>seat-docker</code> directory; the container entrypoint runs composer-install on boot. <strong>Do not run <code>composer require</code> inside the running container</strong> — that change vanishes on the next container rebuild.</p>
+        <ol>
+            <li>Edit your seat-docker <code>.env</code> file and add <code>mattfalahe/manager-core</code> to the SeAT plugins list (typically the <code>SEAT_PLUGINS</code> environment variable, comma-separated with your existing plugins).</li>
+            <li>Restart the SeAT stack so the entrypoint picks up the new plugin list, composer-installs it, and runs Manager Core\'s migrations automatically on container boot. Pass all three compose files so the database and reverse-proxy services come back correctly:
+                <pre style="margin:4px 0;">docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml down
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml up -d</pre>
+            </li>
+            <li>Watch the front container logs while it boots until SeAT reports it is ready:
+                <pre style="margin:4px 0;">docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml logs -f front</pre>
+                The migration phase will create Manager Core\'s tables; the bridge-discovery phase registers compatible plugins (Structure Manager included).</li>
+            <li>Structure Manager auto-detects Manager Core at boot and registers its notification handler. No configuration changes needed in Structure Manager.</li>
+            <li>Navigate to <code>Manager Core &gt; ESI Key Pool</code> (superuser only) and add one or more director characters. More directors = faster rotation + better fault tolerance.</li>
+            <li>(Optional) Check <code>Structure Manager &gt; Diagnostics</code> &mdash; the ESI Notification Path panel should now show "Fast-poll via Manager Core" and confirm Structure Manager is registered.</li>
+        </ol>
+        <p style="margin-top:8px; font-size:0.9em;"><strong>Note:</strong> the exact environment variable name in your <code>.env</code> depends on which version of the <code>eveseat/seat-docker</code> template you started from. Recent versions use <code>SEAT_PLUGINS</code>; some older templates use a different name. Check your <code>.env</code> file for an existing plugin list (other plugins like <code>mattfalahe/structure-manager</code> are already in there) and add Manager Core to the same line.</p>',
+
+    'mc_ecosystem_title' => 'The Broader Ecosystem',
+    'mc_ecosystem_desc' => 'Manager Core is designed to serve multiple plugins, not just Structure Manager. Each plugin that integrates contributes different capabilities to the shared bus:',
+    'mc_ecosystem_list' => '<ul>
+        <li><strong>Structure Manager</strong> &mdash; publishes the <code>structure.alert.*</code> event family (shield_reinforced, armor_reinforced, hull_reinforced, destroyed, destroyed_confirmed, fuel_critical, fuel_recovered, anchoring_started, sov_reinforced, entosis_in_progress) and the <code>structure_manager.timer.*</code> family (created, updated, dismissed, elapsed, upcoming_24h, upcoming_1h, recovered). Registers an ESI notification handler on Manager Core\'s shared fast-poll. Consumes MC pricing for the Fuel Economics page.</li>
+        <li><strong>Mining Manager</strong> &mdash; already integrated. Subscribes to <code>structure.alert.*</code> for extraction-at-risk alerts when a moon-mining refinery enters reinforce. Publishes its own <code>mining.*</code> event family (taxes, theft, jackpots, sessions, events). Uses MC\'s pricing service and the shared director key holder pool.</li>
+        <li><strong>SeAT Broadcast [<code>seat-discord-pings</code>]</strong> &mdash; already integrated with Manager Core\'s EventBus. A planned calendar build will consume SM\'s tactical-planning events to render a fleet-coverage calendar with configurable pre-timer reminder pings (24h / 2h / 30min before reinforce / anchoring timers).</li>
+        <li><strong>Corp Wallet Manager</strong> &mdash; integrated with Manager Core. Publishes <code>wallet.*</code> events for cross-plugin reactions (Mining Manager uses these for invoice payment matching).</li>
+        <li><strong>HR Manager</strong> &mdash; integrated with Manager Core for cross-plugin member-lifecycle events. Used with Corp Wallet Manager for onboarding and accounting workflows.</li>
+    </ul>
+    <p style="margin-top:8px;">You don\'t need to install every plugin to benefit from Manager Core. Even for a solo Structure Manager install, MC gives you the ESI fast-poll. As you add more plugins, the event bus value multiplies.</p>',
+
+    // Fuel Economics page (requires Manager Core for pricing)
+    'economics_title' => 'Fuel Economics',
+    'economics_intro' => 'The Fuel Economics page projects what your structures will cost in ISK over the next 90 / 180 / 365 days, broken down per system, per structure, and per fuel type. It uses the same active-services consumption math as the Logistics Report (so the per-structure rates match), multiplied by Manager Core\'s market prices. Hidden when Manager Core is not installed.',
+
+    'economics_what_it_shows_title' => 'What the page shows',
+    'economics_what_it_shows_html' => '<ul>
+        <li><strong>4 totals cards</strong> at the top: Weekly / Monthly / Quarterly / Yearly fuel ISK across every structure you can see. The values scale linearly from a calculator-derived hourly rate, not from the consumption-tracker history, so projections are accurate even on a fresh install.</li>
+        <li><strong>Cheapest fuel block banner:</strong> picks the lowest-priced of the 4 fuel block types right now (Nitrogen / Hydrogen / Helium / Oxygen) and uses it to price all Upwell + Metenox fuel-block projections. POS towers consume their racial type and can\'t substitute, so they price at racial regardless. Click "All 4 block prices" to see the comparison and verify the suggestion.</li>
+        <li><strong>Optimization banner</strong> (amber, only shown when there\'s real savings): X structures are running on a more expensive fuel type than the cheapest. Switching them all would save Y ISK / month. Per-structure savings appear in the table below.</li>
+        <li><strong>Structure breakdown banner:</strong> count of Upwell / Metenox / POS structures included in the projection, with race split for POSes (e.g. 2 Caldari + 1 Minmatar + 1 Gallente). Use this to verify the page is detecting every structure you expect.</li>
+        <li><strong>By Solar System table:</strong> rows sorted by spend descending so the most-expensive systems are at the top.</li>
+        <li><strong>Daily ISK Trend chart:</strong> stacked area over the look-back window. Flat-zero days mean the structure was offline (low-power) or the tracker had a gap.</li>
+        <li><strong>By Fuel Type doughnut:</strong> period total split by fuel typeID. Useful for "should we bulk-buy a specific block this month" decisions.</li>
+        <li><strong>By Structure table:</strong> per-structure rows with Current fuel + status (already optimal / switch suggestion / racial locked), Weekly / Monthly / Period total ISK, Monthly savings if optimizable, and Offline days.</li>
+    </ul>',
+
+    'economics_pricing_title' => 'How pricing works',
+    'economics_pricing_html' => '<p>Manager Core\'s PricingService is the source of all ISK values. SM registers a pricing preference at boot (default: <strong>Jita SELL</strong>) and subscribes the 12 fuel-related typeIDs to MC\'s price-refresh system. MC fetches prices from ESI on its own schedule and caches them.</p>
+    <p>You can override the market and price type per plugin in
+        <a href="{{ url(\'manager-core/pricing-preferences\') }}"><strong>Manager Core &rsaquo; Pricing Preferences</strong></a>.
+        Available markets default to Jita / Amarr / Dodixie / Hek / Rens. Available price types: SELL (cheapest sell order, what you pay) / BUY (highest buy order, what you get when selling) / AVG (midpoint).</p>
+    <p><strong>Nullsec / lowsec operators:</strong> Manager Core supports adding custom citadel markets via <a href="{{ url(\'manager-core/markets\') }}"><strong>Manager Core &rsaquo; Markets</strong></a>. Point an authenticated character (with <code>esi-markets.structure_markets.v1</code> scope + docking access) at your alliance\'s local citadel and the Fuel Economics page will price fuel at that market instead. Useful when your structures are far from the canonical hubs and your alliance trades fuel at a local citadel hub. See MC\'s Pricing > Custom Markets section for full setup.</p>
+    <p>The page header shows the current pricing source (e.g. "SELL on JITA - admin override"). When the source changes in MC, the next Economics page load reflects it (5-minute cache, or click Force refresh).</p>',
+
+    'economics_substitutable_title' => 'Substitutable vs locked fuel',
+    'economics_substitutable_html' => '<table style="width:100%; border-collapse:collapse; margin-top:8px;">
+        <tr style="background:#2a2f3a;"><th style="padding:6px; text-align:left;">Structure type</th><th style="padding:6px; text-align:left;">Substitutable?</th><th style="padding:6px; text-align:left;">Pricing source</th></tr>
+        <tr><td style="padding:6px;"><strong>Upwell</strong> (Astrahus, Fortizar, Sotiyo, etc.)</td><td style="padding:6px; color:#28a745;">Yes - 4 block types</td><td style="padding:6px;">Cheapest of 4 fuel blocks</td></tr>
+        <tr><td style="padding:6px;"><strong>Metenox</strong> fuel-block side</td><td style="padding:6px; color:#28a745;">Yes - 4 block types</td><td style="padding:6px;">Cheapest of 4 fuel blocks</td></tr>
+        <tr><td style="padding:6px;"><strong>Metenox</strong> magmatic gas side</td><td style="padding:6px; color:#dc3545;">No - fixed type 81143</td><td style="padding:6px;">Magmatic Gas only</td></tr>
+        <tr><td style="padding:6px;"><strong>POS Control Tower</strong> fuel</td><td style="padding:6px; color:#dc3545;">No - racial only</td><td style="padding:6px;">Racial fuel block (Caldari/Minmatar/Amarr/Gallente)</td></tr>
+        <tr><td style="padding:6px;"><strong>POS</strong> charters (high-sec only)</td><td style="padding:6px; color:#dc3545;">No - faction-specific</td><td style="padding:6px;">Actual charter typeID currently in fuel bay</td></tr>
+    </table>
+    <p style="margin-top:8px;">The "Current fuel" column on the per-structure table tells you which category each row falls into.</p>',
+
+    'economics_offline_title' => 'Offline days detection',
+    'economics_offline_html' => '<p>Real outage time, computed from <strong>fuel-history gaps</strong>. For each structure SM walks the history rows in time order. When a row\'s projected fuel_expires is BEFORE the next row\'s created_at, the gap between them = offline duration.</p>
+    <pre style="background:#1f242c; padding:8px; border-radius:3px;">prev row:  created_at = day 5,  fuel_expires = day 10
+next row:  created_at = day 15
+        =&gt; fuel ran out at day 10
+        =&gt; next snapshot arrived at day 15
+        =&gt; offline duration = 5 days</pre>
+    <p>Gaps shorter than 1 hour are ignored to avoid false positives from tracker scheduling jitter (a snapshot 5 minutes after fuel_expires probably means "just refueled" not "5-minute outage"). Only counts gaps INSIDE observed history, so a newly-installed tracker doesn\'t penalize structures for missing earlier days.</p>
+    <p>Offline ISK equivalent = projected daily rate &times; offline days. That\'s "what fuel ISK would have been spent if those days had been active." Surfaces the cost-of-downtime per structure.</p>',
+
+    'economics_settings_title' => 'Settings &rsaquo; Economics tab',
+    'economics_settings_html' => '<p>SM Settings has a dedicated Economics tab with two main controls:</p>
+    <ul>
+        <li><strong>Mode dropdown:</strong> Auto (default - register with MC at boot, show page in sidebar) or Disabled (skip registration, hide the page even though MC is installed). Useful for operators who want to keep MC installed for ESI fast-poll only and not consume pricing.</li>
+        <li><strong>Re-register now button:</strong> manually fires the boot-time registration call inside the user-request lifecycle. Use this when the diagnostic page reports "MC pricing reachable but Structure Manager has not registered a preference yet" - the registration is guaranteed to land. Idempotent: re-clicking is harmless.</li>
+    </ul>
+    <p>When MC is not installed, the same tab shows install instructions instead of the controls.</p>',
+
+    'economics_diagnostic_title' => 'Diagnostic integration',
+    'economics_diagnostic_html' => '<p>The Diagnostic page (admin-only at <code>/structure-manager/diagnostic</code>) has a "Pricing Integration (Manager Core)" health check that reports:</p>
+    <ul>
+        <li><strong>OK:</strong> registered with MC, all 12 fuel typeIDs cached</li>
+        <li><strong>WARN:</strong> registered, but some typeIDs are missing prices (lists which ones). Click Re-register to subscribe + refresh.</li>
+        <li><strong>INFO (operator-disabled):</strong> mode set to Disabled in SM Settings; page intentionally hidden. Deeplink to the settings tab.</li>
+        <li><strong>INFO (MC absent):</strong> Manager Core not installed. Install link in the detail block.</li>
+    </ul>
+    <p>The check reads the live <code>manager_core_market_prices</code> table so it reflects MC\'s actual cache state, not just the registration row.</p>',
+
+    // ESI events + Manager Core
+    'esi_events_title' => 'ESI Events & Manager Core Integration',
+    'esi_events_intro' => 'Structure attack alerts, anchoring notifications, and CCP fuel-alert messages come from EVE\'s ESI notification stream. Structure Manager has two detection paths depending on whether Manager Core is installed.',
+    'esi_events_with_mc' => '<strong>With Manager Core installed (recommended):</strong>
+        <ul>
+            <li>Manager Core polls the ESI notifications endpoint every 2 minutes using an adaptive per-corp fair rotation, then dispatches new notifications to Structure Manager\'s <code>StructureEventHandler</code>.</li>
+            <li>Detection drops from SeAT\'s native ~15-20 minutes to <strong>~2 minutes per corp</strong>. A corp with 1 director gets the same coverage as a corp with 50 (extra directors = fault tolerance, not speed).</li>
+            <li>Cascade retry on CCP transient failures, auto-recovery on token issues, plus a 10-minute SeAT-native sweep as belt-and-braces safety net.</li>
+            <li>Key holder pool is shared across every Manager Core-aware plugin — configure once in <strong>Manager Core → ESI Key Pool</strong>.</li>
+        </ul>
+        <p style="margin-top:8px;"><strong>Full operator reference</strong> (algorithm, scaling math, CCP rate-limit alignment, per-character cooldown ladder, troubleshooting) is in <strong>Manager Core → Help → ESI Fast-Poll</strong> in your SeAT install. For a Github summary or pre-install reading, see the <a href="https://github.com/MattFalahe/Manager-Core#-esi-fast-poll-one-paragraph-summary" target="_blank" rel="noopener">Manager Core README</a>.</p>',
+    'esi_events_standalone' => '<strong>Without Manager Core (standalone):</strong>
+        <ul>
+            <li>Structure Manager reads from SeAT\'s native <code>character_notifications</code> table on its own schedule.</li>
+            <li>Detection latency: ~15-20 minutes (set by SeAT\'s ESI bucket cadence — SeAT itself only refreshes <code>character_notifications</code> from CCP every 20 min).</li>
+            <li>Same categories, same role mentions, same webhook routing — just slower because SeAT\'s upstream refresh is slow.</li>
+            <li>No director key holders required. Works on a fresh SeAT install with zero configuration.</li>
+            <li>The same shielding mechanics for category routing, role mentions, and webhook scoping all work identically.</li>
+        </ul>',
+    'esi_events_how_to_enable' => '<strong>Enabling fast-poll:</strong>
+        <ol>
+            <li>Install <a href="https://github.com/MattFalahe/Manager-Core" target="_blank">Manager Core</a> alongside Structure Manager</li>
+            <li>On container restart, Manager Core\'s migrations create its shared tables</li>
+            <li>Navigate to Manager Core > ESI Key Pool (superuser only)</li>
+            <li>Add one or more director characters from the eligible-characters list. More directors = faster rotation + better fault tolerance.</li>
+            <li>Structure Manager automatically detects Manager Core at boot and registers its handler. No configuration needed.</li>
+        </ol>',
+    'esi_events_detection_mode' => '<strong>Checking which mode is active:</strong> Settings > Structure Events tab shows the current detection mode banner. Diagnostics page also reports it with a per-mode health panel (shared key holders, recent notification counts, registered handler status).',
+
+    // Detection path identification (added 2026-05-11 after end-to-end pipeline verification)
+    'esi_events_paths_title' => 'Reading the Detection Path from Discord',
+    'esi_events_paths_intro' => 'Every Structure Manager alert embed includes two pieces of evidence telling you which detection path delivered it: the <strong>Detection</strong> field inside the embed body, and the footer line under the embed. Use these to tell at a glance whether a fresh attack was caught by fast-poll, whether the sweep fallback picked it up, or whether you\'re running standalone without Manager Core.',
+    'esi_events_paths_table' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Footer Label</th>
+                <th style="padding:6px 10px; text-align:left;">Detection Field</th>
+                <th style="padding:6px 10px; text-align:left;">What happened</th>
+                <th style="padding:6px 10px; text-align:left;">Typical latency</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Fast Poll (Manager Core)</strong></td>
+                    <td style="padding:6px 10px;"><code>via fast_poll</code></td>
+                    <td style="padding:6px 10px;">Manager Core polled a director\'s ESI notifications endpoint directly and found this fresh from CCP. The expected path for new in-game events when MC is installed.</td>
+                    <td style="padding:6px 10px;"><strong>~2 minutes</strong> from in-game event (per corp covered by the pool)</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>SeAT Sweep (Manager Core)</strong></td>
+                    <td style="padding:6px 10px;"><code>via seat_fallback</code></td>
+                    <td style="padding:6px 10px;">Fast-poll missed it (key holder token expired transiently, ESI was down, etc.) so Manager Core\'s 10-minute sweep read it from SeAT\'s <code>character_notifications</code> table instead. Same routing, same embed, just slower.</td>
+                    <td style="padding:6px 10px;">~10 min after SeAT itself sees it (15-20 min after the in-game event)</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>SeAT Native</strong></td>
+                    <td style="padding:6px 10px;"><code>via seat_native</code></td>
+                    <td style="padding:6px 10px;">Manager Core is not installed (or the operator set <code>esi_detection_mode = seat_native</code> to opt out). Structure Manager\'s own <code>process-notifications</code> cron read from SeAT\'s native table and dispatched. This is the default standalone behaviour.</td>
+                    <td style="padding:6px 10px;">~1 min after SeAT\'s 15-20 min bucket</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="margin-top:8px;">Both <strong>SeAT Sweep</strong> and <strong>SeAT Native</strong> wait on SeAT\'s 15-20 minute ESI bucket cadence (CCP only refreshes notifications via the bulk path once every 15-20 minutes per character). The difference is just routing: through MC\'s shared registry vs. SM\'s direct fallback. <strong>Fast Poll</strong> is the only path that beats SeAT\'s cadence by hitting CCP per-character at a tighter rotation.</p>',
+
+    'esi_events_paths_testing_title' => 'Testing each detection path',
+    'esi_events_paths_testing' => '<p><strong>Fast Poll test (Manager Core installed, mode=auto):</strong></p>
+        <ul>
+            <li>Have someone apply 1 point of damage to any structure in-game (a single shot fires <code>StructureUnderAttack</code> without entering reinforce)</li>
+            <li>Within 1-2 minutes the Discord embed lands with footer <em>Fast Poll (Manager Core)</em></li>
+            <li>You can\'t backdate or fake-inject a fast-poll detection; CCP only returns recent notifications from the ESI endpoint, so fresh events are the only way to exercise this path</li>
+        </ul>
+
+        <p style="margin-top:14px;"><strong>SeAT Sweep test (Manager Core installed, mode=auto):</strong></p>
+        <ul>
+            <li>Take a notification already present in <code>character_notifications</code> (something SeAT pulled in the last 24 hours)</li>
+            <li>Reset its dedup state in both tables, then backdate its timestamp so it falls back into the 2-hour sweep window:
+                <pre style="margin:4px 0;">DELETE FROM manager_core_esi_notifications WHERE notification_id = &lt;id&gt;;
+DELETE FROM structure_manager_esi_notifications WHERE notification_id = &lt;id&gt;;
+UPDATE character_notifications
+   SET timestamp = NOW() - INTERVAL 30 MINUTE, updated_at = NOW()
+ WHERE notification_id = &lt;id&gt;;</pre>
+            </li>
+            <li>Within ~60 seconds the next sweep cycle picks it up and the embed lands with footer <em>SeAT Sweep (Manager Core)</em></li>
+        </ul>
+
+        <p style="margin-top:14px;"><strong>SeAT Native test (without uninstalling Manager Core):</strong></p>
+        <ul>
+            <li>Switch the detection mode to seat_native:
+                <pre style="margin:4px 0;">UPDATE structure_manager_settings
+   SET value = \'seat_native\', updated_at = NOW()
+ WHERE `key` = \'esi_detection_mode\';</pre>
+            </li>
+            <li>Restart the SeAT stack so SM stops registering with MC\'s registry (take it down and back up — pass all three compose files):
+                <pre style="margin:4px 0;">docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml down
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml up -d</pre>
+            </li>
+            <li>Apply the same backdating recipe as the SeAT Sweep test above. The minute-cron <code>structure-manager:process-notifications</code> will pick it up via SM\'s native fallback and the embed lands with footer <em>SeAT Native</em></li>
+            <li>Revert when done: <code>UPDATE structure_manager_settings SET value = \'auto\' WHERE `key` = \'esi_detection_mode\';</code> then take the stack down and back up again</li>
+        </ul>
+
+        <p style="margin-top:14px;"><strong>Pro tip:</strong> grep the laravel log live in another window while testing to watch each step:</p>
+        <pre style="margin:4px 0;">docker exec -it seat-docker-worker-1 sh -c "tail -F /var/www/seat/storage/logs/laravel-$(date +%Y-%m-%d).log | grep -E \'PollEsi|SweepSeat|ProcessStructureNotifications|StructureEventHandler|Dispatched: [1-9]\'"</pre>',
+
+    // ============================================================
+    // Pre-timer reminders (added 2026-05-17, dev-4.0 / v2.1)
+    // ============================================================
+    // Scheduled Discord pings 24h/6h/1h before a structure timer expires.
+    // Requires Manager Core (handler subscribes to MC's EventBus).
+    'pre_timer_title' => 'Pre-Timer Reminder Pings (T-24h / T-6h / T-1h)',
+    'pre_timer_intro' => 'When a structure enters reinforce (or a manual op is scheduled), Structure Manager fires <strong>three scheduled reminder pings to Discord</strong> at <code>T-24h</code>, <code>T-6h</code>, and <code>T-1h</code> before the timer expires. This gives fleet leadership a predictable rhythm to plan: tomorrow we organize, this evening we finalize, in an hour we ping fleet to login. Reminders are <strong>separate from the under-attack alert</strong> that fires the moment CCP says your citadel was just shot - that channel still pings immediately, this one is the scheduled follow-up so the timer never sneaks up on the fleet.',
+    'pre_timer_requires_mc' => '<strong>Manager Core required.</strong> The reminder system is built on MC\'s EventBus and scheduled-event infrastructure. Without MC, Structure Manager still fires under-attack alerts via SeAT\'s native notification path - it just won\'t produce the scheduled T-24h/6h/1h reminders. Install Manager Core to unlock this feature.',
+    'pre_timer_event_types_title' => 'Which timers fire reminders',
+    'pre_timer_event_types_desc' => 'Reminders fire automatically for the timer types where fleet logistics matter most. Manual ops are opt-in so admins who schedule an op deliberately can decide whether to reminder-ping or not.',
+    'pre_timer_event_types_table' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Event Type</th>
+                <th style="padding:6px 10px; text-align:left;">Fires Reminder?</th>
+                <th style="padding:6px 10px; text-align:left;">Reason</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Armor Reinforced</strong></td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES (always)</td>
+                    <td style="padding:6px 10px;">Hull timer ~2-3 days out; fleet needs planning lead time</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Hull Reinforced</strong></td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES (always)</td>
+                    <td style="padding:6px 10px;">Final defense fleet must coordinate before decloak</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Sov Reinforced</strong></td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES (always)</td>
+                    <td style="padding:6px 10px;">TCU/IHub decloak window - sov fleet form-up</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Command Nodes Spawning</strong></td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES (always)</td>
+                    <td style="padding:6px 10px;">Sov capture phase begins; entosis fleet needed</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Hostile Op</strong></td>
+                    <td style="padding:6px 10px; color:#f59e0b;">YES (opt-in)</td>
+                    <td style="padding:6px 10px;">Manual op scheduled by admin; toggle on Settings if you want auto-reminders</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Defense Op</strong></td>
+                    <td style="padding:6px 10px; color:#f59e0b;">YES (opt-in)</td>
+                    <td style="padding:6px 10px;">Manual op scheduled by admin; toggle on Settings if you want auto-reminders</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Shield Reinforced</strong></td>
+                    <td style="padding:6px 10px; color:#ef4444;">NO</td>
+                    <td style="padding:6px 10px;">Under-attack alert fires immediately; reminder would duplicate</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Destroyed</strong></td>
+                    <td style="padding:6px 10px; color:#ef4444;">NO</td>
+                    <td style="padding:6px 10px;">Post-event; reminders make no sense after the fact</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Entosis Active</strong></td>
+                    <td style="padding:6px 10px; color:#ef4444;">NO</td>
+                    <td style="padding:6px 10px;">Happening RIGHT NOW (40-min window) - no lead time to remind on</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>Fuel / Anchor / Ownership</strong></td>
+                    <td style="padding:6px 10px; color:#ef4444;">NO</td>
+                    <td style="padding:6px 10px;">Different audience (logistics / industry), not fleet ops</td>
+                </tr>
+            </tbody>
+        </table>',
+    'pre_timer_routing_title' => 'Routing reminders to webhooks (per event type)',
+    'pre_timer_routing_desc' => 'Each timer event type that fires reminders gets its own notification category, so admins can route sov reminders to <code>#sov-fleet</code> with <code>@SovFC</code>, hull reminders to <code>#all-hands</code> with <code>@everyone</code>, and so on - all through the existing <strong>Settings &gt; Notifications</strong> panel. No new UI surface; the same per-category toggles, role-mention precedence, per-binding overrides, and role-picker integration you already use for under-attack alerts now extend to reminders.',
+    'pre_timer_categories_table' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Category</th>
+                <th style="padding:6px 10px; text-align:left;">Fires when</th>
+                <th style="padding:6px 10px; text-align:left;">Default state</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;"><code>events.pre_timer_armor</code></td>
+                    <td style="padding:6px 10px;">Armor reinforce timer (hull cycle)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Enabled + auto-bound to structure_attack webhooks</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>events.pre_timer_hull</code></td>
+                    <td style="padding:6px 10px;">Hull reinforce timer (final defense)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Enabled + auto-bound</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>events.pre_timer_sov</code></td>
+                    <td style="padding:6px 10px;">Sov structure reinforced (TCU / IHub decloak)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Enabled + auto-bound</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>events.pre_timer_nodes</code></td>
+                    <td style="padding:6px 10px;">Command nodes spawning (sov capture)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Enabled + auto-bound</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>events.pre_timer_hostile</code></td>
+                    <td style="padding:6px 10px;">Admin-created hostile op</td>
+                    <td style="padding:6px 10px; color:#f59e0b;">Disabled (opt-in via category toggle)</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>events.pre_timer_defense</code></td>
+                    <td style="padding:6px 10px;">Admin-created defense op</td>
+                    <td style="padding:6px 10px; color:#f59e0b;">Disabled (opt-in via category toggle)</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="margin-top:8px;">On a fresh install the four combat categories auto-bind to whatever webhooks already receive <code>events.structure_attack</code> alerts, so the default behavior matches existing routing. From there: re-route each category to its own channel, set a different role mention per category, override per-binding (a webhook can have its own role mention that wins over the category default), or disable a category entirely if you decide a particular event type shouldn\'t fire reminders.</p>',
+    'pre_timer_settings_title' => 'Settings',
+    'pre_timer_settings_list' => '<ul style="margin-top:6px;">
+            <li><code>pre_timer_reminders_enabled</code> - <strong>master kill-switch.</strong> Default <code>true</code> when Manager Core is installed. Turn this off to silence all reminders in one click, regardless of category bindings (useful for downtime, fleet stand-downs, or testing without spamming Discord).</li>
+        </ul>
+        <p style="margin-top:8px; font-size:0.9em; color:#9ca3af;">Granular control (which event types fire, where they go, what role mention they ping) lives in <strong>Settings &gt; Notifications</strong> on the six <code>pre_timer_*</code> categories. Edits take effect immediately - no worker restart required (the handler reads settings + bindings on every dispatch).</p>',
+    'pre_timer_cadence_title' => 'When reminders fire (the math)',
+    'pre_timer_cadence_desc' => 'Structure Manager runs a scheduled job (<code>structure-manager:publish-timer-schedule-events</code>) every 5 minutes that scans active timers and fires <code>timer.upcoming_24h</code>, <code>timer.upcoming_6h</code>, and <code>timer.upcoming_1h</code> events when a timer enters each window. Each event fires <strong>at most once per timer</strong> thanks to per-window latch columns - even if the job runs 12 times while a timer is in the 24h window, only the first run fires the event.',
+    'pre_timer_cadence_table' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Window</th>
+                <th style="padding:6px 10px; text-align:left;">When the reminder lands</th>
+                <th style="padding:6px 10px; text-align:left;">Embed color</th>
+                <th style="padding:6px 10px; text-align:left;">Audience intent</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>T-24h</strong></td>
+                    <td style="padding:6px 10px;">23h 55m - 24h 00m before <code>eve_time</code></td>
+                    <td style="padding:6px 10px;"><span style="display:inline-block; width:12px; height:12px; background:#f59e0b; border-radius:2px; vertical-align:middle;"></span> Amber</td>
+                    <td style="padding:6px 10px;">Planning - "tomorrow at this time, organize fleet"</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>T-6h</strong></td>
+                    <td style="padding:6px 10px;">5h 55m - 6h 00m before <code>eve_time</code></td>
+                    <td style="padding:6px 10px;"><span style="display:inline-block; width:12px; height:12px; background:#ea580c; border-radius:2px; vertical-align:middle;"></span> Orange</td>
+                    <td style="padding:6px 10px;">Preparation - "tonight, finalize roster + doctrine"</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><strong>T-1h</strong></td>
+                    <td style="padding:6px 10px;">55m - 60m before <code>eve_time</code></td>
+                    <td style="padding:6px 10px;"><span style="display:inline-block; width:12px; height:12px; background:#dc2626; border-radius:2px; vertical-align:middle;"></span> Red</td>
+                    <td style="padding:6px 10px;">Pre-fleet - "ping fleet to login, undock in 30"</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="margin-top:8px; font-size:0.9em; color:#9ca3af;">The 5-minute scan cadence means an FC gets <em>between 55 and 60 minutes</em> of warning for the T-1h ping (not exactly 60). Acceptable for fleet ops - and there is no way to be more precise without a per-second scheduler. The same imprecision applies to the 6h and 24h windows but matters less the further out you are.</p>',
+    'pre_timer_v21_badge' => 'v2.0.0',
+
+    // ============================================================
+    // Attacker threat intel (added 2026-05-17, dev-4.0 / v2.2)
+    // ============================================================
+    // Opt-in async zKillboard enrichment fired after each under-attack alert.
+    'threat_intel_title' => 'Attacker Threat Intel (zKillboard enrichment)',
+    'threat_intel_intro' => 'Optional follow-up Discord embed dispatched <strong>~1-2 seconds after</strong> each attack notification (structure under attack, shield reinforce, armor reinforce, sov reinforce, entosis). Looks up the attacker on zKillboard and posts a separate <em>"who is shooting you"</em> embed with the attacker\'s kill count, top-flown ship, danger ratio, gang ratio, last activity date, and a synthesized threat tier ("Professional", "Active", "Casual", "Dormant", "Cold"). Lets the FC decide fleet form-up based on threat assessment before the cyno even lands.',
+    'threat_intel_opt_in' => '<strong>Opt-in by design.</strong> Disabled by default because the feature makes external HTTP calls to <code>zkillboard.com</code> every time an attack alert fires. Operators who want it explicitly enable both the master toggle (Settings &gt; Structure Events) AND bind the <code>events.attacker_threat_intel</code> category to a webhook on the Notifications panel.',
+    'threat_intel_async_title' => 'Why a separate async embed',
+    'threat_intel_async_desc' => 'The primary under-attack alert is time-critical and must NOT wait on zKB. Inline lookups would add 200-2000ms to dispatch and bottleneck during a major op. Splitting threat intel into its own async job + separate webhook category solves three problems simultaneously:',
+    'threat_intel_async_list' => '<ol style="margin-top:6px;">
+            <li><strong>Speed:</strong> primary alert lands in fleet channels within seconds of ESI detection (unchanged). Threat intel arrives ~1-2s later, after zKB responds.</li>
+            <li><strong>Fail-open:</strong> if zKB is down, timeout, rate-limited, or doesn\'t have the attacker indexed, the primary alert is unaffected. Threat intel embed is simply skipped silently.</li>
+            <li><strong>Routing:</strong> intel typically goes to a different Discord channel than the primary alert (intel team vs. fleet response team). Separate category = separate routing + separate role mention without coupling.</li>
+        </ol>',
+    'threat_intel_what_zkb_sees' => 'What zKillboard receives + returns',
+    'threat_intel_data_flow' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Direction</th>
+                <th style="padding:6px 10px; text-align:left;">Data</th>
+                <th style="padding:6px 10px; text-align:left;">Sensitivity</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;">SeAT → zKB</td>
+                    <td style="padding:6px 10px;">Attacker\'s character ID (public field on every killmail)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Public — already on every zKB-indexed killmail</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">zKB → SeAT</td>
+                    <td style="padding:6px 10px;">Public stats: lifetime kills/losses, most-flown ship, danger/gang ratio, recent activity months</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Public — same data shown on zKB\'s web profile</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">SeAT → zKB</td>
+                    <td style="padding:6px 10px;"><em>(nothing else)</em></td>
+                    <td style="padding:6px 10px; color:#22c55e;">No defender data, no structure name, no corp data, no system, no timer leaves SeAT</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="margin-top:8px;">Opsec-wise this is safe: only attacker char IDs leave SeAT, and those IDs are already public the moment zKB indexes any killmail involving that pilot. No defender intel is exposed.</p>',
+    'threat_intel_tiers_title' => 'Threat tier classification',
+    'threat_intel_tiers_desc' => 'Raw kill counts aren\'t actionable on their own. The embed synthesizes a single tier label from kill cadence + last activity so the FC gets a one-glance read:',
+    'threat_intel_tiers_table' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Tier</th>
+                <th style="padding:6px 10px; text-align:left;">Threshold</th>
+                <th style="padding:6px 10px; text-align:left;">Likely meaning</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;">🔥 Professional</td>
+                    <td style="padding:6px 10px;">≥50 kills last ~30 days</td>
+                    <td style="padding:6px 10px;">Active killer/hunter; structure shooter; expect coordinated follow-up</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">⚠️ Active</td>
+                    <td style="padding:6px 10px;">≥10 kills last ~30 days</td>
+                    <td style="padding:6px 10px;">Regular PvP pilot; competent threat but not a dedicated structure shooter</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">🔍 Casual</td>
+                    <td style="padding:6px 10px;">1-9 kills last ~30 days</td>
+                    <td style="padding:6px 10px;">Occasional PvP; opportunist; defensive posture probably sufficient</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">💤 Dormant</td>
+                    <td style="padding:6px 10px;">No kills in 90+ days</td>
+                    <td style="padding:6px 10px;">Returning player or alpha trial; lower threat than raw lifetime count suggests</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">❄️ Cold</td>
+                    <td style="padding:6px 10px;">No recent activity tracked</td>
+                    <td style="padding:6px 10px;">No data on zKB (newbro / never killed before)</td>
+                </tr>
+            </tbody>
+        </table>',
+    'threat_intel_setup_title' => 'How to enable',
+    'threat_intel_setup_list' => '<ol style="margin-top:6px;">
+            <li>Toggle <strong>Enable attacker threat intel</strong> on the <strong>Settings &gt; Structure Events</strong> tab.</li>
+            <li>On the <strong>Settings &gt; Notifications</strong> tab, find the <code>events.attacker_threat_intel</code> category (sort order 80, near the bottom of events).</li>
+            <li>Enable the category\'s master toggle.</li>
+            <li>Bind the category to one or more webhooks (typically a dedicated intel channel separate from your fleet-response channel).</li>
+            <li>Set a role mention if desired (e.g. <code>@IntelOfficer</code> or <code>@SeniorFC</code>).</li>
+            <li>Test by waiting for the next attack alert — the intel embed lands ~1-2 seconds after the primary alert.</li>
+        </ol>',
+    'threat_intel_caching_title' => 'Caching + rate limits',
+    'threat_intel_caching_desc' => 'Attacker profiles cache for <strong>7 days</strong> in Laravel\'s cache (Redis on a standard SeAT install). Repeat attackers in coordinated ops resolve from cache without re-querying zKB, so even a sustained assault from one fleet only hits zKB once per attacker per week. zKB rate limit responses (HTTP 429) cache as a 1-hour miss so the system recovers automatically without hammering.',
+    'threat_intel_v22_badge' => 'v2.0.0',
+
+    // ============================================================
+    // Final-timer awareness (added 2026-05-17, v2.0.0 release)
+    // ============================================================
+    // Surfaces in alerts + board + reminders for structures with no
+    // separate hull reinforce timer (mediums, FLEX, Metenox, Skyhook).
+    'final_timer_title' => 'FINAL TIMER awareness',
+    'final_timer_intro' => 'EVE Online structures don\'t all share the same reinforce cycle. <strong>Medium Upwell structures</strong> (Astrahus, Raitaru, Athanor), <strong>FLEX navigation</strong> (Ansiblex, Pharolux, Tenebrex), and the <strong>Equinox single-cycle structures</strong> (Metenox Moon Drill, Orbital Skyhook) have <strong>no separate hull reinforce timer</strong>. When the armor cycle elapses, defenders get ONE fight to keep the structure. If armor falls, hull comes down in the same window and the structure dies. <strong>Large/XL structures</strong> (Fortizar, Tatara, Azbel, Keepstar, Sotiyo, Palatine Keepstar) get TWO reinforce cycles, giving defenders a second chance at the hull timer.',
+    'final_timer_surfaces' => '<p>To make this difference operationally visible, Structure Manager surfaces a FINAL TIMER indicator in three places:</p>
+        <ol style="margin-top:6px;">
+            <li><strong>Under-attack Discord embed</strong> (<code>StructureLostShields</code> and friends): a <code>🚨 FINAL TIMER</code> field appears prominently in the embed with copy explaining "no hull reinforce follows". The Discord push-notification preview is also amplified so FCs see the stakes before clicking through.</li>
+            <li><strong>Pre-timer reminder embeds</strong> (T-24h / T-6h / T-1h): same indicator, so fleet planning is informed by whether you have one fight or two.</li>
+            <li><strong>Structure Board badge</strong>: a red <code>⚠ FINAL TIMER</code> pill next to the event label. Visually distinct from the standard category badge so a packed board scans correctly.</li>
+        </ol>
+        <p style="margin-top:8px;">All notification stages still fire normally (Shield / Armor / Hull / Destroyed) — this is purely informational. The change is in what the operator sees, not in which events get processed.</p>',
+    'final_timer_classification' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Structure family</th>
+                <th style="padding:6px 10px; text-align:left;">Has hull reinforce timer?</th>
+                <th style="padding:6px 10px; text-align:left;">FINAL TIMER marker?</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;">Medium Upwell (Astrahus, Raitaru, Athanor)</td>
+                    <td style="padding:6px 10px; color:#ef4444;">No (skip hull state)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES on armor reinforce</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">FLEX navigation (Ansiblex, Pharolux, Tenebrex)</td>
+                    <td style="padding:6px 10px; color:#ef4444;">No (direct vulnerability)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">Equinox single-cycle (Metenox, Orbital Skyhook)</td>
+                    <td style="padding:6px 10px; color:#ef4444;">No (one short cycle total)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">YES</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">Large Upwell (Azbel, Fortizar, Tatara)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Yes (separate armor + hull cycles)</td>
+                    <td style="padding:6px 10px; color:#9ca3af;">No (defenders get hull timer too)</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;">XL Upwell (Sotiyo, Keepstar, Palatine Keepstar)</td>
+                    <td style="padding:6px 10px; color:#22c55e;">Yes (separate cycles)</td>
+                    <td style="padding:6px 10px; color:#9ca3af;">No</td>
+                </tr>
+            </tbody>
+        </table>',
+    'final_timer_design' => 'The classification lives in <code>StructureTimerMechanics::ARMOR_IS_FINAL_TYPE_IDS</code>. CCP doesn\'t expose this design intent as a queryable SDE attribute, so the list is hardcoded and reviewed against CCP patch notes. When CCP introduces a new single-cycle structure (rare), its typeID gets added in the same commit that updates these docs. Manual operator-created ops on the board never carry the FINAL TIMER badge — operators write their own framing in the timer notes field.',
+    'final_timer_v23_badge' => 'v2.0.0',
+
+    // Operational security stance on tactical data (added 2026-05-12 after explicit
+    // discussion of why ICS calendar export will never ship)
+    'opsec_title' => 'Operational Security: Tactical Data Boundaries',
+    'opsec_intro' => 'Structure timers are <strong>military intelligence</strong> in EVE. When a structure enters reinforce, the exact moment it comes out is the most valuable piece of information an attacker can have to time fleet form-up, mid arrivals, and engagement windows. Structure Manager treats this data accordingly: timer information stays inside two trust zones and never leaves them.',
+    'opsec_trust_zones' => '<strong>Trust zones for timer data:</strong>
+        <ol>
+            <li><strong>Inside SeAT itself</strong> (the Structure Board, fuel pages, diagnostic views). Behind your SeAT authentication, your operators see what your permissions model lets them see.</li>
+            <li><strong>Discord/Slack webhooks you control</strong>. Operators paste in their own corp/alliance channel webhook URL. Channel access is governed by your Discord/Slack role model. SeAT does not store any data on the destination server.</li>
+        </ol>',
+    'opsec_no_external_export_title' => 'Why we will never add ICS / iCal / calendar feed export',
+    'opsec_no_external_export' => '<p>A recurring request for plugins of this kind is "export upcoming reinforce timers as an iCalendar (.ics) feed so operators can subscribe in Google Calendar / Apple Calendar / Outlook." It would be one of the easiest features to build technically. <strong>It will not ship.</strong> Reasons:</p>
+        <ul>
+            <li><strong>Calendar services can read the data.</strong> Google, Apple, and Microsoft staff have audit access to user calendar contents under their terms of service. A spy with access to a calendar provider could enumerate timer data across many operators systematically.</li>
+            <li><strong>Subscription URLs leak.</strong> ICS subscriptions typically use unauthenticated or weakly-authenticated URLs because most clients do not support OAuth flows. A URL share, accidental commit, or screenshot exposes the entire timer set to anyone with the link.</li>
+            <li><strong>Sync everywhere.</strong> Subscribing in Google Calendar replicates the data to the operator\'s phone, cloud backups, sometimes their watch, and any shared calendars they participate in. Surface area for accidental disclosure grows dramatically.</li>
+            <li><strong>Aggregation risk.</strong> A predictable URL scheme could be enumerated by automated scrapers across SeAT installs and shared on third-party intel sites.</li>
+            <li><strong>Operator chain-of-custody breaks down.</strong> An operator forwards their calendar to a friend for unrelated reasons. The friend turns out to be a spy. The defender did nothing wrong yet handed the attacker hours of preparation time.</li>
+        </ul>
+        <p>None of these failure modes apply to the trust zones we DO support: SeAT auth-gates everything inside the app, and Discord webhook channels are operator-controlled with the operator\'s own role model.</p>',
+    'opsec_alternatives_title' => 'How to get the same operational value without leaking timer data',
+    'opsec_alternatives' => '<ul>
+            <li><strong>Use the Structure Board.</strong> All upcoming and active timers are visible there, mobile-responsive so FCs can pull up the page on a phone during ops. Stays inside SeAT auth.</li>
+            <li><strong>Trust the existing Discord pings.</strong> The same channel that already receives <code>StructureLostShields</code> and <code>StructureLostArmor</code> alerts is the operator-controlled trust zone for timer info. Pre-timer reminder pings (future enhancement: 24h / 1h / 15min before reinforce expires) will use the same webhooks — same trust profile, same role mention setup.</li>
+            <li><strong>Manual abstraction.</strong> If an operator personally needs a timer in their calendar, they can write "structure timer ends ~21:30" manually — without dates, structure names, or location. The calendar has a reminder; the data has no value to a leak.</li>
+        </ul>',
+    // IdResolver feature documentation (added 2026-05-12 for v2.0.0)
+    'id_resolver_title' => 'Name Resolution via Public ESI',
+    'id_resolver_intro' => 'Discord embeds for combat events show real character / corporation / alliance names where possible — even when the attacker has never been a member of any corp on this SeAT install. Structure Manager achieves this through a three-tier name resolver (<code>IdResolver</code> service) that escalates from local DB to public ESI with a 7-day cache.',
+    'id_resolver_chain' => '<strong>Resolution chain (per ID lookup):</strong>
+        <ol>
+            <li><strong>SeAT local info table</strong> — <code>character_infos</code> / <code>corporation_infos</code> / <code>alliance_infos</code>. Instant, free. Hit rate is high for entities your operators are members of or have interacted with.</li>
+            <li><strong>SeAT universe_names cache</strong> — secondary lookup table SeAT uses for bulk name resolution. Catches entities that SeAT has touched via killmail enrichment, bulk lookups, etc.</li>
+            <li><strong>CCP public ESI endpoint</strong> — <code>esi.evetech.net/latest/characters/{id}/</code> (and equivalent for corps + alliances). Public, no auth needed. 2-second timeout to keep alert dispatch snappy. Successful results cached in Laravel\'s cache for 7 days.</li>
+            <li><strong>Fallback</strong> — if all three tiers miss, the embed renders the ID-only form ("Pilot ID #N (name not cached)") exactly as before. ESI outages degrade gracefully; alerts always fire.</li>
+        </ol>',
+    'id_resolver_what_resolves' => '<strong>What gets resolved:</strong>
+        <ul>
+            <li><strong>Attacker pilot</strong> — the character who fired the entosis / launched the dread / shot the structure. Critical info for tactical response.</li>
+            <li><strong>Attacker corporation</strong> — usually carried by CCP in notification YAML, but resolved as backfill when CCP omits it (older notification formats, sov events).</li>
+            <li><strong>Attacker alliance</strong> — same backfill pattern as corporation.</li>
+            <li><strong>Transferring character</strong> on <code>OwnershipTransferred</code> events.</li>
+            <li><strong>Old / new corporations</strong> on ownership transfer events (when names are not in YAML).</li>
+        </ul>',
+    'id_resolver_performance' => '<strong>Performance considerations:</strong>
+        <ul>
+            <li>First-time attacker resolution adds ~250ms to alert dispatch (one ESI call). Acceptable for a critical security ping.</li>
+            <li>Subsequent attacks by the same pilot / corp / alliance resolve instantly from the 7-day cache.</li>
+            <li>Real-world threat actors tend to be recurring — cache hit rate is high once an install has been running for a few weeks.</li>
+            <li>Per CCP\'s third-party developer guidelines, ESI calls include a User-Agent identifying the plugin: <code>SeAT-StructureManager/2.0.0 (+https://github.com/MattFalahe/structure-manager)</code>.</li>
+        </ul>',
+    'id_resolver_opsec' => '<strong>Opsec note:</strong> attacker character / corp / alliance IDs are <strong>public information</strong> in EVE. CCP exposes them through public ESI and zKillboard already renders them on every kill. Looking them up does not leak defender intel. Names rarely change in EVE (paid service for characters; even rarer for corps/alliances), so the 7-day cache TTL is a balance between freshness and ESI load. Operators can force-refresh a single resolution via <code>IdResolver::forget(\'character\', $id)</code> in tinker if a known rename happens.',
+    'id_resolver_admin_force_refresh' => '<strong>Force-refresh a single entity:</strong>
+        <pre style="margin:4px 0;">docker exec -it seat-docker-front-1 php artisan tinker --execute "
+\\StructureManager\\Services\\IdResolver::forget(\'character\', 12345);     // force re-fetch on next lookup
+\\StructureManager\\Services\\IdResolver::forget(\'corporation\', 6789);
+\\StructureManager\\Services\\IdResolver::forget(\'alliance\', 1234);
+"</pre>',
+
+    // Tactical-planning events (SeAT Broadcast integration contract — added 2026-05-12)
+    'tactical_events_title' => 'Tactical-Planning Event Contract (for SeAT Broadcast + future consumers)',
+    'tactical_events_intro' => 'Structure Manager publishes a family of <code>structure.alert.*</code> events on Manager Core\'s EventBus specifically for fleet-planning use cases. SeAT Broadcast [<code>seat-discord-pings</code>] (or any future "fleet calendar" consumer) can subscribe to these events to populate a calendar view of upcoming critical operations and fire pre-timer reminders (e.g. "2h before reinforce timer ends, ping the FC channel").',
+    'tactical_events_design' => '<strong>Design rationale:</strong> these events are distinct from the per-corp Discord webhook alerts SM already fires. The webhooks go to your everyone-on-Discord operational channels ("heads up, this happened"). The EventBus events go to fleet-command tooling that does <em>planning</em> ("calendar this, remind me at 2h, prepare fleet coverage"). Different audiences, different cadences, different jobs. Not duplication.',
+    'tactical_events_table' => '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9em;">
+            <thead><tr style="background:#23262d; color:#dfe3eb;">
+                <th style="padding:6px 10px; text-align:left;">Event name</th>
+                <th style="padding:6px 10px; text-align:left;">Fires for</th>
+                <th style="padding:6px 10px; text-align:left;">timer_ends_at</th>
+                <th style="padding:6px 10px; text-align:left;">Severity</th>
+                <th style="padding:6px 10px; text-align:left;">Tactical action</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.shield_reinforced</code></td>
+                    <td style="padding:6px 10px;">StructureLostShields, SkyhookLostShields</td>
+                    <td style="padding:6px 10px;">Armor entry time</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
+                    <td style="padding:6px 10px;">Defend at armor exit</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.armor_reinforced</code></td>
+                    <td style="padding:6px 10px;">StructureLostArmor</td>
+                    <td style="padding:6px 10px;">Hull entry time</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
+                    <td style="padding:6px 10px;">Final defense or evacuate</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.destroyed</code></td>
+                    <td style="padding:6px 10px;">StructureDestroyed, SkyhookDestroyed</td>
+                    <td style="padding:6px 10px;">null (already happened)</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
+                    <td style="padding:6px 10px;">After-action; clear timers; update intel</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.anchoring_started</code></td>
+                    <td style="padding:6px 10px;">StructureAnchoring, AllAnchoringMsg</td>
+                    <td style="padding:6px 10px;">Anchor completion (~24h)</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-warning">warning</span></td>
+                    <td style="padding:6px 10px;">Contest anchor before completion</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.sov_reinforced</code></td>
+                    <td style="padding:6px 10px;">SovStructureReinforced</td>
+                    <td style="padding:6px 10px;">Decloak time</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
+                    <td style="padding:6px 10px;">Fleet coverage for sov defense</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.entosis_in_progress</code></td>
+                    <td style="padding:6px 10px;">EntosisCaptureStarted, SovCommandNodeEventStarted</td>
+                    <td style="padding:6px 10px;">null (live op)</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
+                    <td style="padding:6px 10px;">Counter-entosis NOW</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.fuel_critical</code></td>
+                    <td style="padding:6px 10px;">(SM fuel poll detecting low fuel)</td>
+                    <td style="padding:6px 10px;">Fuel exhaustion time</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
+                    <td style="padding:6px 10px;">Schedule refuel run</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 10px;"><code>structure.alert.fuel_recovered</code></td>
+                    <td style="padding:6px 10px;">(SM fuel poll detecting refill)</td>
+                    <td style="padding:6px 10px;">null</td>
+                    <td style="padding:6px 10px;"><span class="badge badge-success">info</span></td>
+                    <td style="padding:6px 10px;">Clear calendar; cancel reminders</td>
+                </tr>
+            </tbody>
+        </table>',
+    'tactical_events_payload' => '<p style="margin-top:8px;"><strong>Payload schema</strong> (every <code>structure.alert.*</code> event ships these fields via <code>AlertEventEnvelope</code>):</p>
+        <ul>
+            <li><code>source_plugin</code>: always <code>structure-manager</code></li>
+            <li><code>schema_version</code>: int, currently 1 (consumers should branch on this when SM bumps it)</li>
+            <li><code>event_id</code>: UUID for one-shot correlation</li>
+            <li><code>event_type</code>: the bit after <code>structure.alert.</code> (e.g. <code>shield_reinforced</code>)</li>
+            <li><code>category_group</code>: <code>fuel</code> / <code>tactical</code> / <code>lifecycle</code></li>
+            <li><code>severity</code>: <code>info</code> / <code>warning</code> / <code>critical</code></li>
+            <li><code>corporation_id</code>: owner corp (null for AllAnchoringMsg system-wide warnings)</li>
+            <li><code>structure_id</code>: Upwell / Skyhook / sov entity ID (nullable for AllAnchoringMsg)</li>
+            <li><code>structure_name</code>, <code>structure_type_id</code></li>
+            <li><code>system_id</code>, <code>system_name</code>, <code>system_security</code></li>
+            <li><code>eve_time</code>, <code>seconds_until</code>, <code>is_elapsed</code>: derived from <code>timer_ends_at</code> for forward events, from <code>destroyed_at</code> for destruction events</li>
+            <li><code>timer_ends_at</code>: ISO 8601 timestamp the timer expires (null when not applicable)</li>
+            <li><code>attacker_resolution_status</code>, <code>attacker_character_*</code>, <code>attacker_corporation_*</code>, <code>attacker_alliance_*</code>: combat events only; <code>null</code> for fuel / anchoring / sov / entosis</li>
+            <li><code>url</code>: deeplink to SM Structure Board for this structure</li>
+            <li><code>source_reference</code>: stable per-notification key (e.g. <code>esi-notif:NNN</code>) used by MC\'s idempotency dedup</li>
+        </ul>',
+    'tactical_events_subscriber_guide' => '<p><strong>How a fleet-planning subscriber consumes these events:</strong></p>
+        <ol>
+            <li>Register an EventBus subscription via Manager Core: <code>event_pattern = \'structure.alert.*\'</code>, <code>handler_capability = \'your-plugin.structure_calendar\'</code></li>
+            <li>Implement the capability handler to receive <code>($eventName, $publisherPlugin, $payload)</code></li>
+            <li>Filter to events with non-null <code>timer_ends_at</code> for calendar entries; treat null-timer events as "react NOW" pings</li>
+            <li>Store the event in your own DB keyed by <code>event_id</code> for idempotency. Re-emissions of the same logical event within MC\'s 1h dedup window are suppressed at publish time, but if you do see a duplicate, the <code>event_id</code> tells you to merge.</li>
+            <li>For pre-timer reminders, schedule a job (or cron) that periodically queries your DB for events where <code>timer_ends_at - reminder_offset BETWEEN NOW() AND NOW() + 1min</code> and fires one ping per match.</li>
+        </ol>',
+    'tactical_events_opsec_note' => 'These events stay inside MC\'s EventBus (database-backed, behind your SeAT auth) and only reach the subscribers you have installed. They do not leave the trust zone. The SeAT Broadcast calendar view, if installed, lives inside SeAT and is auth-gated. Per-timer reminder pings go through operator-controlled Discord webhooks (the same trust pattern as SM\'s direct alerts).',
+
+    'opsec_other_data_title' => 'Other tactical data SM keeps in-perimeter',
+    'opsec_other_data' => 'The same trust-zone discipline applies to other tactically-sensitive data SM holds:
+        <ul>
+            <li><strong>Structure inventories</strong> (corporation_assets contents) — visible to authorized SeAT users only, never exported.</li>
+            <li><strong>Fuel consumption rates / depletion projections</strong> — knowing when a structure will run out of fuel is nearly as valuable as knowing its reinforce timer. Stays inside SeAT + your Discord.</li>
+            <li><strong>POS strontium reserves</strong> — explicit reinforce-cap intel. Same trust zones.</li>
+            <li><strong>Attacker / aggressor names</strong> from notification YAML — these come from public ESI feeds (zKillboard already shows them), so they are not your defender intel. Safe to enrich and display.</li>
+        </ul>
+        <p style="margin-top:8px;">If a future feature request involves "export this data to a third-party service", the default answer is no. The bar to ship such a feature is showing the third-party has a stronger operational-security profile than SeAT itself — which is almost never true for general-purpose services.</p>',
+
     'webhook_features' => 'Webhook Features',
     'webhook_features_desc' => '<ul>
         <li><strong>Discord & Slack Support:</strong> Compatible with both Discord and Slack webhook URLs</li>
@@ -401,9 +1202,28 @@ return [
     </ol>',
     
     'notification_examples' => 'Notification Examples',
-    'critical_example' => '<strong>Critical Alert Example:</strong><br><br>🚨 <strong>CRITICAL POS FUEL ALERT</strong><br><br><strong>Tower:</strong> Death Star (Large Amarr Control Tower)<br><strong>System:</strong> 3-FKCZ (Null-Sec)<br><strong>Corporation:</strong> Test Corp<br><br><strong>Fuel Blocks:</strong> 245 remaining (4.3 days) [LIMITING FACTOR]<br><strong>Strontium:</strong> 15,432 remaining<br><br><strong>Status:</strong> CRITICAL - Refuel immediately!',
+    'critical_example' => '<p><strong>Critical Alert Example:</strong></p>
+<pre style="white-space: pre-wrap; line-height: 1.5; margin: 0;">&#x1F6A8; <strong>CRITICAL POS FUEL ALERT</strong>
+
+<strong>Tower:</strong>        Death Star (Large Amarr Control Tower)
+<strong>System:</strong>       3-FKCZ (Null-Sec)
+<strong>Corporation:</strong>  Test Corp
+
+<strong>Fuel Blocks:</strong>  245 remaining (4.3 days) [LIMITING FACTOR]
+<strong>Strontium:</strong>    15,432 remaining
+
+<strong>Status:</strong>       CRITICAL - Refuel immediately!</pre>',
     
-    'warning_example' => '<strong>Warning Alert Example:</strong><br><br>⚠️ <strong>POS FUEL WARNING</strong><br><br><strong>Tower:</strong> Moon Mining Base (Medium Caldari Control Tower)<br><strong>System:</strong> J123456 (W-Space)<br><br><strong>Fuel Blocks:</strong> 5,840 remaining (12.2 days)<br><strong>Strontium:</strong> 8,200 remaining<br><br><strong>Status:</strong> LOW - Schedule refuel operation',
+    'warning_example' => '<p><strong>Warning Alert Example:</strong></p>
+<pre style="white-space: pre-wrap; line-height: 1.5; margin: 0;">&#x26A0;&#xFE0F; <strong>POS FUEL WARNING</strong>
+
+<strong>Tower:</strong>        Moon Mining Base (Medium Caldari Control Tower)
+<strong>System:</strong>       J123456 (W-Space)
+
+<strong>Fuel Blocks:</strong>  5,840 remaining (12.2 days)
+<strong>Strontium:</strong>    8,200 remaining
+
+<strong>Status:</strong>       LOW - Schedule refuel operation</pre>',
 
     'zero_strontium_title' => 'Zero Strontium Behavior',
     'zero_strontium_intro' => 'Structure Manager has intelligent handling for POSes with zero strontium clathrates, recognizing different scenarios and alerting appropriately.',
@@ -445,15 +1265,17 @@ return [
         </ul>',
 
     'multiple_webhooks_title' => 'Multiple Webhook Support',
-    'multiple_webhooks_intro' => 'Structure Manager supports up to 10 concurrent webhooks with per-webhook corporation filtering and role mentions. This is ideal for hosting multiple corporations with separate alert channels.',
+    'multiple_webhooks_intro' => 'Structure Manager supports any number of webhooks with per-webhook corporation filtering. Role mentions and per-category routing are handled through the Notifications page rather than on the webhook row itself. This makes complex multi-corp, multi-channel setups clean without creating duplicate webhooks for different categories.',
     'multiple_webhooks_features' => '<strong>Features:</strong>
         <ul>
-            <li><strong>Up to 10 webhooks:</strong> Configure multiple Discord or Slack webhook URLs simultaneously</li>
+            <li><strong>Unlimited webhooks:</strong> Configure as many Discord or Slack webhook URLs as you need</li>
             <li><strong>Corporation filtering:</strong> Each webhook can target specific corporations or "all corporations"</li>
-            <li><strong>Independent configuration:</strong> Each webhook has its own enabled/disabled state</li>
-            <li><strong>Per-webhook role mentions:</strong> Different Discord role mentions for each webhook</li>
-            <li><strong>Optional descriptions:</strong> Add notes to identify webhook purpose</li>
-            <li><strong>Individual testing:</strong> Test each webhook separately to verify configuration</li>
+            <li><strong>Independent enable state:</strong> Each webhook has its own master on/off toggle</li>
+            <li><strong>Per-category bindings:</strong> Each webhook receives only the notification categories it\'s bound to</li>
+            <li><strong>Per-binding role mentions:</strong> Override the category default role for a specific webhook (e.g. different roles on corp vs. alliance Discord)</li>
+            <li><strong>Per-binding enable toggle:</strong> Silence a specific category → webhook pairing without deleting it</li>
+            <li><strong>Optional descriptions:</strong> Label each webhook for easier identification</li>
+            <li><strong>Individual testing:</strong> Test each webhook separately from the Settings page</li>
         </ul>',
     'multiple_webhooks_use_cases' => '<strong>Use Cases:</strong>
         <ul>
@@ -487,27 +1309,27 @@ return [
                 </ul>
             </li>
         </ul>',
-    'multiple_webhooks_configuration' => '<strong>Configuration:</strong>
+    'multiple_webhooks_configuration' => '<strong>Configuration workflow:</strong>
         <ol>
-            <li>Navigate to Settings → POS Notifications → Webhook Configuration</li>
-            <li>Click "Add Webhook" button (max 10 webhooks)</li>
-            <li>Enter webhook URL (Discord or Slack)</li>
-            <li>Select corporation filter:
+            <li>Navigate to <strong>Settings > POS Notifications > Webhook Configuration</strong> and add your webhook(s):
                 <ul>
-                    <li>"All Corporations" - Receives alerts for all POSes regardless of corporation</li>
-                    <li>Specific Corporation - Receives alerts only for that corporation\'s POSes</li>
+                    <li>Discord or Slack URL (https only, default port 443, approved hosts)</li>
+                    <li>Corporation filter: "All Corporations" or a specific corp</li>
+                    <li>Description to identify the webhook</li>
+                    <li>Legacy role-mention field (optional, used only as a last-resort fallback — prefer the Notifications page below)</li>
                 </ul>
             </li>
-            <li>Configure Discord role mention (optional):
+            <li>Test the webhook with "Test Webhook" to verify connectivity.</li>
+            <li>Navigate to <strong>Structure Manager > Notifications</strong> (sidebar).</li>
+            <li>For each category you care about:
                 <ul>
-                    <li>Format: <code>&lt;@&amp;ROLE_ID&gt;</code> or just the role ID number</li>
-                    <li>Only triggers for critical and final alerts</li>
-                    <li>Leave empty for no mentions</li>
+                    <li>Toggle the master enable switch</li>
+                    <li>Set a default role mention (picker if a Discord source is installed, manual otherwise)</li>
+                    <li>Pick webhooks from the "Bind Webhook" dropdown and click Add</li>
                 </ul>
             </li>
-            <li>Add description (optional) to identify webhook purpose</li>
-            <li>Test webhook with "Test Webhook" button</li>
-            <li>Enable webhook to start receiving notifications</li>
+            <li>To set a different role mention on a specific webhook binding: edit the role override on that row, then click Save. Leaving it blank inherits the category default.</li>
+            <li>Per-binding enable switches let you temporarily silence one binding without deleting it.</li>
         </ol>',
     'multiple_webhooks_example' => '<strong>Example Multi-Corp Setup:</strong><br>
         <pre>Webhook #1:
@@ -553,22 +1375,22 @@ Webhook #3:
     'fuel_interval_desc' => '<strong>Fuel/Charter Interval:</strong> How often to send reminder alerts during critical stage for fuel/charters (default: 6 hours, range: 1-24 hours). Set to 0 to disable interval reminders and only receive status change alerts.',
     'strontium_interval_desc' => '<strong>Strontium Interval:</strong> How often to send reminder alerts during critical stage for strontium (default: 2 hours, range: 1-12 hours). Set to 0 to disable interval reminders and only receive status change alerts.',
     
-    'threshold_settings' => 'Alert Threshold Settings',
-    'threshold_desc' => 'Customize when alerts are triggered for each resource type.',
-    
-    'fuel_thresholds' => 'Fuel & Charter Thresholds',
-    'fuel_critical_setting' => '<strong>Critical:</strong> Alert when fuel/charters drop below X days (default: 7 days)',
-    'fuel_warning_setting' => '<strong>Warning:</strong> Alert when fuel/charters drop below X days (default: 14 days)',
-    
-    'strontium_thresholds' => 'Strontium Thresholds',
-    'strontium_critical_setting' => '<strong>Critical:</strong> Alert when strontium drops below X hours (default: 6 hours)',
-    'strontium_warning_setting' => '<strong>Warning:</strong> Alert when strontium drops below X hours (default: 12 hours)',
+    'threshold_settings' => 'POS Alert Threshold Settings',
+    'threshold_desc' => 'Customize when POS alerts are triggered for each resource type. Wormhole and null-sec deployments often need higher critical thresholds for extended response times — these are configurable per install. <em>Note: Upwell structure thresholds (citadels, refineries, Metenoxes, etc.) are locked at 7d critical / 14d warning and not configurable here — see the Upwell Notifications section.</em>',
+
+    'fuel_thresholds' => 'POS Fuel & Charter Thresholds',
+    'fuel_critical_setting' => '<strong>Critical:</strong> Alert when fuel/charters drop below X days (default: 7 days, configurable)',
+    'fuel_warning_setting' => '<strong>Warning:</strong> Alert when fuel/charters drop below X days (default: 14 days, configurable)',
+
+    'strontium_thresholds' => 'POS Strontium Thresholds',
+    'strontium_critical_setting' => '<strong>Critical:</strong> Alert when strontium drops below X hours (default: 6 hours, configurable)',
+    'strontium_warning_setting' => '<strong>Warning:</strong> Alert when strontium drops below X hours (default: 12 hours, configurable)',
     
     'test_webhook_button' => 'Test Webhook',
     'test_webhook_desc' => 'Send a test notification to verify your webhook configuration is working correctly.',
     
     'reserves_tracking_settings' => 'Reserves Tracking Settings',
-    'reserves_tracking_desc' => 'Configure which corporate hangars are included in fuel reserves calculations for both Upwell Structures and POSes.',
+    'reserves_tracking_desc' => 'Configure which CorpSAG hangars are included in Upwell fuel reserves calculations. POS towers have no CorpSAG hangars; their fuel/stront/charter inventories are tracked directly on POS detail pages and are unaffected by this setting.',
     
     'hangar_exclusion_title' => 'Hangar Exclusion',
     'hangar_exclusion_desc' => 'Select which corporate hangars (1-7) should be EXCLUDED from fuel reserves tracking. This is useful for excluding hangars used for:',
@@ -578,7 +1400,7 @@ Webhook #3:
         <li><strong>Personal Storage:</strong> Hangars not intended for structure refueling</li>
         <li><strong>Contract Fulfillment:</strong> Fuel blocks reserved for external contracts</li>
     </ul>',
-    'hangar_exclusion_note' => '<strong>Note:</strong> Checked hangars are tracked, unchecked hangars are excluded. Fuel in excluded hangars will not appear in reserves reports, logistics calculations, or the reserves page for ANY asset type (both Upwell Structures and POSes).',
+    'hangar_exclusion_note' => '<strong>Note:</strong> Checked hangars are tracked, unchecked hangars are excluded. Fuel in excluded CorpSAG hangars will not appear in reserves reports, logistics calculations, or the Upwell Reserves page. POS resources are unaffected (POSes have no CorpSAG hangars to exclude).',
     
     'settings_tips' => 'Configuration Tips',
     'settings_tips_list' => '<ul>
@@ -590,11 +1412,179 @@ Webhook #3:
         <li><strong>Hangar Exclusions:</strong> Regularly review excluded hangars to ensure they match your current operations</li>
     </ul>',
     
-    'upwell_notifications_note' => 'Note on Upwell Structures',
-    'upwell_notifications_desc' => 'Webhook notifications are currently available for POSes only. Upwell structure notifications (Citadels, Refineries, Engineering Complexes) are planned for a future release. Currently, Upwell structures use the dashboard critical alerts widget and in-app alerts page.',
+    'upwell_notifications_note' => 'Upwell Structure Notifications',
+    'upwell_notifications_desc' => 'Discord/Slack webhook notifications are available for both POSes and Upwell structures (Citadels, Refineries, Engineering Complexes, Metenox Moon Drills). Upwell alerts use proactive polling every 10 minutes with thresholds locked at sensible defaults (7-day critical, 14-day warning). Notifications fire on status transitions (good/warning/critical) with an automatic final alert at 1 hour remaining. Metenox structures show dual-fuel intelligence (fuel blocks + magmatic gas) with limiting-factor highlighting. POS thresholds are configurable per install (Settings > POS Notifications) since wormhole/null-sec deployments need extended response time; Upwell thresholds are locked for cross-surface consistency. Both POS and Upwell alerts share the same webhook configurations.',
+
+    // ============================================================
+    // Upwell Structure Notifications (detailed)
+    // ============================================================
+    'upwell_detailed_title' => 'Upwell Structure Notifications — Detailed Guide',
+    'upwell_detailed_intro' => 'Upwell notifications are Structure Manager\'s polling-based alert system for Citadels, Engineering Complexes, Refineries, and Metenox Moon Drills. Unlike CCP\'s reactive <code>StructureFuelAlert</code> (which fires only once, ~24 hours before empty), Structure Manager proactively polls fuel bays every 10 minutes and fires multi-stage alerts as your fuel crosses two locked thresholds (7-day critical, 14-day warning). The 13-day operational window between SM\'s first warning and CCP\'s last-mile alert is the difference between "schedule a refuel run this week" and "scramble logistics RIGHT NOW".',
+
+    'upwell_what_tracked_title' => 'Structures Covered',
+    'upwell_what_tracked_list' => '<ul>
+        <li><strong>Citadels</strong> — Astrahus, Fortizar, Keepstar</li>
+        <li><strong>Engineering Complexes</strong> — Raitaru, Azbel, Sotiyo</li>
+        <li><strong>Refineries</strong> — Athanor, Tatara (fuel bonuses applied automatically when service has the bonus)</li>
+        <li><strong>Observatories</strong> — Tenebrex Cyno Jammer (type ID 37534)</li>
+        <li><strong>Flex Structures</strong> — Ansiblex Jump Gates, Pharolux Cyno Beacons</li>
+        <li><strong>Metenox Moon Drills</strong> — tracked with dual-fuel logic (fuel blocks + magmatic gas)</li>
+    </ul>
+    <p style="margin-top:8px;">Any structure with a fuel bay that SeAT can read via ESI is covered. Structures that CCP marks as "unfueled" (NULL <code>fuel_expires</code>) are ignored.</p>',
+
+    'upwell_detection_title' => 'How Detection Works',
+    'upwell_detection_list' => '<ol>
+        <li><strong>Every 10 minutes</strong>, the <code>structure-manager:notify-upwell-fuel</code> job dispatches (cron <code>*/10 * * * *</code>)</li>
+        <li>The job reads all <code>corporation_structures</code> rows where <code>fuel_expires IS NOT NULL</code></li>
+        <li>For each structure it loads:
+            <ul>
+                <li>Current fuel block count from <code>corporation_assets</code> (location_id = structure_id, location_flag = StructureFuel)</li>
+                <li>Time remaining via <code>fuel_expires - NOW()</code></li>
+                <li>Active service count from <code>corporation_structure_services</code> (state = \'online\')</li>
+                <li>Consumption rate via <code>FuelCalculator::getFuelRequirement()</code> (handles refinery bonuses)</li>
+            </ul>
+        </li>
+        <li>For Metenox: also loads magmatic gas from the same fuel bay (type ID 81143) and computes effective days as <code>min(fuel_days, gas_days)</code></li>
+        <li>Status is determined against the locked Upwell thresholds (7d critical / 14d warning) and stored in <code>structure_notification_status</code> (one row per structure)</li>
+        <li>Notifications fire on status transitions, plus a latched final alert at 1 hour remaining</li>
+    </ol>',
+
+    'upwell_status_flow_title' => 'Status Flow',
+    'upwell_status_flow_desc' => 'Each structure has a status that transitions through four states. Notifications fire on <strong>transitions</strong>, not on every poll, to prevent spam.',
+    'upwell_status_flow_table' => '<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead><tr>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Status</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Trigger</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Fires Notification?</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Color</th>
+        </tr></thead>
+        <tbody>
+            <tr>
+                <td style="padding:8px;"><strong>good</strong></td>
+                <td style="padding:8px;">days_remaining &ge; warning_days</td>
+                <td style="padding:8px;">No (baseline)</td>
+                <td style="padding:8px;">—</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;"><strong>warning</strong></td>
+                <td style="padding:8px;">critical_days &le; days_remaining &lt; warning_days</td>
+                <td style="padding:8px;">Yes, on entry (good &rarr; warning)</td>
+                <td style="padding:8px; color:#ffc107;">Yellow</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;"><strong>critical</strong></td>
+                <td style="padding:8px;">days_remaining &lt; critical_days</td>
+                <td style="padding:8px;">Yes, on entry + optional interval reminders</td>
+                <td style="padding:8px; color:#dc3545;">Red</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;"><strong>final</strong></td>
+                <td style="padding:8px;">hours_remaining &le; 1 AND &gt; 0</td>
+                <td style="padding:8px;">Yes, latched (fires once; re-arms on recovery)</td>
+                <td style="padding:8px; color:#8b0000;">Dark red</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="margin-top:8px;"><strong>Recovery behavior:</strong> when a structure\'s status returns above critical (usually after refueling), Structure Manager resets the <code>fuel_final_alert_sent</code> latch. A future drop back to the 1-hour mark will fire a fresh final alert rather than staying silent.</p>',
+
+    'upwell_metenox_dual_fuel_title' => 'Metenox Dual-Fuel Logic',
+    'upwell_metenox_dual_fuel_desc' => 'Metenox Moon Drills consume both fuel blocks AND magmatic gas simultaneously. If either resource runs out, the structure stops working — so the alert uses whichever runs out first.',
+    'upwell_metenox_dual_fuel_math' => '<ul>
+        <li><strong>Consumption rates:</strong> 5 blocks/hour + 200 gas/hour (120 blocks/day + 4,800 gas/day)</li>
+        <li><strong>Effective days remaining:</strong> <code>min(fuel_days, gas_days)</code></li>
+        <li><strong>Limiting factor:</strong> the resource with fewer days left — shown prominently in the embed with a <code>[LIMITING]</code> badge</li>
+        <li><strong>Weekly requirement:</strong> 840 blocks + 33,600 gas per Metenox</li>
+        <li><strong>No refinery bonus:</strong> Metenox drills do NOT receive Athanor/Tatara bonuses (CCP-intended design)</li>
+    </ul>
+    <p style="margin-top:8px;">Example: a Metenox with 100 fuel blocks (~20 hours) and 48,000 gas (10 days) shows <strong>fuel blocks as limiting</strong>. The alert prioritizes fuel-block hauling even though gas reserves look fine.</p>',
+
+    'upwell_config_title' => 'Configuration',
+    'upwell_config_thresholds' => '<strong>Thresholds (locked, NOT configurable):</strong>
+        <ul>
+            <li><strong>Critical:</strong> &lt; 7 days remaining (<code>FuelThresholds::UPWELL_FUEL_CRITICAL_DAYS</code>)</li>
+            <li><strong>Warning:</strong> &lt; 14 days remaining (<code>FuelThresholds::UPWELL_FUEL_WARNING_DAYS</code>)</li>
+            <li><strong>Final alert:</strong> &le; 1 hour remaining (latched, not configurable)</li>
+        </ul>
+        <p style="margin-top:6px;">Upwell thresholds are locked at sensible defaults so every display surface (list, detail, board, webhooks, Critical Alerts) agrees on what counts as critical / warning. This avoids the "settings drift" problem where the embed fires at one threshold while the UI flags structures at another. POS thresholds remain configurable in Settings &gt; POS Notifications because wormhole / null-sec deployments need different response times — Upwell deployments are typically more uniform across high-sec / null-sec.</p>
+        <p style="margin-top:6px;"><strong>Configurable (cadence):</strong></p>
+        <ul>
+            <li><code>upwell_fuel_notification_interval</code> — hours between reminder pings during critical stage (0 = disabled, only status transitions fire). Settings &gt; Upwell Structures.</li>
+        </ul>',
+    'upwell_config_webhooks' => '<strong>Webhooks &amp; Role Mentions (Notifications page):</strong>
+        <ol>
+            <li>Add your webhook URL(s) in <code>Settings &gt; POS Notifications &gt; Webhook Configuration</code></li>
+            <li>Go to <code>Structure Manager &gt; Notifications</code></li>
+            <li>Enable the <code>upwell.fuel</code> category (and <code>upwell.magmatic_gas</code> for Metenox gas alerts)</li>
+            <li>Bind the webhook(s) you want to receive Upwell alerts</li>
+            <li>Set a default role mention on the category, or per-binding for fine control</li>
+        </ol>',
+
+    'upwell_vs_pos_title' => 'Upwell vs POS — Key Differences',
+    'upwell_vs_pos_table' => '<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead><tr>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Aspect</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">Upwell</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid #454d55;">POS (legacy)</th>
+        </tr></thead>
+        <tbody>
+            <tr>
+                <td style="padding:8px;">Fuel detection source</td>
+                <td style="padding:8px;">ESI <code>fuel_expires</code> + fuel bay polling</td>
+                <td style="padding:8px;">ESI <code>assets</code> + Structure Manager fuel rate math (<code>TypeIdRegistry</code> + <code>PosFuelCalculator</code>, hardcoded rates with SDE <code>invControlTowerResources</code> as fallback for racial-fuel-type lookups)</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Reinforcement timer</td>
+                <td style="padding:8px;">Via ESI notifications (StructureUnderAttack, etc.)</td>
+                <td style="padding:8px;">Strontium clathrate hours when <code>state = \'reinforced\'</code></td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Dual fuel?</td>
+                <td style="padding:8px;">Metenox only (blocks + gas)</td>
+                <td style="padding:8px;">No (just blocks + charter in high-sec)</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Status tracking table</td>
+                <td style="padding:8px;"><code>structure_notification_status</code></td>
+                <td style="padding:8px;">Columns on <code>starbase_fuel_history</code> latest row</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Notification categories</td>
+                <td style="padding:8px;"><code>upwell.fuel</code>, <code>upwell.magmatic_gas</code></td>
+                <td style="padding:8px;"><code>pos.fuel</code>, <code>pos.strontium</code>, <code>pos.lifecycle</code></td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Poll cadence</td>
+                <td style="padding:8px;">Every 10 minutes</td>
+                <td style="padding:8px;">Every 10 minutes</td>
+            </tr>
+            <tr>
+                <td style="padding:8px;">Final alert latch</td>
+                <td style="padding:8px;">1 hour remaining</td>
+                <td style="padding:8px;">1 hour (fuel) / 30 min (strontium)</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="margin-top:8px; font-size:0.9em;"><strong>Why Structure Manager uses hardcoded POS fuel rates instead of pure SDE math:</strong> SeAT\'s SDE for POS towers has documented inaccuracies in some fields (notably faction-tower modifiers and at least one type-ID discrepancy where Tenebrex Cyno Jammer is listed as 35839 in some snapshots but is actually 37534 in live). <code>TypeIdRegistry</code> hardcodes the verified-correct values (POS_TOWERS metadata with faction modifiers, POS_BASE_FUEL_RATES per size) and uses <code>invControlTowerResources</code> only for the racial-fuel-type lookup where SDE is reliable. The hourly rate calculation prefers SDE\'s <code>invControlTowerResources.quantity</code> when present and falls back to <code>POS_BASE_FUEL_RATES[size] &times; faction_modifier</code> otherwise. See <code>TypeIdRegistry.php</code>\'s "HARDCODED ON PURPOSE" docblock for the full reasoning.</p>',
+
+    'upwell_embed_example_title' => 'Example Discord Embed',
+    'upwell_embed_example' => '<pre>CRITICAL: Upwell Structure Low Fuel &mdash; 1 structure needs attention
+&lt;@&amp;123456789&gt;
+
+FINAL ALERT: "3-FKCZ Fortizar"
+📍 Location: 3-FKCZ (-0.07)
+Structure Type: Fortizar
+⏰ Last Update: just now
+GOING OFFLINE IN: 47 minutes
+
+Fuel Blocks: 47 blocks remaining
+Consumption Rate: 40.0 blocks/hour
+Active Services: 4 service(s) online
+Weekly Requirement: 6,720 blocks
+
+SeAT Structure Manager | Structure ID: 1042938412345</pre>',
 
     // Pages Guide
-    'pages_intro' => 'Structure Manager consists of several pages, each designed for specific aspects of fuel management.',
+    'pages_intro' => 'Structure Manager consists of several pages, each designed for a specific aspect of structure and fuel management. They are listed below in the same order they appear in the sidebar.',
 
     'dashboard_page_title' => 'Upwell Structures (Main Page)',
     'dashboard_page_desc' => '<ul>
@@ -659,6 +1649,19 @@ Webhook #3:
         <li><strong>Jump planning:</strong> System-by-system breakdown for route planning</li>
     </ul>',
 
+    'economics_page_title' => 'Fuel Economics Page (requires Manager Core)',
+    'economics_page_desc' => '<ul>
+        <li><strong>ISK projections:</strong> weekly / monthly / quarterly / yearly fuel cost across every structure you can see, computed from the same active-services rate the Logistics Report uses</li>
+        <li><strong>Cheapest fuel suggestion:</strong> picks the lowest-priced of the 4 fuel block types right now and uses it to price all Upwell + Metenox projections (those structures can substitute freely)</li>
+        <li><strong>Optimization banner:</strong> when one or more structures are running on a more expensive type than the cheapest, surfaces the monthly / yearly savings you would unlock by switching</li>
+        <li><strong>Per-system breakdown:</strong> table sorted by spend descending so the most-expensive systems are at the top</li>
+        <li><strong>Per-structure breakdown:</strong> Current fuel + status (already optimal / switch suggestion / racial locked) plus per-structure monthly savings and offline days</li>
+        <li><strong>Daily ISK trend:</strong> stacked area chart over the look-back window (90 / 180 / 365 days) showing daily fuel cost</li>
+        <li><strong>By Fuel Type pie:</strong> doughnut chart breaking the period total down by fuel typeID</li>
+        <li><strong>Structure breakdown banner:</strong> count of Upwell / Metenox / POS structures included, with race split for POSes</li>
+        <li><strong>Force refresh button:</strong> bypasses the 5-minute cache when you need ground-truth numbers</li>
+    </ul>',
+
     'detail_page_title' => 'Structure Detail Page',
     'detail_page_desc' => '<ul>
         <li><strong>Comprehensive fuel dashboard:</strong> Complete overview of one structure</li>
@@ -666,10 +1669,29 @@ Webhook #3:
         <li><strong>Service tracking:</strong> Lists active services and their fuel impact</li>
         <li><strong>Historical charts:</strong> Visual graphs of fuel consumption over time</li>
         <li><strong>Refuel event log:</strong> Timeline of when fuel was added</li>
-        <li><strong>Anomaly detection:</strong> Alerts for unusual consumption patterns</li>
+        <li><strong>Recent Fuel Records:</strong> Per-poll event classification badges (v2.0.0 fuel forensics)</li>
         <li><strong>Reserve history:</strong> Staged fuel movements for this structure</li>
         <li><strong>Metenox dual-display:</strong> Separate charts and stats for fuel blocks and gas</li>
-        <li><strong>Control Tower dual-display:</strong> Seperate charts and stats for fuel blocks and charters (if required), seperate status for Strontium Clathrates</li>
+        <li><strong>Control Tower dual-display:</strong> Separate charts and stats for fuel blocks and charters (if required), separate status for Strontium Clathrates</li>
+    </ul>
+    <p><em>Not a sidebar entry — you reach the Structure Detail page by clicking any structure on the Upwell Structures or Control Towers pages.</em></p>',
+
+    'command_board_page_title' => 'Structure Board',
+    'command_board_page_desc' => '<ul>
+        <li><strong>Timer board:</strong> Central view of every active structure timer — reinforcement timers, anchoring timers, and admin-created manual ops</li>
+        <li><strong>Auto-population:</strong> ESI structure events (shield / armor reinforced, anchoring) create board entries automatically</li>
+        <li><strong>Live countdowns:</strong> Countdown to each timer\'s exit, grouped and sorted by urgency</li>
+        <li><strong>Manual ops:</strong> Admins can add hostile / defensive operation timers directly to the board, with a target structure type and notes</li>
+        <li><strong>Auto-cleanup:</strong> Elapsed and resolved timers are pruned automatically so the board stays current</li>
+    </ul>',
+
+    'settings_page_title' => 'Settings',
+    'settings_page_desc' => '<ul>
+        <li><strong>Fuel thresholds:</strong> Warning and critical day cutoffs that drive fuel alerts</li>
+        <li><strong>Reserves Tracking:</strong> Choose which CorpSAG hangars are included in reserve calculations</li>
+        <li><strong>ESI Detection Mode:</strong> Choose how structure events are detected (auto / SeAT-native / off)</li>
+        <li><strong>Notifications panel:</strong> Webhooks, notification categories, and Discord role mentions all live inside Settings</li>
+        <li><strong>Admin-only:</strong> Requires the <code>structure-manager.admin</code> permission. See the dedicated Settings section of this help page for the full walkthrough.</li>
     </ul>',
 
     'pro_tip' => 'Pro Tip',
@@ -894,6 +1916,63 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
             <li><strong>Role mentions:</strong> Test per-webhook role mentions with different corporations</li>
         </ul>',
 
+    // 2026-05-12: documentation for the 7 commands that were shipped but
+    // never made it into the Commands page. Grouped into two subsections —
+    // operational (cron-driven background jobs operators should know about
+    // because they appear in schedules + Horizon) and test (the test-data
+    // family operators interact with directly during verification).
+    'commands_additional_title' => 'Additional Commands',
+    'commands_additional_intro' => 'These commands were previously undocumented but are part of the shipped plugin. Most run on schedule; a few are operator-invoked for testing.',
+
+    'commands_operational_title' => 'Operational Background Jobs',
+    'commands_operational_intro' => 'Scheduled commands you will see in Horizon and the SeAT scheduler. You normally do not run these manually, but knowing what they do helps when reading logs or troubleshooting.',
+
+    'process_notifications_title' => 'process-notifications',
+    'process_notifications_desc' => 'SeAT-native fallback for ESI notification processing. Reads from SeAT\'s <code>character_notifications</code> table and dispatches Structure Manager webhooks. Used when Manager Core is absent (MC fast-poll is unavailable) or when the operator has set <code>esi_detection_mode = seat_native</code> to opt out of MC fast-poll. The job\'s handle() includes a mode-aware gate so it correctly no-ops when MC is handling notifications.',
+    'process_notifications_cron' => 'Cron: <code>* * * * *</code> (every minute). Detection floor is SeAT\'s 15-20 min bucket cadence; running the job every minute means SM picks up new rows immediately when SeAT writes them.',
+
+    'track_structure_presence_title' => 'track-structure-presence',
+    'track_structure_presence_desc' => 'Destruction-detection medium-confidence path. Tracks corporation_structures membership over time so structures that vanish for 3+ polls (~30 min absent) can be classified as destroyed / likely_transferred / bulk_vanished. The high-confidence path (CCP StructureDestroyed notification) fires from StructureEventHandler regardless of whether MC is installed; this medium-confidence path is the safety net for cases where the notification was missed.',
+    'track_structure_presence_cron' => 'Cron: <code>*/10 * * * *</code> (every 10 minutes). Three consecutive absences = classified as gone.',
+
+    'publish_timer_schedule_events_title' => 'publish-timer-schedule-events',
+    'publish_timer_schedule_events_desc' => 'Cross-plugin timer-lifecycle event publisher. Fires <code>structure_manager.timer.upcoming_24h</code>, <code>.upcoming_1h</code>, and <code>.elapsed</code> events on Manager Core\'s EventBus for each tracked timer that crosses a threshold. Consumed by SeAT Broadcast (when its calendar feature lands) and any future fleet-planning subscriber.',
+    'publish_timer_schedule_events_cron' => 'Cron: <code>*/5 * * * *</code> (every 5 minutes). Without this command running, the Family B timer.* events never fire even though the Family A alert.* events still do.',
+
+    'prune_structure_board_timers_title' => 'prune-structure-board-timers',
+    'prune_structure_board_timers_desc' => 'Daily housekeeping. Deletes old dismissed Structure Board timer rows so the table does not grow unbounded. Without this scheduled, dismissed rows accumulate forever.',
+    'prune_structure_board_timers_cron' => 'Cron: <code>0 4 * * *</code> (daily at 04:00 UTC).',
+
+    'commands_test_title' => 'Test-Data Commands',
+    'commands_test_intro' => 'For end-to-end verification of webhook delivery, EventBus publishing, and the dispatch chain. All test data lives in declared safe ID ranges (corporations 2.1B / structures 2.3B / characters 2.4B / POSes 2.2B / notifications 8e18+) so production data cannot be accidentally affected.',
+
+    'create_test_upwell_structures_title' => 'create-test-upwell-structures',
+    'create_test_upwell_structures_desc' => 'Creates 12 test Upwell structures (every published Upwell type) anchored in a test system, owned by a test corporation. Used as targets for inject-test-notification. Idempotent — running it twice does not create duplicates.',
+    'create_test_upwell_structures_usage' => '<pre><code>php artisan structure-manager:create-test-upwell-structures</code></pre>',
+
+    'inject_test_notification_title' => 'inject-test-notification',
+    'inject_test_notification_desc' => 'Inject a fake CCP-shaped notification into SeAT\'s <code>character_notifications</code> table, then synchronously dispatch via StructureEventHandler. Used for verifying the full dispatch chain (embed building, role mention injection, webhook delivery, EventBus publishing) without waiting for a real in-game event.',
+    'inject_test_notification_usage' => '<pre><code># Most commonly used flavors
+php artisan structure-manager:inject-test-notification --structure-id=2300000001 --type=StructureUnderAttack --attacker-corp="Test Aggressor"
+php artisan structure-manager:inject-test-notification --structure-id=2300000001 --type=StructureLostShields --time-left=86400
+php artisan structure-manager:inject-test-notification --structure-id=2300000001 --type=StructureDestroyed
+
+# See all 23 supported types
+php artisan structure-manager:inject-test-notification --list</code></pre>',
+    'inject_test_notification_safety' => '<strong>Safety:</strong> all gates fail-closed. Structure ID must be in the test range (2.3B+), character ID must be in the test character range, and the generated notification_id (8e18+) cannot collide with real CCP IDs. Refuses to inject against a real structure under any circumstances.',
+
+    'cleanup_test_data_title' => 'cleanup-test-data',
+    'cleanup_test_data_desc' => 'Symmetric teardown for everything the test-data commands create. Wraps <code>TestDataGenerator::cleanupAll()</code> and extends the sweep to Manager Core\'s notification dedup table. Bounded by the same safe-range constants as the create commands, so real CCP data cannot be touched.',
+    'cleanup_test_data_usage' => '<pre><code># Show what would be deleted, without deleting
+php artisan structure-manager:cleanup-test-data --dry-run
+
+# Interactive with confirmation prompt
+php artisan structure-manager:cleanup-test-data
+
+# Skip the prompt (useful in CI scripts)
+php artisan structure-manager:cleanup-test-data --force</code></pre>',
+    'cleanup_test_data_output' => '<strong>Output:</strong> a table showing rows-deleted per affected table (character_notifications, structure_manager_esi_notifications, manager_core_esi_notifications, corporation_structures, character_infos, etc.) plus a summary count. Idempotent — running twice on already-clean data is a harmless no-op.',
+
     'pos_example_title' => 'POS Tracking Example',
     'pos_example_desc' => 'A Large Amarr Control Tower in High Security requires:',
     'pos_example_list' => '<ul>
@@ -909,6 +1988,33 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'note' => 'Note',
     'commands_warning' => 'Manual command execution is rarely necessary. The automatic scheduling handles all routine operations. Only use manual commands for testing or troubleshooting purposes.',
 
+    // Custom Styling
+    'custom_styling' => 'Custom Styling',
+    'custom_styling_guide' => 'CSS Overrides Guide',
+    'custom_styling_intro' => 'Structure Manager wraps every page in CSS hook classes, so you can restyle any part of the plugin from SeAT\'s custom CSS feature or your own theme stylesheet — without editing the plugin\'s files (which are overwritten on every update).',
+    'css_class_hierarchy' => 'CSS Class Hierarchy',
+    'css_class_hierarchy_desc' => 'Structure Manager uses a small, deliberate set of hook classes:',
+    'css_base_class' => '<code>.structure-manager-wrapper</code> — present on EVERY plugin page. The global hook: style this to affect all of Structure Manager at once.',
+    'css_settings_class' => '<code>.settings-page</code> — added alongside the wrapper on the Settings page only.',
+    'css_diagnostic_class' => '<code>.diagnostic-page</code> — added alongside the wrapper on the Admin Diagnostics page only.',
+    'css_components_title' => 'Reusable Component Classes',
+    'css_components_desc' => 'Most of the plugin\'s chrome is built from a few shared component classes — target these to restyle a widget everywhere it appears:',
+    'css_component_card' => '<code>.card-dark</code> — the dark card chrome (header + body) used on every page.',
+    'css_component_cardtitle' => '<code>.card-title</code> — the heading inside a card header.',
+    'css_component_cardtools' => '<code>.card-tools</code> — the button / filter cluster on the right of a card header.',
+    'css_component_infobox' => '<code>.info-box</code> + <code>.info-box-icon</code> — the coloured stat cards (Fuel Summary, Critical / Warning / Total Fuel Needed). <code>.info-box-icon</code> is the coloured square; the icon glyph inside it sizes with <code>font-size</code>.',
+    'css_component_btn' => '<code>.btn-sm-primary</code> — the indigo primary buttons (Refresh, Save, etc.).',
+    'css_example_title' => 'Example Overrides',
+    'css_example_global' => '/* Tint the background of every Structure Manager page */',
+    'css_example_global_code' => '.structure-manager-wrapper { background-color: #0d0d12; }',
+    'css_example_specific' => '/* Restyle the card border on the Settings page only */',
+    'css_example_specific_code' => '.settings-page .card-dark { border-color: #667eea; }',
+    'css_example_icon' => '/* Resize the coloured stat-card icons (handy on a custom SeAT theme) */',
+    'css_example_icon_code' => '.structure-manager-wrapper .info-box .info-box-icon i { font-size: 2.25rem; }',
+    'css_where_to_add' => 'Where to Add Custom CSS',
+    'css_where_to_add_desc' => 'SeAT auto-loads two custom stylesheets if they exist: <code>custom-layout.css</code> (applies app-wide) and <code>custom-layout-mini.css</code> (the sign-in page only). On a bare-metal install, drop <code>custom-layout.css</code> into SeAT\'s <code>public/</code> directory (e.g. <code>/var/www/seat/public/custom-layout.css</code>). On SeAT Docker, place it in <code>/opt/seat-docker/custom/</code> and mount it to <code>/var/www/seat/public/</code> via <code>docker-compose.override.yml</code>, then bring the stack back up. The file is detected automatically — there is no SeAT setting to toggle. Never edit the plugin\'s own files; they are overwritten on every update. Full guide: <a href="https://eveseat.github.io/docs/styling/" target="_blank" rel="noopener">SeAT styling docs</a>.',
+    'custom_styling_note' => 'Structure Manager\'s own stylesheet is written for the standard SeAT layout. If you run a custom SeAT theme, small visual tweaks belong in your theme\'s CSS — keeping the plugin standard-clean and your theme adjustments separate means both survive updates independently.',
+
     // FAQ
     'frequently_asked' => 'Frequently Asked Questions',
     
@@ -922,7 +2028,7 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'faq_a3' => 'Yes! Structure Manager automatically tracks all corporations that your SeAT installation manages. The dashboard includes filters to view specific corporations, and all pages support multi-corporation data.',
 
     'faq_q4' => 'Q4: How often does the plugin check fuel levels?',
-    'faq_a4' => 'Upwell structures: Fuel levels tracked hourly, consumption analysis runs every 30 minutes. POSes: Tracked every 10 minutes for real-time monitoring, notifications checked every 10 minutes. Reserve tracking occurs hourly for all structure types. These schedules are automatic and require no configuration.',
+    'faq_a4' => 'Upwell structures: fuel bay levels tracked hourly, consumption analysis runs every 30 minutes, CorpSAG hangar reserves tracked hourly as part of the same pass. POS towers: fuel bay, strontium, and charter inventories all tracked every 10 minutes for real-time monitoring; notifications checked every 10 minutes. POSes have no CorpSAG hangars and are not represented on the Reserves page. These schedules are automatic and require no configuration.',
 
     'faq_q5' => 'Q5: What happens if I refuel a structure?',
     'faq_a5' => 'The plugin automatically detects refuel events by analyzing fuel bay history. Significant increases in fuel levels are logged as refuel events, which appear in the structure detail page and can help track refueling operations.',
@@ -934,7 +2040,7 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'faq_a7' => 'Yes! The plugin retains 6 months of fuel bay history for Upwell structures and 90 days for POSes (updated more frequently). Reserve history is retained for 3 months. Visit any structure\'s detail page to see consumption charts, refuel events, and historical trends.',
 
     'faq_q8' => 'Q8: How does reserve tracking work?',
-    'faq_a8' => 'The plugin scans all structure hangars for fuel blocks (Type ID: 4312) and magmatic gas (Type ID: 58903) in CorpSAG divisions. It tracks quantities and locations, identifying which structures have staged fuel ready for use.',
+    'faq_a8' => 'The plugin scans all structure hangars for fuel blocks (the four block types — Nitrogen 4051, Hydrogen 4246, Helium 4247, Oxygen 4312) and magmatic gas (Type ID: 81143) in CorpSAG divisions. It tracks quantities and locations, identifying which structures have staged fuel ready for use.',
 
     'faq_q9' => 'Q9: What is the "limiting factor" on Metenox drills?',
     'faq_a9' => 'The limiting factor is whichever resource (fuel blocks or magmatic gas) will run out first. Since both are required for operation, the plugin highlights which resource needs priority hauling with a purple "LIMITING" badge.',
@@ -946,16 +2052,25 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'faq_a11' => 'Very accurate. The plugin uses official EVE Online fuel mechanics and, when possible, calculates consumption from actual fuel bay data rather than service counts. It correctly handles multi-service modules, refinery bonuses, moon drills, and Metenox dual-fuel requirements.',
 
     'faq_q12' => 'Q12: Does the plugin send Discord notifications?',
-    'faq_a12' => 'Yes! Discord/Slack webhook notifications are available for POS fuel alerts. Configure webhook URL and thresholds in Settings. Notifications use status-based alerting (good→warning→critical transitions) with optional critical stage reminders. Final alerts sent 1 hour before POS goes offline. Avatar uses your webhook configuration. Rich embeds show tower location, type, and resource levels. Upwell structure notifications are planned for a future release.',
+    'faq_a12' => 'Yes! Discord/Slack webhook notifications are available for both POS and Upwell structure fuel alerts. Configure webhook URLs in Webhook Configuration (sidebar), then bind them to categories under Settings > Notifications. POS thresholds are configurable (Settings > POS Notifications) — useful for wormhole/null-sec deployments that need extended response times. Upwell thresholds are locked at 7d critical / 14d warning so every display surface (list, detail, board, embeds) agrees on what counts as critical. Notifications use status-based alerting (good→warning→critical transitions) with optional critical-stage reminders. Final alerts fire 1 hour before a structure goes offline. Metenox Moon Drills show dual-fuel data (blocks + magmatic gas) with limiting factor. Both POS and Upwell alerts share the same webhook configuration including per-webhook corporation filters and role mentions.',
 
     'faq_q13' => 'Q13: How does POS charter tracking work?',
     'faq_a13' => 'Starbase charters are automatically tracked for POSes in high-security space. The plugin detects system security level and monitors charter consumption (1/hour) alongside fuel blocks. POSes in low-sec, null-sec (both sovereign and NPC), or wormhole space don\'t require charters and won\'t show charter tracking.',
 
     'faq_q14' => 'Q14: Why are my POS fuel and strontium alerts separate?',
-    'faq_a14' => 'Fuel blocks and strontium serve different purposes and have different urgency levels. Fuel is for daily operations (critical at 7 days), while strontium is defensive (critical at 6 hours). Separate status tracking with optional different reminder intervals (6 hours for fuel, 2 hours for strontium during critical stage) ensure appropriate notification frequency for each resource type.',
+    'faq_a14' => 'Fuel blocks and strontium serve different purposes and have different urgency levels. Fuel is for daily operations (default critical at 7 days, configurable per install), while strontium is defensive (default critical at 6 hours, configurable per install). Wormhole and null-sec POS deployments often need higher critical thresholds for extended response times — adjust in Settings > POS Notifications. Separate status tracking with optional different reminder intervals (6 hours for fuel, 2 hours for strontium during critical stage) ensures appropriate notification frequency for each resource type.',
 
     'faq_q15' => 'Q15: What happens if a POS runs low on multiple resources?',
     'faq_a15' => 'The plugin identifies the "limiting factor" - whichever resource will run out first. This appears with a [LIMITING FACTOR] badge in alerts and on the POS detail page. For example, if fuel lasts 20 days but charters only last 4 days, charters are marked as limiting.',
+
+    'faq_q16' => 'Q16: My Recent Fuel Records now shows a "Withdrawal from Bay" badge. What does that mean?',
+    'faq_a16' => 'v2.0.0 reclassifies every fuel-tracking poll into one of eight event types. Most polls are <code>consumption_normal</code> (bay burned within ±15% of expected). A <code>withdrawal_bay</code> badge means the bay went down by more than 1.5x expected consumption — someone likely yanked fuel from the structure. <code>withdrawal_reserves</code> means a CorpSAG hangar dropped >=500 blocks without the bay gaining, which means fuel left the corp. For each withdrawal event, click the small magnifying-glass icon to see the forensic candidate list — corp members who collaterally match four signals (online during the window, personal hangar gain, has corp title, sold matching fuel on market). The list is probabilistic inference, NOT proof: ESI does not expose actor identity for asset moves, so the candidates are inferred from collateral SeAT data. False positives are inevitable (logistics alts moving fuel between hangars look identical to thieves).',
+
+    'faq_q17' => 'Q17: What appears under an "External" card on the Fuel Reserves page?',
+    'faq_a17' => 'v2.0.0 tracks CorpSAG fuel staged in two kinds of locations beyond your own structures: (a) <strong>NPC stations</strong> where your corp rents Offices (e.g. fuel staged in Jita 4-4 for hauling out), and (b) <strong>foreign Upwell structures</strong> where your corp has CorpSAG access — typically via Office rentals in friendly alliance-mates\' Fortizars used as forward staging points. Both appear as "External" badged cards under their real solar system, with the location name resolved from <code>staStations</code> (NPC) or <code>universe_structures</code> (foreign Upwell). If you don\'t see a location you expect, check: SeAT has polled <code>corporation_assets</code> recently (1-hour ESI cache), and SM\'s <code>track-fuel</code> command has run since the asset row updated (runs hourly at <code>:15</code>). Force-trigger with <code>php artisan structure-manager:track-fuel</code> if you don\'t want to wait.',
+
+    'faq_q18' => 'Q18: How do I tell if my Discord webhook is actually working?',
+    'faq_a18' => 'Go to <code>/structure-manager/diagnostic</code> (admin-only) and look at the "Webhook Delivery Health (Last 24h)" section on the Health Checks tab. Per-webhook table shows attempt count, success rate (green ≥95% / yellow ≥50% / red <50%), average response time, last attempt timestamp, and most recent failure with HTTP code + error preview. If a webhook shows 0 attempts for 24h but is enabled, either no notifications fired in that window OR your category bindings need review (Webhook Configuration tab → check what categories the webhook is bound to). Every dispatch since v2.0.0 is logged to <code>structure_manager_webhook_deliveries</code> with 30-day retention.',
 
     // Troubleshooting
     'troubleshooting_guide' => 'Troubleshooting Guide',
@@ -983,13 +2098,14 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     </ul>',
 
     'issue3_title' => '3. Missing Reserve Data',
-    'issue3_desc' => 'If fuel reserves aren\'t showing:',
+    'issue3_desc' => 'If Upwell fuel reserves aren\'t showing on the Reserves page:',
     'issue3_solutions' => '<ul>
-        <li><strong>Check hangar divisions:</strong> Reserves must be in CorpSAG hangar divisions (not personal hangars).</li>
-        <li><strong>Verify item types:</strong> Plugin tracks Type ID 4312 (Fuel Blocks) and 58903 (Magmatic Gas) only.</li>
-        <li><strong>Asset sync required:</strong> SeAT must have synced corporation asset data.</li>
-        <li><strong>Run reserve tracking:</strong> Execute <code>php artisan structure-manager:track-reserves</code> manually.</li>
-        <li><strong>Wait for next cycle:</strong> Reserve tracking occurs hourly.</li>
+        <li><strong>Check hangar divisions:</strong> Reserves must be in CorpSAG hangar divisions (not personal hangars). POS towers do not have CorpSAG hangars and never appear on the Reserves page — their fuel/stront/charter inventories are on the POS detail pages instead.</li>
+        <li><strong>Verify item types:</strong> The Reserves page tracks the four fuel block types (4051 Nitrogen, 4246 Hydrogen, 4247 Helium, 4312 Oxygen) plus Magmatic Gas (81143, Metenox only).</li>
+        <li><strong>Asset sync required:</strong> SeAT must have synced corporation asset data (~1-hour ESI cache).</li>
+        <li><strong>Run the tracker:</strong> Execute <code>php artisan structure-manager:track-fuel</code> to force a poll. CorpSAG reserves are detected as part of this same pass.</li>
+        <li><strong>Wait for next cycle:</strong> CorpSAG reserves are scanned hourly with the main fuel pass.</li>
+        <li><strong>Excluded hangar check:</strong> If a known hangar is missing, verify it isn\'t unchecked in Settings → Reserves Tracking.</li>
     </ul>',
 
     'issue4_title' => '4. Metenox Dual-Fuel Not Showing',
@@ -1025,6 +2141,81 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
         <li><strong>Per-webhook role mentions:</strong> Verify each webhook\'s role ID format is correct: <code>&lt;@&amp;ROLE_ID&gt;</code></li>
         <li><strong>Final alert timing:</strong> Remember that final alerts are sent at exactly 1 hour remaining, regardless of intervals.</li>
         <li><strong>Notifications for removed POSes:</strong> If you receive alerts for POSes that no longer exist (unanchored/removed), this was fixed in v1.0.11. Update to the latest version. The tracking job now automatically detects and marks orphaned POSes as unanchored.</li>
+    </ul>',
+
+    // ===================================================================
+    // Admin Troubleshooting (Diagnostics page + Test Notification Lab)
+    // ===================================================================
+
+    'admin_diagnostics_title' => 'Admin Troubleshooting & Diagnostics',
+    'admin_diagnostics_intro' => 'Structure Manager ships with a hidden diagnostic page for admins. It is intentionally not in the sidebar (matches Mining Manager\'s convention) so daily ops aren\'t cluttered with troubleshooting tools, but the page is one URL away when you need it.',
+
+    'admin_diagnostics_url_title' => 'Accessing the Diagnostics Page',
+    'admin_diagnostics_url_desc' => 'The page lives at <code>/structure-manager/diagnostic</code>. It is gated by the <code>structure-manager.admin</code> permission — a regular pilot typing the URL gets a 403. Bookmark it once you\'ve found it.',
+
+    'admin_diagnostics_what_title' => 'What\'s On The Diagnostics Page',
+    'admin_diagnostics_what_list' => '<ul>
+        <li><strong>Health Checks</strong> (default landing tab): environment, required tables, plugin tables, type ID verification (SDE), schedule status, webhook configuration, ESI coverage, notification state, registered Manager Core handler status, <strong>Pricing Integration</strong>, <strong>Webhook Delivery Health (Last 24h)</strong> (v2.0.0 — per-webhook attempt counts, success rate, last failure with HTTP code), and your resolved corp scope. Heavy checks cached 60s.</li>
+        <li><strong>Type IDs (SDE)</strong>: verifies that every type ID the plugin hardcodes (fuel blocks, structure types, charters, magmatic gas) resolves correctly against your installed SDE. Flags name mismatches as informational warnings (not errors, since the plugin keys on type IDs not names).</li>
+        <li><strong>Master Test</strong>: aggregates every Health Check into a pass / warn / fail score grouped by category (Runtime / Schema / Constants / Notifications / Other). Single-page health overview.</li>
+        <li><strong>System Validation</strong>: verifies hardcoded constants and dependencies are sound. Threshold ordering, plugin classes autoload, plugin Eloquent models autoload, SeAT package classes still exist, Manager Core capability surface present, notification-handler coverage, PHP / Laravel baseline. Lazy-loaded — first visit triggers compute, then cached 30 min.</li>
+        <li><strong>Settings Health</strong>: per-key audit of every plugin setting. Current value vs default, has-it-been-changed flag, is-it-respected flag, per-key validator. Detects orphan keys. Lazy-loaded; 30s cache. <strong>v2.0.0</strong>: deprecated settings at their default values are hidden (small footer at the bottom lists what\'s suppressed) — they\'d only show with a loud WARN if an operator accidentally set a value.</li>
+        <li><strong>Data Integrity</strong>: read-only DB-level consistency checks. Plugin table inventory, FK orphans, stale dedup rows, settings table integrity, failed_jobs queue health. Lazy-loaded; 5-min cache.</li>
+        <li><strong>Fuel Trace</strong>: pick one structure or POS, walk the full fuel pipeline showing what the plugin sees and would do for that specific row. Input row, universe context, reserves snapshot, fuel history, <strong>v2.0.0 forensics surfaces</strong> (event classification breakdown for the last 30 polls + forensic candidates list for the latest withdrawal event), threshold determination, notification gate, recent ESI dedup entries. Most powerful "why didn\'t I get alerted about X" debugging surface.</li>
+        <li><strong>Notification Testing</strong>: buttons that dispatch the real production notification jobs on demand against real data. "Run Upwell notification check" runs the cron command, "Run POS notification check" same, "Run notification job now" forces the next ESI poll. Real jobs only — no synthetic data on this tab.</li>
+        <li><strong>Notification Lab (DEV)</strong>: all synthetic-data dispatch paths. Inject fake CCP-shaped notifications through the full SM pipeline (Structure Board upsert → EventBus publish → Discord webhook embed) end-to-end. Also hosts the "Send Sample Upwell Alert" embed-preview form. <strong>v2.0.0</strong>: now carries the same red danger-zone warning as Test Data — without a Test webhook URL set, fake injections WILL hit real Discord channels. See the next section for full details.</li>
+        <li><strong>Test Data (DEV)</strong>: generate test corporations, test POSes, test Metenox + Astrahus structures with realistic fuel scenarios. Used for exercising webhook filtering and dual-fuel logic. Includes a one-click cleanup that removes everything in safe ID ranges (test corps 2.1B, test POSes 2.2B, test structures 2.3B, test characters 2.4B, test notifications 8e18).</li>
+    </ul>
+    <p style="margin-top:0.8rem;"><strong>Every tab opens with a uniform "What this tab does / When to use / Heads up" intro box (v2.0.0)</strong> because the diagnostic page is intentionally not in this Help & Documentation section — tab intros are where you learn each surface\'s purpose. Health Checks is always the default landing tab on a fresh visit.</p>',
+
+    'test_lab_title' => 'Test Notification Lab',
+    'test_lab_intro' => 'The Notification Lab is the most thorough way to verify your webhook setup. It generates fake CCP-shaped notifications, injects them through SM\'s real dispatch pipeline, and routes the resulting Discord embed to a test webhook URL only — production webhooks never see test traffic.',
+
+    'test_lab_workflow_title' => 'Workflow',
+    'test_lab_workflow_list' => '<ol>
+        <li><strong>Save a Test Webhook URL</strong> — paste any Discord webhook URL into the Test Webhook field at the top of the Notification Lab tab. All test injections route to this URL only. Production webhooks (your corp\'s real channels) are never hit by test traffic.</li>
+        <li><strong>Generate test structures</strong> — click "Generate test Upwell structures" to create one of each Upwell type (Astrahus, Fortizar, Keepstar, Raitaru, Azbel, Sotiyo, Athanor, Tatara, Metenox, Ansiblex, Pharolux, Tenebrex). All structures live in the safe 2.3B ID range, so they cannot collide with real EVE data.</li>
+        <li><strong>Inject a fake notification</strong> — pick a target structure from the dropdown, optionally tweak attacker context (corp / alliance / timer duration), then click any of the 24 type buttons grouped by family (Attack, Lifecycle, Fuel, Services, Sov). The injection is synchronous: the embed lands in your test Discord within seconds, with a <code>[TEST INJECTION]</code> banner.</li>
+        <li><strong>Send dual-fuel embed</strong> — for Metenox specifically, the lab has a dedicated "Send dual-fuel embed" button that fires Structure Manager\'s own analysis-path embed (the rich one with <code>[LIMITING]</code> flags and predictive offline time). Pick magmatic gas or fuel blocks as the limiting factor.</li>
+        <li><strong>Watch recent injections</strong> — the Recent panel shows the last 10 injected notifications with their dispatch status (queued / pending / processed) and auto-refreshes every 30 seconds.</li>
+        <li><strong>Clean up when done</strong> — "Delete all test data" wipes every test corp, character, structure, POS, and notification in the safe ID ranges. Production data is protected by ID-range guards. The cleanup result shows a per-table breakdown of what was removed.</li>
+    </ol>',
+
+    'test_lab_paths_title' => 'Two Notification Paths You Can Test',
+    'test_lab_paths_desc' => 'Structure Manager has two independent notification pipelines for fuel/reagent alerts. Both are useful and complementary; the Test Lab can exercise either:',
+    'test_lab_paths_list' => '<ol>
+        <li><strong>SM Analysis Path</strong> (the rich one) — <code>NotifyUpwellLowFuel</code> calculates limiting factor from <code>corporation_assets</code> every 10 min. For Metenox: shows fuel blocks vs. magmatic gas with <code>[LIMITING]</code> flag, predictive offline time, weekly fuel + gas requirement. Test it via the lab\'s "Send dual-fuel embed" button.</li>
+        <li><strong>CCP Notification Relay</strong> (the simple one) — <code>StructureEventHandler</code> renders an embed when CCP itself sends <code>StructureFuelAlert</code> / <code>StructureLowReagentsAlert</code> / <code>StructureNoReagentsAlert</code>. Test it via the lab\'s 24-button injection panel (Fuel + Power family).</li>
+    </ol>
+    <p>In production both paths fire at different points in the depletion timeline: SM\'s analysis warns first based on consumption math (predictive); CCP\'s last-mile alert fires closer to actual depletion (reactive). Together they give defense-in-depth.</p>',
+
+    'test_lab_supported_types_title' => 'Notification Types Supported by the Lab',
+    'test_lab_supported_types_desc' => 'All 24 CCP notification types Structure Manager handles can be injected, grouped by family:',
+    'test_lab_supported_types_list' => '<ul>
+        <li><strong>Attack family (7):</strong> StructureUnderAttack, StructureLostShields, StructureLostArmor, StructureDestroyed, SkyhookUnderAttack, SkyhookLostShields, SkyhookDestroyed</li>
+        <li><strong>Lifecycle (5):</strong> StructureAnchoring, AllAnchoringMsg, StructureUnanchoring, OwnershipTransferred, SkyhookDeployed</li>
+        <li><strong>Fuel + power (6):</strong> StructureWentLowPower, StructureWentHighPower, StructureFuelAlert, StructureLowReagentsAlert, StructureNoReagentsAlert, SkyhookOnline</li>
+        <li><strong>Services (1):</strong> StructureServicesOffline</li>
+        <li><strong>Sovereignty (4):</strong> EntosisCaptureStarted, SovStructureReinforced, SovStructureDestroyed, SovCommandNodeEventStarted</li>
+    </ul>
+    <p>Each type produces a CCP-faithful YAML payload (verified against SeAT core\'s reference notification templates) and routes through the same handler your real notifications use. The embed you see in Discord is byte-identical to a real one (modulo the <code>[TEST INJECTION]</code> banner).</p>',
+
+    'test_lab_safety_title' => 'Safety Guarantees',
+    'test_lab_safety_list' => '<ul>
+        <li><strong>Test webhook isolation:</strong> notifications in the safe ID range (8e18 for notification_id, 2.3B for structure_id) route to <code>test_webhook_url</code> ONLY. Production binding lookup is skipped entirely — your real corp webhooks cannot receive test traffic.</li>
+        <li><strong>Foreign-key cascade cleanup:</strong> deleting a test character cascade-deletes its notifications via SeAT\'s FK; deleting a test corp cascade-deletes its structures + POSes. No orphan rows.</li>
+        <li><strong>SeAT update jobs ignore test data:</strong> ESI never returns our test character or notification IDs (they\'re outside CCP\'s allocation), so SeAT\'s sync jobs cannot accidentally touch our test rows.</li>
+        <li><strong>Embed banner:</strong> every test embed is stamped <code>[TEST INJECTION]</code> in the content, title, and footer — anyone glancing at the test Discord sees immediately it\'s not a real attack.</li>
+        <li><strong>Confirm-checkbox gating:</strong> every destructive action (generate, inject, cleanup) requires either an in-form checkbox tick or a hidden pre-set value, preventing accidental misclicks.</li>
+        <li><strong>Admin-only access:</strong> all 14 diagnostic endpoints carry <code>middleware: can:structure-manager.admin</code> — non-admins get 403 even with a direct URL.</li>
+    </ul>',
+
+    'admin_diagnostics_when_to_use_title' => 'When To Use Each Path',
+    'admin_diagnostics_when_to_use_list' => '<ul>
+        <li><strong>Real Discord channel verification:</strong> use <em>Notification Testing > Send sample alert</em>. Posts to your actual configured corp webhooks. Good for confirming that role pings work, that the channel renders embeds correctly, and that the right team sees it.</li>
+        <li><strong>Embed format / copy review:</strong> use <em>Notification Lab > 24-button inject panel</em>. Routes to your test Discord only. Good for reviewing how an attack alert vs. an OwnershipTransferred vs. a sov reinforce will look in the wild without bothering your operations channel.</li>
+        <li><strong>Dual-fuel embed preview:</strong> use <em>Notification Lab > Send dual-fuel embed</em>. Synthesizes a critical Metenox scenario in memory (no DB mutation) and posts SM\'s rich analysis embed to the test webhook.</li>
+        <li><strong>Pipeline troubleshooting:</strong> use <em>Notification Lab > inject + Recent panel</em>. The status transitions queued → pending → processed in real time tell you whether the polling job is running and whether dispatch is working end-to-end.</li>
     </ul>',
 
     'need_help' => 'Need More Help?',

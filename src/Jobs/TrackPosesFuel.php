@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StarbaseFuelReserves;
 use StructureManager\Helpers\PosFuelCalculator;
+use StructureManager\Helpers\TypeIdRegistry;
 use Carbon\Carbon;
 
 /**
@@ -25,6 +26,21 @@ use Carbon\Carbon;
 class TrackPosesFuel implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
+
+    /**
+     * Max seconds the job is allowed to run before the worker kills it.
+     */
+    public $timeout = 600;
+
+    /**
+     * Retry count on unhandled exceptions.
+     */
+    public $tries = 3;
+
+    /**
+     * Retry back-off schedule in seconds.
+     */
+    public $backoff = [60, 300, 900];
 
     /**
      * Execute the job.
@@ -107,21 +123,23 @@ class TrackPosesFuel implements ShouldQueue
             $fuelBlocks = DB::table('corporation_starbase_fuels')
                 ->where('starbase_id', $pos->starbase_id)
                 ->where('corporation_id', $pos->corporation_id)
-                ->whereIn('type_id', array_keys(PosFuelCalculator::FUEL_BLOCKS))
+                ->whereIn('type_id', array_keys(TypeIdRegistry::FUEL_BLOCK_NAMES))
                 ->sum('quantity');
             
-            // Get current strontium
+            // Get current strontium. Use sum() instead of value() so multiple
+            // strontium stacks (edge case observed on some SeAT schemas) are
+            // correctly aggregated rather than returning only the first row.
             $strontium = DB::table('corporation_starbase_fuels')
                 ->where('starbase_id', $pos->starbase_id)
                 ->where('corporation_id', $pos->corporation_id)
-                ->where('type_id', PosFuelCalculator::STRONTIUM)
-                ->value('quantity') ?? 0;
+                ->where('type_id', TypeIdRegistry::STRONTIUM)
+                ->sum('quantity');
             
             // Get current charters (if high-sec)
             $charters = DB::table('corporation_starbase_fuels')
                 ->where('starbase_id', $pos->starbase_id)
                 ->where('corporation_id', $pos->corporation_id)
-                ->whereIn('type_id', array_keys(PosFuelCalculator::CHARTER_TYPES))
+                ->whereIn('type_id', array_keys(TypeIdRegistry::CHARTER_NAMES))
                 ->sum('quantity');
             
             // Get fuel consumption rates
@@ -149,7 +167,7 @@ class TrackPosesFuel implements ShouldQueue
             
             if ($lastHistory && $lastHistory->fuel_blocks_quantity) {
                 $fuelBlocksUsed = $lastHistory->fuel_blocks_quantity - $fuelBlocks;
-                $hoursSinceLastCheck = Carbon::now()->diffInHours($lastHistory->created_at);
+                $hoursSinceLastCheck = Carbon::now()->diffInHours($lastHistory->created_at, true);
                 
                 if ($hoursSinceLastCheck > 0 && $fuelBlocksUsed > 0) {
                     $fuelHourlyConsumption = round($fuelBlocksUsed / $hoursSinceLastCheck, 4);
@@ -263,11 +281,11 @@ class TrackPosesFuel implements ShouldQueue
             // Look for: fuel blocks, strontium, charters in hangars
             
             // Fuel block type IDs
-            $fuelTypeIds = array_keys(PosFuelCalculator::FUEL_BLOCKS);
+            $fuelTypeIds = array_keys(TypeIdRegistry::FUEL_BLOCK_NAMES);
             // Strontium type ID
-            $strontiumTypeId = PosFuelCalculator::STRONTIUM;
+            $strontiumTypeId = TypeIdRegistry::STRONTIUM;
             // Charter type IDs
-            $charterTypeIds = array_keys(PosFuelCalculator::CHARTER_TYPES);
+            $charterTypeIds = array_keys(TypeIdRegistry::CHARTER_NAMES);
             
             // Get all relevant assets in hangars (location_flag like 'CorpSAG%')
             $reserves = DB::table('corporation_assets')

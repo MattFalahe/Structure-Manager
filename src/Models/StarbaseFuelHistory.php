@@ -87,23 +87,25 @@ class StarbaseFuelHistory extends Model
     }
     
     /**
-     * Check if strontium is at critical levels (< 6 hours)
+     * Check if strontium is at critical levels.
+     * Reads from FuelThresholds::posStrontiumCritical() — configurable per install.
      */
     public function hasCriticalStrontium()
     {
-        return $this->strontium_hours_available !== null && 
-               $this->strontium_hours_available < 6;
+        return $this->strontium_hours_available !== null &&
+               $this->strontium_hours_available < \StructureManager\Helpers\FuelThresholds::posStrontiumCritical();
     }
-    
+
     /**
-     * Check if strontium is at warning levels (< 12 hours)
+     * Check if strontium is at warning levels.
+     * Reads from FuelThresholds::posStrontiumWarning() — configurable per install.
      */
     public function hasLowStrontium()
     {
-        return $this->strontium_hours_available !== null && 
-               $this->strontium_hours_available < 12;
+        return $this->strontium_hours_available !== null &&
+               $this->strontium_hours_available < \StructureManager\Helpers\FuelThresholds::posStrontiumWarning();
     }
-    
+
     /**
      * Check if the POS is in high-sec and requires charters
      */
@@ -111,17 +113,18 @@ class StarbaseFuelHistory extends Model
     {
         return $this->requires_charters === true;
     }
-    
+
     /**
-     * Check if charters are running low (< 7 days)
+     * Check if charters are running low.
+     * Reads from FuelThresholds::posCharterCritical() — configurable per install.
      */
     public function hasLowCharters()
     {
-        return $this->requires_charters && 
-               $this->charter_days_remaining !== null && 
-               $this->charter_days_remaining < 7;
+        return $this->requires_charters &&
+               $this->charter_days_remaining !== null &&
+               $this->charter_days_remaining < \StructureManager\Helpers\FuelThresholds::posCharterCritical();
     }
-    
+
     /**
      * Get the limiting factor (fuel or charters)
      */
@@ -129,45 +132,45 @@ class StarbaseFuelHistory extends Model
     {
         return $this->limiting_factor;
     }
-    
+
     /**
-     * Check if fuel is critically low (< 7 days)
+     * Check if fuel is critically low.
+     * Reads from FuelThresholds::posFuelCritical() — configurable per install.
      */
     public function hasCriticalFuel()
     {
-        return $this->actual_days_remaining !== null && 
-               $this->actual_days_remaining < 7;
+        return $this->actual_days_remaining !== null &&
+               $this->actual_days_remaining < \StructureManager\Helpers\FuelThresholds::posFuelCritical();
     }
-    
+
     /**
-     * Check if fuel is low (< 14 days)
+     * Check if fuel is low (warning level).
+     * Reads from FuelThresholds::posFuelWarning() — configurable per install.
      */
     public function hasLowFuel()
     {
-        return $this->actual_days_remaining !== null && 
-               $this->actual_days_remaining < 14;
+        return $this->actual_days_remaining !== null &&
+               $this->actual_days_remaining < \StructureManager\Helpers\FuelThresholds::posFuelWarning();
     }
-    
+
     /**
-     * Get fuel status level
-     * 
-     * @return string critical/warning/normal/good
+     * Get fuel status level — 3-tier (critical / warning / good / unknown).
+     * Thresholds read live from POS settings; same values used by the
+     * notification job, board upserts, and every display surface.
      */
     public function getFuelStatus()
     {
         if ($this->actual_days_remaining === null) {
             return 'unknown';
         }
-        
-        if ($this->actual_days_remaining < 7) {
+
+        $T = \StructureManager\Helpers\FuelThresholds::class;
+        if ($this->actual_days_remaining < $T::posFuelCritical()) {
             return 'critical';
-        } elseif ($this->actual_days_remaining < 14) {
+        } elseif ($this->actual_days_remaining < $T::posFuelWarning()) {
             return 'warning';
-        } elseif ($this->actual_days_remaining < 30) {
-            return 'normal';
-        } else {
-            return 'good';
         }
+        return 'good';
     }
     
     /**

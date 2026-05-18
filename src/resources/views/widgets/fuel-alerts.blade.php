@@ -1,3 +1,11 @@
+{{-- Dashboard widget partial.
+     This is included from another page (no @extends) — it does NOT
+     own the @push('head') stack, so we cannot link the canonical
+     structure-manager.css from here. The host page is responsible
+     for that. We keep the existing .structure-manager-wrapper so
+     widget styles still apply when included on dashboards that
+     don't already provide one.
+--}}
 <div class="structure-manager-wrapper">
 
 <div class="card card-danger" id="fuel-alerts-widget">
@@ -46,7 +54,12 @@
 </div><!-- /.structure-manager-wrapper -->
 
 <style>
-    /* Metenox indicator in widget */
+    /* === Fuel-alerts widget — scoped to the widget only ===
+       This partial cannot link the canonical CSS (no @push('head')
+       access), so we keep the small set of widget-specific tooltip
+       primitives inline. SEMANTIC Metenox/gas colors — DO NOT CHANGE. */
+
+    /* SEMANTIC Metenox indicator badge — DO NOT CHANGE */
     .metenox-widget-badge {
         background-color: rgba(156, 39, 176, 0.2);
         color: #ce93d8;
@@ -56,17 +69,18 @@
         font-size: 0.7rem;
         margin-left: 0.25rem;
     }
-    
+
+    /* SEMANTIC magmatic-gas warning icon — DO NOT CHANGE */
     .gas-icon {
         color: #ffd43b;
         margin-left: 0.25rem;
     }
-    
+
+    /* Hover-revealed tooltip for dual-fuel structures */
     .dual-fuel-tooltip {
         position: relative;
         cursor: help;
     }
-    
     .dual-fuel-tooltip .tooltip-text {
         visibility: hidden;
         background-color: rgba(0, 0, 0, 0.9);
@@ -85,7 +99,6 @@
         border: 1px solid rgba(255, 255, 255, 0.2);
         font-size: 0.85rem;
     }
-    
     .dual-fuel-tooltip:hover .tooltip-text {
         visibility: visible;
         opacity: 1;
@@ -97,28 +110,28 @@ $(document).ready(function() {
     function loadFuelAlerts() {
         $.get('{{ route("structure-manager.critical-alerts") }}', function(data) {
             let html = '';
-            
+
             if (data.length === 0) {
                 html = '<tr><td colspan="4" class="text-center text-success">All structures have sufficient fuel!</td></tr>';
             } else {
                 data.forEach(function(structure) {
                     let statusClass = structure.status === 'critical' ? 'text-danger font-weight-bold' : 'text-warning';
                     let isMetenox = structure.structure_type === 'Metenox Moon Drill';
-                    
+
                     // Build structure name with badges
                     let structureName = `
                         <a href="{{ url('structure-manager/structure') }}/${structure.structure_id}">
                             ${structure.structure_name}
                         </a>
                     `;
-                    
+
                     // Add Metenox indicator
                     if (isMetenox) {
                         structureName += `<span class="metenox-widget-badge" title="Metenox: Needs fuel blocks + gas"><i class="fas fa-wind"></i></span>`;
                     }
-                    
+
                     structureName += `<br><small class="text-muted">${structure.structure_type}</small>`;
-                    
+
                     // Build weekly need column
                     let weeklyNeed = '';
                     if (isMetenox) {
@@ -136,7 +149,7 @@ $(document).ready(function() {
                     } else {
                         weeklyNeed = `<strong>${structure.blocks_needed.toLocaleString()}</strong> blocks`;
                     }
-                    
+
                     html += `
                         <tr>
                             <td>${structureName}</td>
@@ -147,7 +160,7 @@ $(document).ready(function() {
                     `;
                 });
             }
-            
+
             $('#fuel-alerts-body').html(html);
         }).fail(function(xhr, status, error) {
             console.error('Error loading fuel alerts:', error);
@@ -160,10 +173,10 @@ $(document).ready(function() {
             `);
         });
     }
-    
+
     // Load on page load
     loadFuelAlerts();
-    
+
     // Refresh button
     $('#refresh-fuel-alerts').on('click', function() {
         let icon = $(this).find('i');
@@ -173,10 +186,10 @@ $(document).ready(function() {
             icon.removeClass('fa-spin');
         }, 1000);
     });
-    
+
     // Auto-refresh every 5 minutes
     setInterval(loadFuelAlerts, 300000);
-    
+
     // Generate logistics report
     $('#generate-logistics-report').on('click', function() {
         window.open('{{ route("structure-manager.logistics-report") }}', '_blank');

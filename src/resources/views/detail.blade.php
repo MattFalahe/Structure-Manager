@@ -4,25 +4,29 @@
 @section('page_header', $structure->structure_name)
 
 @push('head')
+<link rel="stylesheet" href="{{ asset('vendor/structure-manager/css/structure-manager.css') }}?v=17">
 <style>
-    /* Better contrast for dark themes */
+    /* === Structure detail — page-specific chrome ===
+       Generic card / button / fuel-status / metenox-indicator / fuel-card
+       come from canonical structure-manager.css. The bespoke colored text
+       classes used heavily throughout this view are kept inline below.
+       SEMANTIC severity colors — DO NOT CHANGE. */
     .text-success-bright { color: #51cf66; }
     .text-warning-bright { color: #ffd43b; }
-    .text-danger-bright { color: #ff6b6b; }
-    .text-info-bright { color: #5dade2; }
-    
-    /* DARK THEME COMPATIBLE - Service list items */
+    .text-danger-bright  { color: #ff6b6b; }
+    .text-info-bright    { color: #5dade2; }
+
+    /* Service module list — bespoke dark backgrounds for list-group items */
     .list-group-item {
         background: rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.1);
         margin-bottom: 0.5rem;
     }
-    
     .list-group-item:hover {
         background: rgba(0, 0, 0, 0.3);
     }
-    
-    /* Stat boxes */
+
+    /* Stat boxes for consumption / projection numbers */
     .stat-box {
         background: rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -30,42 +34,36 @@
         padding: 1rem;
         margin-bottom: 1rem;
     }
-    
     .stat-box h4 {
         margin-bottom: 0.5rem;
         font-size: 1.1rem;
-        color: #17a2b8;
+        color: var(--sm-info);
     }
-    
     .stat-number {
         font-size: 1.5rem;
         font-weight: bold;
         color: #3c994b;
     }
-    
     .stat-label {
         font-size: 0.875rem;
         color: #a0a0a0;
     }
-    
-    /* Info banner */
+
+    /* Info / warning / metenox banners (left-stripe accent boxes) */
     .info-banner {
         background: rgba(23, 162, 184, 0.1);
-        border-left: 4px solid #17a2b8;
+        border-left: 4px solid var(--sm-info);
         padding: 0.75rem;
         margin-bottom: 1rem;
         border-radius: 0.25rem;
     }
-    
     .warning-banner {
         background: rgba(255, 193, 7, 0.1);
-        border-left: 4px solid #ffc107;
+        border-left: 4px solid var(--sm-warning);
         padding: 0.75rem;
         margin-bottom: 1rem;
         border-radius: 0.25rem;
     }
-    
-    /* Metenox-specific styles */
     .metenox-banner {
         background: rgba(156, 39, 176, 0.1);
         border-left: 4px solid #9c27b0;
@@ -73,7 +71,8 @@
         margin-bottom: 1rem;
         border-radius: 0.25rem;
     }
-    
+
+    /* SEMANTIC Metenox identity badge — DO NOT CHANGE */
     .metenox-badge {
         background-color: rgba(193, 114, 207, 0.2);
         color: #c04ed4;
@@ -84,7 +83,8 @@
         font-weight: bold;
         margin-left: 0.5rem;
     }
-    
+
+    /* Fuel/gas resource cards in dual-fuel display */
     .resource-card {
         background: rgba(0, 0, 0, 0.3);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -92,24 +92,181 @@
         padding: 1rem;
         margin-bottom: 1rem;
     }
-    
+    /* SEMANTIC limiting-factor outline — DO NOT CHANGE */
     .limiting-factor {
         border: 2px solid #ff6b6b;
         background: rgba(220, 53, 69, 0.1);
     }
-    
     .resource-card h5 {
         margin-bottom: 0.75rem;
+    }
+
+    /* ===========================================================
+       v2.0.0 — Fuel event forensics (Tier 1 + 2)
+       Expandable suspect-narrowing panel under withdrawal_* rows
+       in the Recent Fuel Records table. Lives inline because the
+       UI is exclusive to this view.
+       =========================================================== */
+
+    /* Highlight the table row when classifier flags a withdrawal */
+    .sm-fuel-row-withdrawal {
+        background: rgba(220, 53, 69, 0.08);
+    }
+
+    /* Expand toggle button next to event badge */
+    .sm-fuel-forensics-toggle {
+        margin-left: 0.5rem;
+        padding: 0 0.4rem;
+        color: #a5b4fc !important;
+        text-decoration: none;
+        font-size: 0.85rem;
+    }
+    .sm-fuel-forensics-toggle:hover {
+        color: #c7d2fe !important;
+        text-decoration: none;
+    }
+    .sm-fuel-forensics-toggle i {
+        margin-right: 0.2rem;
+    }
+
+    /* Expanded row cell removes table padding so the panel fills it */
+    .sm-fuel-forensics-cell {
+        padding: 0 !important;
+        background: rgba(0, 0, 0, 0.4);
+    }
+
+    .sm-fuel-forensics-panel {
+        padding: 1rem 1.5rem;
+        background: rgba(0, 0, 0, 0.25);
+        border-left: 4px solid #dc3545;
+    }
+
+    .sm-fuel-forensics-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .sm-fuel-forensics-header h5 {
+        margin: 0;
+        color: #ff6b6b;
+        font-size: 1rem;
+    }
+    .sm-fuel-forensics-header h5 i {
+        margin-right: 0.3rem;
+    }
+
+    .sm-fuel-forensics-magnitude {
+        font-size: 0.875rem;
+        color: #e2e8f0;
+    }
+    .sm-fuel-forensics-magnitude small {
+        color: #94a3b8;
+        margin-left: 0.25rem;
+    }
+
+    .sm-fuel-forensics-disclaimer {
+        background: rgba(23, 162, 184, 0.1);
+        border-left: 3px solid #17a2b8;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.2rem;
+        font-size: 0.825rem;
+        color: #cbd5e1;
+        margin-bottom: 0.75rem;
+    }
+    .sm-fuel-forensics-disclaimer i {
+        margin-right: 0.3rem;
+        color: #17a2b8;
+    }
+
+    .sm-fuel-forensics-table {
+        margin-bottom: 0;
+        background: transparent;
+    }
+    .sm-fuel-forensics-table thead th {
+        color: #94a3b8;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+    .sm-fuel-forensics-table tbody td {
+        border-top-color: rgba(255, 255, 255, 0.05);
+        color: #e2e8f0;
+        vertical-align: middle;
+    }
+    .sm-fuel-forensics-table a {
+        color: #a5b4fc;
+    }
+    .sm-fuel-forensics-table a:hover {
+        color: #c7d2fe;
+        text-decoration: none;
+    }
+
+    /* Score bar — visual representation of the 0-100 score */
+    .sm-fuel-forensics-score {
+        position: relative;
+        width: 120px;
+        height: 1.25rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.2rem;
+        overflow: hidden;
+    }
+    .sm-fuel-forensics-score-bar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, #dc3545 0%, #ffc107 60%, #28a745 100%);
+        opacity: 0.4;
+    }
+    .sm-fuel-forensics-score-num {
+        position: relative;
+        z-index: 1;
+        font-weight: 600;
+        color: #f1f5f9;
+        font-size: 0.85rem;
+        padding-left: 0.5rem;
+        line-height: 1.25rem;
+        display: block;
+    }
+
+    /* Signal pills */
+    .sm-fuel-forensics-signal {
+        display: inline-block;
+        background: rgba(99, 102, 241, 0.15);
+        color: #c7d2fe;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 0.15rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        margin-right: 0.35rem;
+        margin-bottom: 0.2rem;
+    }
+    .sm-fuel-forensics-signal i {
+        color: #4ade80;
+        margin-right: 0.2rem;
+        font-size: 0.7rem;
+    }
+    .sm-fuel-forensics-signal small {
+        color: #94a3b8;
+        margin-left: 0.2rem;
     }
 </style>
 @endpush
 
+@php
+    // Locked fuel thresholds — see StructureManager\Helpers\FuelThresholds.
+    $T = \StructureManager\Helpers\FuelThresholds::class;
+@endphp
 @section('content')
 <div class="structure-manager-wrapper">
 
 <div class="row">
     <div class="col-md-6">
-        <div class="card">
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title">
                     <i class="fas fa-info-circle"></i> Structure Information
@@ -127,25 +284,25 @@
                             <span class="badge badge-info">Deployable</span>
                         @endif
                     </dd>
-                    
+
                     <dt class="col-sm-4">System:</dt>
                     <dd class="col-sm-8">
-                        {{ $structure->system_name }} 
+                        {{ $structure->system_name }}
                         <span class="{{ $structure->security >= 0.5 ? 'text-success-bright' : ($structure->security > 0 ? 'text-warning-bright' : 'text-danger-bright') }}">
                             ({{ number_format($structure->security, 1) }})
                         </span>
                     </dd>
-                    
+
                     <dt class="col-sm-4">Corporation:</dt>
                     <dd class="col-sm-8">{{ $structure->corporation_name }}</dd>
-                    
+
                     <dt class="col-sm-4">State:</dt>
                     <dd class="col-sm-8">
                         <span class="badge badge-{{ $structure->state == 'shield_vulnerable' ? 'success' : 'warning' }}">
                             {{ str_replace('_', ' ', ucwords($structure->state)) }}
                         </span>
                     </dd>
-                    
+
                     <dt class="col-sm-4">Fuel Expires:</dt>
                     <dd class="col-sm-8">
                         @if($structure->fuel_expires)
@@ -154,10 +311,10 @@
                             @php
                                 $fuelExpires = \Carbon\Carbon::parse($structure->fuel_expires);
                                 $now = now();
-                                $totalHours = $fuelExpires->diffInHours($now);
+                                $totalHours = $fuelExpires->diffInHours($now, true);
                                 $days = floor($totalHours / 24);
                                 $hours = $totalHours % 24;
-                                $colorClass = $totalHours < 168 ? 'text-danger-bright' : ($totalHours < 336 ? 'text-warning-bright' : 'text-success-bright');
+                                $colorClass = $totalHours < $T::upwellFuelCriticalHours() ? 'text-danger-bright' : ($totalHours < $T::upwellFuelWarningHours() ? 'text-warning-bright' : 'text-success-bright');
                             @endphp
                             <strong class="{{ $colorClass }}">
                                 <i class="fas fa-clock"></i> {{ $days }}d {{ $hours }}h remaining
@@ -169,41 +326,41 @@
                             <span class="text-muted">Unknown</span>
                         @endif
                     </dd>
-                    
+
                     <dt class="col-sm-4">Reinforce Hour:</dt>
                     <dd class="col-sm-8">{{ $structure->reinforce_hour }}:00 EVE Time</dd>
-                    
+
                     <dt class="col-sm-4">Last Updated:</dt>
                     <dd class="col-sm-8">{{ \Carbon\Carbon::parse($structure->updated_at)->diffForHumans() }}</dd>
                 </dl>
             </div>
         </div>
-        
+
         {{-- Metenox Dual Fuel Display --}}
         @php
             // Better Metenox detection - check BOTH structure type AND consumption method
-            $isMetenox = ($structure->structure_type == 'Metenox Moon Drill') || 
+            $isMetenox = ($structure->structure_type == 'Metenox Moon Drill') ||
                          (isset($consumption['method']) && $consumption['method'] == 'metenox_drill');
         @endphp
-        
+
         @if($isMetenox)
-        <div class="card">
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-gas-pump"></i> Metenox Fuel Status</h3>
             </div>
             <div class="card-body">
                 <div class="metenox-banner">
-                    <i class="fas fa-exclamation-triangle"></i> 
+                    <i class="fas fa-exclamation-triangle"></i>
                     <strong>Dual Fuel System:</strong> Metenox requires both fuel blocks AND magmatic gas. Structure stops when EITHER runs out!
                 </div>
-                
+
                 @php
                     $fuelBlocks = $consumption['fuel_blocks'] ?? null;
                     $magmaticGas = $consumption['magmatic_gas'] ?? null;
                     $limitingFactor = $consumption['limiting_factor'] ?? 'unknown';
                     $actualDays = $consumption['actual_days_remaining'] ?? 0;
                 @endphp
-                
+
                 @if($fuelBlocks && $magmaticGas)
                     <div class="row">
                         <div class="col-md-6">
@@ -216,26 +373,26 @@
                                 </h5>
                                 <div class="stat-number">{{ number_format($fuelBlocks['current_quantity'] ?? 0) }}</div>
                                 <div class="stat-label">blocks available</div>
-                                
+
                                 <hr>
-                                
+
                                 <dl class="row mb-0">
                                     <dt class="col-sm-6">Days Remaining:</dt>
                                     <dd class="col-sm-6">
-                                        <strong class="{{ ($fuelBlocks['days_remaining'] ?? 0) < 7 ? 'text-danger-bright' : (($fuelBlocks['days_remaining'] ?? 0) < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                                        <strong class="{{ ($fuelBlocks['days_remaining'] ?? 0) < $T::UPWELL_FUEL_CRITICAL_DAYS ? 'text-danger-bright' : (($fuelBlocks['days_remaining'] ?? 0) < $T::UPWELL_FUEL_WARNING_DAYS ? 'text-warning-bright' : 'text-success-bright') }}">
                                             {{ number_format($fuelBlocks['days_remaining'] ?? 0, 1) }} days
                                         </strong>
                                     </dd>
-                                    
+
                                     <dt class="col-sm-6">Consumption:</dt>
                                     <dd class="col-sm-6">5 blocks/hour</dd>
-                                    
+
                                     <dt class="col-sm-6">Daily Use:</dt>
                                     <dd class="col-sm-6">120 blocks/day</dd>
                                 </dl>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <div class="resource-card {{ $limitingFactor == 'magmatic_gas' ? 'limiting-factor' : '' }}">
                                 <h5>
@@ -246,28 +403,28 @@
                                 </h5>
                                 <div class="stat-number">{{ number_format($magmaticGas['current_quantity'] ?? 0) }}</div>
                                 <div class="stat-label">units available</div>
-                                
+
                                 <hr>
-                                
+
                                 <dl class="row mb-0">
                                     <dt class="col-sm-6">Days Remaining:</dt>
                                     <dd class="col-sm-6">
-                                        <strong class="{{ ($magmaticGas['days_remaining'] ?? 0) < 7 ? 'text-danger-bright' : (($magmaticGas['days_remaining'] ?? 0) < 14 ? 'text-warning-bright' : 'text-success-bright') }}">
+                                        <strong class="{{ ($magmaticGas['days_remaining'] ?? 0) < $T::UPWELL_FUEL_CRITICAL_DAYS ? 'text-danger-bright' : (($magmaticGas['days_remaining'] ?? 0) < $T::UPWELL_FUEL_WARNING_DAYS ? 'text-warning-bright' : 'text-success-bright') }}">
                                             {{ number_format($magmaticGas['days_remaining'] ?? 0, 1) }} days
                                         </strong>
                                     </dd>
-                                    
+
                                     <dt class="col-sm-6">Consumption:</dt>
                                     <dd class="col-sm-6">200 gas/hour</dd>
-                                    
+
                                     <dt class="col-sm-6">Daily Use:</dt>
                                     <dd class="col-sm-6">4,800 gas/day</dd>
                                 </dl>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="alert alert-{{ $actualDays < 7 ? 'danger' : ($actualDays < 14 ? 'warning' : 'info') }} mb-0">
+
+                    <div class="alert alert-{{ $actualDays < $T::UPWELL_FUEL_CRITICAL_DAYS ? 'danger' : ($actualDays < $T::UPWELL_FUEL_WARNING_DAYS ? 'warning' : 'info') }} mb-0">
                         <h5 class="mb-2">
                             <i class="fas fa-stopwatch"></i> Actual Time Until Empty
                         </h5>
@@ -293,16 +450,16 @@
         </div>
 
         {{-- METENOX CONSUMPTION STATISTICS --}}
-        <div class="card">
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-fire"></i> Fuel Consumption Statistics</h3>
             </div>
             <div class="card-body">
                 <div class="info-banner">
-                    <i class="fas fa-info-circle"></i> 
+                    <i class="fas fa-info-circle"></i>
                     <strong>Metenox Moon Drill:</strong> Consumption rates are fixed at 5 blocks/hour (120/day) and 200 gas/hour (4,800/day).
                 </div>
-                
+
                 {{-- Fuel Blocks Consumption --}}
                 <h5 class="mb-3"><i class="fas fa-fire text-warning-bright"></i> Fuel Blocks</h5>
                 <div class="row mb-4">
@@ -371,7 +528,7 @@
 
                 @if($fuelBlocks && $magmaticGas)
                 <hr>
-                
+
                 <h5><i class="fas fa-chart-line"></i> Fuel Projections</h5>
                 <div class="row">
                     {{-- Fuel Blocks Projections --}}
@@ -380,10 +537,10 @@
                         <dl class="row">
                             <dt class="col-sm-6">Current Stock:</dt>
                             <dd class="col-sm-6">{{ number_format($fuelBlocks['current_quantity'] ?? 0) }} blocks</dd>
-                            
+
                             <dt class="col-sm-6">Volume:</dt>
                             <dd class="col-sm-6">{{ number_format(($fuelBlocks['current_quantity'] ?? 0) * 5) }} m³</dd>
-                            
+
                             <dt class="col-sm-6">Runs Out:</dt>
                             <dd class="col-sm-6">
                                 @if(isset($fuelBlocks['days_remaining']) && $fuelBlocks['days_remaining'] > 0)
@@ -392,31 +549,31 @@
                                     <span class="text-danger-bright">Empty</span>
                                 @endif
                             </dd>
-                            
+
                             <dt class="col-sm-6">Days Left:</dt>
                             @php
                                 $fuelDays = isset($fuelBlocks['days_remaining']) ? floor($fuelBlocks['days_remaining']) : 0;
                                 $fuelHours = isset($fuelBlocks['days_remaining']) ? floor(($fuelBlocks['days_remaining'] - $fuelDays) * 24) : 0;
-                                $fuelColorClass = ($fuelBlocks['days_remaining'] ?? 0) < 7 ? 'text-danger-bright' : 
-                                                 (($fuelBlocks['days_remaining'] ?? 0) < 14 ? 'text-warning-bright' : 'text-success-bright');
+                                $fuelColorClass = ($fuelBlocks['days_remaining'] ?? 0) < $T::UPWELL_FUEL_CRITICAL_DAYS ? 'text-danger-bright' :
+                                                 (($fuelBlocks['days_remaining'] ?? 0) < $T::UPWELL_FUEL_WARNING_DAYS ? 'text-warning-bright' : 'text-success-bright');
                             @endphp
                             <dd class="col-sm-6 {{ $fuelColorClass }}">{{ $fuelDays }}d {{ $fuelHours }}h</dd>
-                            
+
                             <dt class="col-sm-6">Hourly Rate:</dt>
                             <dd class="col-sm-6">5.00 blocks/hr</dd>
                         </dl>
                     </div>
-                    
+
                     {{-- Magmatic Gas Projections --}}
                     <div class="col-md-6">
                         <h6 class="mb-3"><i class="fas fa-wind text-warning-bright"></i> Magmatic Gas</h6>
                         <dl class="row">
                             <dt class="col-sm-6">Current Stock:</dt>
                             <dd class="col-sm-6">{{ number_format($magmaticGas['current_quantity'] ?? 0) }} units</dd>
-                            
+
                             <dt class="col-sm-6">Volume:</dt>
                             <dd class="col-sm-6">{{ number_format(($magmaticGas['current_quantity'] ?? 0) * 0.01) }} m³</dd>
-                            
+
                             <dt class="col-sm-6">Runs Out:</dt>
                             <dd class="col-sm-6">
                                 @if(isset($magmaticGas['days_remaining']) && $magmaticGas['days_remaining'] > 0)
@@ -425,16 +582,16 @@
                                     <span class="text-danger-bright">Empty</span>
                                 @endif
                             </dd>
-                            
+
                             <dt class="col-sm-6">Days Left:</dt>
                             @php
                                 $gasDays = isset($magmaticGas['days_remaining']) ? floor($magmaticGas['days_remaining']) : 0;
                                 $gasHours = isset($magmaticGas['days_remaining']) ? floor(($magmaticGas['days_remaining'] - $gasDays) * 24) : 0;
-                                $gasColorClass = ($magmaticGas['days_remaining'] ?? 0) < 7 ? 'text-danger-bright' : 
-                                                (($magmaticGas['days_remaining'] ?? 0) < 14 ? 'text-warning-bright' : 'text-success-bright');
+                                $gasColorClass = ($magmaticGas['days_remaining'] ?? 0) < $T::UPWELL_FUEL_CRITICAL_DAYS ? 'text-danger-bright' :
+                                                (($magmaticGas['days_remaining'] ?? 0) < $T::UPWELL_FUEL_WARNING_DAYS ? 'text-warning-bright' : 'text-success-bright');
                             @endphp
                             <dd class="col-sm-6 {{ $gasColorClass }}">{{ $gasDays }}d {{ $gasHours }}h</dd>
-                            
+
                             <dt class="col-sm-6">Hourly Rate:</dt>
                             <dd class="col-sm-6">200.00 units/hr</dd>
                         </dl>
@@ -442,7 +599,7 @@
                 </div>
 
                 {{-- Limiting Factor Summary --}}
-                <div class="alert alert-{{ $actualDays < 7 ? 'danger' : ($actualDays < 14 ? 'warning' : 'info') }} mb-0 mt-3">
+                <div class="alert alert-{{ $actualDays < $T::UPWELL_FUEL_CRITICAL_DAYS ? 'danger' : ($actualDays < $T::UPWELL_FUEL_WARNING_DAYS ? 'warning' : 'info') }} mb-0 mt-3">
                     <div class="row">
                         <div class="col-md-8">
                             <h6 class="mb-2">
@@ -483,16 +640,16 @@
         </div>
         @else
         {{-- Standard Upwell Structure Fuel Display --}}
-        <div class="card">
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-fire"></i> Fuel Consumption Statistics</h3>
             </div>
             <div class="card-body">
                 <div class="info-banner">
-                    <i class="fas fa-info-circle"></i> 
+                    <i class="fas fa-info-circle"></i>
                     <strong>Service-Based Calculation:</strong> Consumption rates below are calculated from currently active service modules and update in real-time when services change.
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-3">
                         <div class="stat-box">
@@ -523,13 +680,13 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <hr>
-                
+
                 <h5><i class="fas fa-chart-line"></i> Fuel Projections</h5>
                 @if($structure->fuel_expires && ($consumption['daily'] ?? 0) > 0)
                     @php
-                        $daysRemaining = \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now());
+                        $daysRemaining = \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
                         $blocksRemaining = $daysRemaining * ($consumption['daily'] ?? 0);
                         $volumeM3 = $blocksRemaining * 5; // Each fuel block is 5 m³
                     @endphp
@@ -538,7 +695,7 @@
                             <dl class="row">
                                 <dt class="col-sm-6">Est. Blocks:</dt>
                                 <dd class="col-sm-6">~{{ number_format($blocksRemaining) }}</dd>
-                                
+
                                 <dt class="col-sm-6">Volume:</dt>
                                 <dd class="col-sm-6">~{{ number_format($volumeM3) }} m³</dd>
                             </dl>
@@ -547,7 +704,7 @@
                             <dl class="row">
                                 <dt class="col-sm-6">Runs Out:</dt>
                                 <dd class="col-sm-6">{{ \Carbon\Carbon::parse($structure->fuel_expires)->format('Y-m-d H:i') }}</dd>
-                                
+
                                 <dt class="col-sm-6">Days Left:</dt>
                                 <dd class="col-sm-6 {{ $colorClass }}">{{ $days }}d {{ $hours }}h</dd>
                             </dl>
@@ -562,7 +719,7 @@
                 @else
                     <p class="text-muted">Insufficient data for projections</p>
                 @endif
-                
+
                 @if(isset($historicalAnalysis) && $historicalAnalysis['status'] === 'success')
                     <hr>
                     <div class="warning-banner">
@@ -580,9 +737,9 @@
         </div>
         @endif
     </div>
-    
+
     <div class="col-md-6">
-        <div class="card">
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-server"></i> Online Services</h3>
             </div>
@@ -600,7 +757,7 @@
                                 </div>
                             </div>
                         @endforeach
-                        
+
                         @foreach($services->where('state', '!=', 'online') as $service)
                             <div class="list-group-item">
                                 <div class="d-flex w-100 justify-content-between align-items-center">
@@ -613,11 +770,11 @@
                             </div>
                         @endforeach
                     </div>
-                    
+
                     <div class="mt-3">
                         <small class="text-muted">
-                            <i class="fas fa-info-circle"></i> 
-                            <strong>{{ $services->where('state', 'online')->count() }}</strong> service(s) online consuming fuel. 
+                            <i class="fas fa-info-circle"></i>
+                            <strong>{{ $services->where('state', 'online')->count() }}</strong> service(s) online consuming fuel.
                             Only online service modules consume fuel blocks.
                         </small>
                     </div>
@@ -632,8 +789,8 @@
                 @endif
             </div>
         </div>
-        
-        <div class="card">
+
+        <div class="card card-dark">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-area"></i> Fuel History (30 Days)</h3>
             </div>
@@ -644,7 +801,7 @@
     </div>
 </div>
 
-<div class="card mt-3">
+<div class="card card-dark mt-3">
     <div class="card-header">
         <h3 class="card-title"><i class="fas fa-list"></i> Recent Fuel Records</h3>
     </div>
@@ -665,7 +822,12 @@
             </thead>
             <tbody>
                 @foreach($fuelHistory->take(15) as $record)
-                    <tr>
+                    @php
+                        $isWithdrawal = $record->isWithdrawalEvent();
+                        $hasCandidates = $isWithdrawal && $record->relationLoaded('candidates') && $record->candidates->isNotEmpty();
+                        $rowExpandTarget = $hasCandidates ? 'fuel-event-' . $record->id : null;
+                    @endphp
+                    <tr @if($isWithdrawal) class="sm-fuel-row-withdrawal" @endif>
                         <td>{{ \Carbon\Carbon::parse($record->created_at)->format('Y-m-d H:i') }}</td>
                         <td>{{ $record->fuel_expires ? \Carbon\Carbon::parse($record->fuel_expires)->format('Y-m-d H:i') : 'N/A' }}</td>
                         <td>{{ $record->days_remaining ?? 'N/A' }}</td>
@@ -689,52 +851,159 @@
                             </td>
                         @endif
                         <td>
-                            @if($loop->index < $fuelHistory->count() - 1)
-                                @php
-                                    $prev = $fuelHistory[$loop->index + 1];
-                                    $change = $record->days_remaining - $prev->days_remaining;
-                                @endphp
-                                @if($change > 5)
+                            {{-- Change column: prefer the classifier's signed delta when present.
+                                 fuel_blocks_used is positive on consumption, negative on refuel
+                                 (intentional inversion in the tracker). --}}
+                            @if(!is_null($record->fuel_blocks_used))
+                                @if($record->fuel_blocks_used < 0)
                                     <span class="text-success-bright">
-                                        <i class="fas fa-arrow-up"></i> +{{ $change }} days
+                                        <i class="fas fa-arrow-up"></i> +{{ number_format(abs($record->fuel_blocks_used)) }} blocks
                                     </span>
-                                @elseif($change < -2)
+                                @elseif($record->fuel_blocks_used > 0)
                                     <span class="text-danger-bright">
-                                        <i class="fas fa-arrow-down"></i> {{ $change }} days
+                                        <i class="fas fa-arrow-down"></i> {{ number_format($record->fuel_blocks_used) }} blocks
                                     </span>
                                 @else
-                                    <span class="text-muted">{{ $change }} days</span>
+                                    <span class="text-muted">0</span>
                                 @endif
                             @else
                                 -
+                            @endif
+                            @if(!is_null($record->reserves_delta) && $record->reserves_delta !== 0)
+                                <br>
+                                <small class="text-muted">
+                                    Reserves:
+                                    @if($record->reserves_delta > 0)
+                                        +{{ number_format($record->reserves_delta) }}
+                                    @else
+                                        {{ number_format($record->reserves_delta) }}
+                                    @endif
+                                </small>
                             @endif
                         </td>
                         <td>
-                            @if($loop->index < $fuelHistory->count() - 1)
-                                @php
-                                    $prev = $fuelHistory[$loop->index + 1];
-                                    $change = $record->days_remaining - $prev->days_remaining;
-                                @endphp
-                                @if($change > 5)
-                                    <span class="badge badge-success">
-                                        <i class="fas fa-gas-pump"></i> Refuel
-                                    </span>
-                                @elseif($change < -2)
-                                    <span class="badge badge-warning" style="color: #000;">
-                                        <i class="fas fa-bolt"></i> High Usage
-                                    </span>
-                                @else
-                                    <span class="badge badge-secondary">Normal</span>
+                            {{-- v2.0.0 — classifier-driven badge replaces the v1.x days-delta heuristic.
+                                 Old +5days/-2days thresholds couldn't distinguish theft from refuel,
+                                 so we use the FuelEventClassifier output instead. --}}
+                            @if($record->event_type && $record->event_type !== \StructureManager\Models\StructureFuelHistory::EVENT_UNCLASSIFIED)
+                                <span class="badge {{ $record->eventBadgeClass() }}"
+                                      title="{{ trans('structure-manager::structure.fuel_event_desc_' . $record->event_type) }}">
+                                    @switch($record->event_type)
+                                        @case(\StructureManager\Models\StructureFuelHistory::EVENT_REFUEL_INTERNAL)
+                                        @case(\StructureManager\Models\StructureFuelHistory::EVENT_REFUEL_EXTERNAL)
+                                            <i class="fas fa-gas-pump"></i>
+                                            @break
+                                        @case(\StructureManager\Models\StructureFuelHistory::EVENT_WITHDRAWAL_BAY)
+                                        @case(\StructureManager\Models\StructureFuelHistory::EVENT_WITHDRAWAL_RESERVES)
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            @break
+                                        @case(\StructureManager\Models\StructureFuelHistory::EVENT_CONSUMPTION_ANOMALY)
+                                        @case(\StructureManager\Models\StructureFuelHistory::EVENT_UNEXPLAINED_GAIN)
+                                            <i class="fas fa-question-circle"></i>
+                                            @break
+                                        @default
+                                            <i class="fas fa-circle"></i>
+                                    @endswitch
+                                    {{ $record->eventLabel() }}
+                                </span>
+                                @if($hasCandidates)
+                                    <button type="button"
+                                            class="btn btn-xs btn-link sm-fuel-forensics-toggle"
+                                            data-toggle="collapse"
+                                            data-target="#{{ $rowExpandTarget }}"
+                                            aria-expanded="false"
+                                            title="{{ trans('structure-manager::structure.forensics_panel_title') }}">
+                                        <i class="fas fa-user-secret"></i>
+                                        {{ $record->candidates->count() }}
+                                    </button>
                                 @endif
                             @else
-                                -
+                                <span class="badge badge-light">{{ $record->eventLabel() }}</span>
                             @endif
                         </td>
                     </tr>
+                    @if($hasCandidates)
+                        <tr id="{{ $rowExpandTarget }}" class="collapse sm-fuel-forensics-row">
+                            <td colspan="{{ $isMetenox ? 7 : 5 }}" class="sm-fuel-forensics-cell">
+                                <div class="sm-fuel-forensics-panel">
+                                    <div class="sm-fuel-forensics-header">
+                                        <h5>
+                                            <i class="fas fa-user-secret"></i>
+                                            {{ trans('structure-manager::structure.forensics_panel_title') }}
+                                        </h5>
+                                        @if(!is_null($record->unexplained_delta))
+                                            <span class="sm-fuel-forensics-magnitude">
+                                                Magnitude: <strong>{{ number_format(abs($record->unexplained_delta)) }}</strong> blocks
+                                                @if(!is_null($record->expected_consumption) && $record->expected_consumption > 0)
+                                                    <small>(expected: {{ number_format($record->expected_consumption, 1) }})</small>
+                                                @endif
+                                            </span>
+                                        @endif
+                                    </div>
+                                    <div class="sm-fuel-forensics-disclaimer">
+                                        <i class="fas fa-info-circle"></i>
+                                        {{ trans('structure-manager::structure.forensics_panel_disclaimer') }}
+                                    </div>
+                                    <table class="table table-sm sm-fuel-forensics-table">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ trans('structure-manager::structure.forensics_column_character') }}</th>
+                                                <th>{{ trans('structure-manager::structure.forensics_column_confidence') }}</th>
+                                                <th>{{ trans('structure-manager::structure.forensics_column_score') }}</th>
+                                                <th>{{ trans('structure-manager::structure.forensics_column_signals') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($record->candidates as $candidate)
+                                                <tr>
+                                                    <td>
+                                                        <a href="https://zkillboard.com/character/{{ $candidate->character_id }}/"
+                                                           target="_blank"
+                                                           rel="noopener noreferrer"
+                                                           title="View on zKillboard">
+                                                            {{ $candidate->character_name ?? ('Character ' . $candidate->character_id) }}
+                                                            <i class="fas fa-external-link-alt" style="font-size: 0.7em; opacity: 0.6;"></i>
+                                                        </a>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge {{ $candidate->confidenceBadgeClass() }}">
+                                                            {{ trans('structure-manager::structure.fuel_confidence_' . $candidate->confidence) }}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div class="sm-fuel-forensics-score">
+                                                            <span class="sm-fuel-forensics-score-bar" style="width: {{ $candidate->score }}%"></span>
+                                                            <span class="sm-fuel-forensics-score-num">{{ $candidate->score }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        @php
+                                                            $signals = is_array($candidate->signals) ? $candidate->signals : [];
+                                                        @endphp
+                                                        @forelse($signals as $key => $value)
+                                                            <span class="sm-fuel-forensics-signal">
+                                                                <i class="fas fa-check"></i>
+                                                                {{ \StructureManager\Models\StructureFuelEventCandidate::signalLabel($key) }}
+                                                                @if(is_array($value) && isset($value['quantity']))
+                                                                    <small>({{ number_format($value['quantity']) }})</small>
+                                                                @endif
+                                                            </span>
+                                                        @empty
+                                                            <span class="text-muted">No signals</span>
+                                                        @endforelse
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    @endif
                 @endforeach
             </tbody>
         </table>
-        
+
         @if($fuelHistory->count() > 15)
             <div class="text-center mt-3">
                 <small class="text-muted">Showing 15 of {{ $fuelHistory->count() }} records</small>
@@ -751,29 +1020,29 @@
 <script src="{{ asset('vendor/structure-manager/js/chart.min.js') }}"></script>
 <script src="{{ asset('vendor/structure-manager/js/moment.min.js') }}"></script>
 <script>
-    
+
 $(document).ready(function() {
     // Prepare fuel history chart data
     let fuelHistory = @json($fuelHistory);
-    
+
     let labels = fuelHistory.map(h => moment(h.created_at).format('MM-DD HH:mm')).reverse();
     let daysData = fuelHistory.map(h => h.days_remaining).reverse();
-    
+
     // Calculate current consumption line
     let currentRate = {{ $consumption['daily'] ?? 0 }};
-    let currentDaysRemaining = {{ $structure->fuel_expires ? \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now()) : 0 }};
-    
+    let currentDaysRemaining = {{ $structure->fuel_expires ? \Carbon\Carbon::parse($structure->fuel_expires)->diffInDays(now(), true) : 0 }};
+
     // Fix chart height to prevent infinite growth
     const canvas = document.getElementById('fuelHistoryChart');
     const ctx = canvas.getContext('2d');
     canvas.parentNode.style.height = '400px';
     canvas.parentNode.style.width = '100%';
-    
+
     // Create gradient for historical data
     const gradient = ctx.createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, 'rgba(75, 192, 192, 0.4)');
     gradient.addColorStop(1, 'rgba(75, 192, 192, 0.0)');
-    
+
     new Chart(ctx, {
         type: 'line',
         data: {

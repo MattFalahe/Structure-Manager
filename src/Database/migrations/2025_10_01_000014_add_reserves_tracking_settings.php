@@ -11,7 +11,7 @@ use StructureManager\Models\StructureManagerSettings;
  * This migration adds default settings for hangar exclusion
  * and ensures proper categorization of settings
  */
-return new class extends Migration
+class AddReservesTrackingSettings extends Migration
 {
     /**
      * Run the migrations.
@@ -76,4 +76,4 @@ return new class extends Migration
             'pos_charter_critical_days',
         ])->update(['category' => 'general']);
     }
-};
+}

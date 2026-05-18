@@ -57,6 +57,13 @@ Route::group([
         'uses' => 'FuelAlertController@logisticsReportView',
         'middleware' => 'can:structure-manager.view',
     ]);
+
+    // Fuel Economics - View (requires Manager Core for pricing)
+    Route::get('/economics', [
+        'as' => 'structure-manager.economics.index',
+        'uses' => 'EconomicsController@index',
+        'middleware' => 'can:structure-manager.economics',
+    ]);
     
     // Logistics Report - JSON Data
     Route::get('/logistics-data', [
@@ -163,10 +170,20 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
     
-    // Reset Settings
-    Route::get('/settings/reset', [
+    // Reset Settings - POST only (destructive action requires CSRF token)
+    Route::post('/settings/reset', [
         'as' => 'structure-manager.settings.reset',
         'uses' => 'SettingsController@reset',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    // Re-register pricing preference with Manager Core (Settings > Economics
+    // > "Re-register now" button). Idempotent. Lives in the user-request
+    // lifecycle, so it's guaranteed to run after every provider has booted
+    // (the boot-time call can silently fail if SM boots before MC).
+    Route::post('/settings/economics/re-register', [
+        'as' => 'structure-manager.settings.economics.re-register',
+        'uses' => 'SettingsController@reRegisterPricing',
         'middleware' => 'can:structure-manager.admin',
     ]);
     
@@ -208,5 +225,218 @@ Route::group([
         'uses' => 'SettingsController@testWebhook',
         'middleware' => 'can:structure-manager.admin',
     ]);
-    
+
+    // ============================================
+    // Diagnostics (admin-only, read-only checks +
+    // guarded dev-only test data generation)
+    // ============================================
+
+    Route::get('/diagnostic', [
+        'as'         => 'structure-manager.diagnostic',
+        'uses'       => 'DiagnosticController@index',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/poses', [
+        'as'         => 'structure-manager.diagnostic.test-data.poses',
+        'uses'       => 'DiagnosticController@generateTestPoses',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/metenox', [
+        'as'         => 'structure-manager.diagnostic.test-data.metenox',
+        'uses'       => 'DiagnosticController@generateTestMetenox',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/simulate', [
+        'as'         => 'structure-manager.diagnostic.test-data.simulate',
+        'uses'       => 'DiagnosticController@simulateConsumption',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/cleanup', [
+        'as'         => 'structure-manager.diagnostic.test-data.cleanup',
+        'uses'       => 'DiagnosticController@cleanupTestData',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    // Test Notification Lab
+    Route::post('/diagnostic/test-data/upwell-structures', [
+        'as'         => 'structure-manager.diagnostic.test-data.upwell-structures',
+        'uses'       => 'DiagnosticController@generateTestUpwellStructures',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/inject-notification', [
+        'as'         => 'structure-manager.diagnostic.test-data.inject-notification',
+        'uses'       => 'DiagnosticController@injectTestNotification',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/test-webhook', [
+        'as'         => 'structure-manager.diagnostic.test-data.test-webhook',
+        'uses'       => 'DiagnosticController@saveTestWebhookUrl',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::get('/diagnostic/test-data/state', [
+        'as'         => 'structure-manager.diagnostic.test-data.state',
+        'uses'       => 'DiagnosticController@testLabState',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/test-data/metenox-dual-fuel', [
+        'as'         => 'structure-manager.diagnostic.test-data.metenox-dual-fuel',
+        'uses'       => 'DiagnosticController@sendTestMetenoxDualFuelEmbed',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    // Notification testing
+    Route::post('/diagnostic/notify/upwell', [
+        'as'         => 'structure-manager.diagnostic.notify.upwell',
+        'uses'       => 'DiagnosticController@runUpwellNotificationCheck',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/notify/pos', [
+        'as'         => 'structure-manager.diagnostic.notify.pos',
+        'uses'       => 'DiagnosticController@runPosNotificationCheck',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/notify/esi-poll', [
+        'as'         => 'structure-manager.diagnostic.notify.esi-poll',
+        'uses'       => 'DiagnosticController@runEsiPollNow',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/diagnostic/notify/test-upwell-alert', [
+        'as'         => 'structure-manager.diagnostic.notify.test-upwell-alert',
+        'uses'       => 'DiagnosticController@sendTestUpwellAlert',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    // ============================================
+    // Structure Board (v2)
+    // ============================================
+
+    Route::get('/command-board', [
+        'as'         => 'structure-manager.command-board.index',
+        'uses'       => 'StructureBoardController@index',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
+    Route::post('/command-board/op', [
+        'as'         => 'structure-manager.command-board.op.store',
+        'uses'       => 'StructureBoardController@storeManualOp',
+        'middleware' => 'can:structure-manager.command-board.create',
+    ]);
+
+    Route::post('/command-board/{id}/dismiss', [
+        'as'         => 'structure-manager.command-board.dismiss',
+        'uses'       => 'StructureBoardController@dismiss',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ])->where('id', '[0-9]+');
+
+    Route::post('/command-board/{id}/undismiss', [
+        'as'         => 'structure-manager.command-board.undismiss',
+        'uses'       => 'StructureBoardController@undismiss',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ])->where('id', '[0-9]+');
+
+    Route::delete('/command-board/{id}', [
+        'as'         => 'structure-manager.command-board.destroy',
+        'uses'       => 'StructureBoardController@destroy',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ])->where('id', '[0-9]+');
+
+    // Bulk operations on the Structure Board. Both endpoints take an
+    // `ids[]` array of timer IDs; the controller filters to ones the
+    // current user is allowed to dismiss/delete and quietly skips the rest.
+    Route::post('/command-board/bulk-dismiss', [
+        'as'         => 'structure-manager.command-board.bulk-dismiss',
+        'uses'       => 'StructureBoardController@bulkDismiss',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
+    Route::delete('/command-board/bulk-destroy', [
+        'as'         => 'structure-manager.command-board.bulk-destroy',
+        'uses'       => 'StructureBoardController@bulkDestroy',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
+    // NOTE: an external ICS / iCalendar feed was implemented here in
+    // commit d8b816f (April 2026) and explicitly removed before the
+    // v2.0.0 public release after an opsec review. Timer data is
+    // tactical intelligence in EVE; calendar services have audit
+    // access, subscription URLs leak, multi-device sync expands the
+    // exposure surface. See Help & Documentation > Notifications >
+    // "Operational Security" for the full reasoning. Do not re-add
+    // this feature without revisiting the opsec section first. The
+    // in-app monthly grid below + the existing Discord webhook
+    // channels are the supported operator-controlled trust zones for
+    // timer info; the future SeAT Broadcast calendar build will use
+    // Manager Core EventBus events, not an ICS export.
+
+    // Monthly grid view — alternative to the timeline. Same data, same
+    // visibility filters; just laid out as a calendar grid for operators
+    // who prefer that view shape. Defaults to the current month; ?month=YYYY-MM
+    // navigates.
+    Route::get('/command-board/grid', [
+        'as'         => 'structure-manager.command-board.grid',
+        'uses'       => 'StructureBoardController@calendarGrid',
+        'middleware' => 'can:structure-manager.command-board.view',
+    ]);
+
+    // ESI Key Holder management moved to Manager Core v1.x.
+    // When MC is installed, admins manage the shared key pool at
+    //   route('manager-core.esi-key-pool.index')
+    // When MC is absent, Structure Manager uses SeAT's native notification path
+    // (character_notifications table) — no key holders required.
+
+    // ============================================
+    // Notifications (category/webhook matrix)
+    // ============================================
+
+    // Notifications page was folded into Settings as a sidebar section.
+    // Keep the named route + URL working so existing bookmarks / inbound links
+    // (sidebar entries, in-content references) land on the settings page with
+    // the Notifications section pre-activated via the URL fragment.
+    Route::get('/settings/notifications', function () {
+        return redirect()->away(route('structure-manager.settings') . '#notifications');
+    })
+        ->name('structure-manager.notifications.index')
+        ->middleware('can:structure-manager.admin');
+
+    Route::post('/settings/notifications/category/{id}', [
+        'as'         => 'structure-manager.notifications.category.update',
+        'uses'       => 'NotificationController@updateCategory',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where('id', '[0-9]+');
+
+    Route::post('/settings/notifications/category/{categoryId}/bind/{webhookId}', [
+        'as'         => 'structure-manager.notifications.binding.upsert',
+        'uses'       => 'NotificationController@upsertBinding',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where(['categoryId' => '[0-9]+', 'webhookId' => '[0-9]+']);
+
+    Route::delete('/settings/notifications/category/{categoryId}/bind/{webhookId}', [
+        'as'         => 'structure-manager.notifications.binding.remove',
+        'uses'       => 'NotificationController@removeBinding',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where(['categoryId' => '[0-9]+', 'webhookId' => '[0-9]+']);
+
+    Route::post('/settings/notifications/category/{categoryId}/bind/{webhookId}/toggle', [
+        'as'         => 'structure-manager.notifications.binding.toggle',
+        'uses'       => 'NotificationController@toggleBinding',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where(['categoryId' => '[0-9]+', 'webhookId' => '[0-9]+']);
+
+    Route::get('/settings/notifications/roles', [
+        'as'         => 'structure-manager.notifications.roles',
+        'uses'       => 'NotificationController@listRoles',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
 });

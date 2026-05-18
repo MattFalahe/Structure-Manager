@@ -26,7 +26,8 @@ class CreateTestPoses extends Command
                             {--corporations=3 : Number of test corporations to create (max 10)}
                             {--poses-per-corp=2 : Number of POSes per corporation (max 10)}
                             {--fast-consumption : Enable 20-minute consumption cycles for testing}
-                            {--cleanup : Remove all test data}';
+                            {--cleanup : Remove all test data}
+                            {--force : Skip the interactive confirmation prompt during --cleanup (used by the web diagnostic page, which has its own checkbox gate)}';
 
     /**
      * The console command description.
@@ -83,7 +84,7 @@ class CreateTestPoses extends Command
         
         // Low-sec
         30002053 => ['name' => 'Amamake', 'security' => 0.4, 'requires_charters' => false],
-        30002187 => ['name' => 'Tama', 'security' => 0.3, 'requires_charters' => false],
+        30045349 => ['name' => 'Tama', 'security' => 0.3, 'requires_charters' => false],
         
         // Null-sec (using some random IDs for testing)
         30004970 => ['name' => 'Test Null System 1', 'security' => -0.5, 'requires_charters' => false],
@@ -488,10 +489,15 @@ class CreateTestPoses extends Command
         $this->line("  • Related fuel history and assets");
         $this->newLine();
         
-        // Confirm deletion
-        if (!$this->confirm('⚠️  Delete this test data?', false)) {
-            $this->info("Cleanup cancelled.");
-            return 0;
+        // Confirm deletion. Skip the interactive prompt when --force is passed
+        // (the web diagnostic page passes --force because it has its own
+        // confirmation checkbox; without --force, Artisan::call from web would
+        // get $this->confirm()'s default of false and silently no-op).
+        if (!$this->option('force')) {
+            if (!$this->confirm('⚠️  Delete this test data?', false)) {
+                $this->info("Cleanup cancelled.");
+                return 0;
+            }
         }
         
         $this->newLine();

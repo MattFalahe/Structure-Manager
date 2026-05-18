@@ -6,18 +6,27 @@ use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Models\StructureFuelHistory;
-use StructureManager\Models\StructureFuelReserves; 
 use Carbon\Carbon;
 
 class StructureManagerController extends Controller
 {
     /**
      * Get user's accessible corporation IDs
+     *
+     * Returns null when the user has explicit structure-manager.admin permission
+     * (full cross-corporation access). Otherwise returns an array of corp IDs the
+     * user's linked characters belong to, which may be empty.
      */
     private function getUserCorporations()
     {
-        // Get corporation IDs from user's characters via refresh_tokens and character_affiliations
-        $corporationIds = DB::table('refresh_tokens')
+        // SECURITY: Only users with explicit admin permission get cross-corp access.
+        // Previously an empty query (user with no linked characters) was treated as
+        // superadmin, which was a privilege-escalation path.
+        if (auth()->user() && auth()->user()->can('structure-manager.admin')) {
+            return null;
+        }
+
+        return DB::table('refresh_tokens')
             ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
             ->where('refresh_tokens.user_id', auth()->id())
             ->whereNull('refresh_tokens.deleted_at')
@@ -25,8 +34,66 @@ class StructureManagerController extends Controller
             ->unique()
             ->filter()
             ->toArray();
-        
-        return !empty($corporationIds) ? $corporationIds : null;
+    }
+
+    /**
+     * The corporations the CURRENT VIEW should be filtered to.
+     *
+     * Distinct from getUserCorporations() — that reports actual access
+     * RIGHTS (admin = null = everything) and backs requireCorporationAccess().
+     * This reports the current VIEW SCOPE: it defaults to the user's own
+     * corporations even for admins, so an admin landing on a list page
+     * sees their own corp(s) first instead of every corp on the install.
+     *
+     *   ?scope=mine     (default) -> user's own corporations
+     *   ?scope=all                -> null (all corps) — admins only
+     *   ?scope=<corpId>           -> that single corp (admins: any;
+     *                                others: only their own, else own)
+     *
+     * Returns null only for an admin who explicitly asked for scope=all.
+     */
+    private function getScopedCorporations()
+    {
+        $user    = auth()->user();
+        $isAdmin = $user && $user->can('structure-manager.admin');
+
+        $ownCorps = DB::table('refresh_tokens')
+            ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
+            ->where('refresh_tokens.user_id', auth()->id())
+            ->whereNull('refresh_tokens.deleted_at')
+            ->pluck('character_affiliations.corporation_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $scope = (string) request()->query('scope', 'mine');
+
+        if ($scope === 'all') {
+            return $isAdmin ? null : $ownCorps;
+        }
+
+        if ($scope !== 'mine' && ctype_digit($scope)) {
+            $corpId = (int) $scope;
+            if ($isAdmin || in_array($corpId, $ownCorps)) {
+                return [$corpId];
+            }
+            return $ownCorps; // non-admin asked for a corp that isn't theirs
+        }
+
+        return $ownCorps; // 'mine' / default
+    }
+
+    /**
+     * Abort 403 if the given corporation_id is not accessible to the current user.
+     * Admin (null = full access) always passes.
+     */
+    private function requireCorporationAccess($corporationId)
+    {
+        $userCorps = $this->getUserCorporations();
+        if ($userCorps !== null && !in_array($corporationId, $userCorps)) {
+            abort(403, 'Access denied');
+        }
     }
     
     public function index()
@@ -57,9 +124,10 @@ class StructureManagerController extends Controller
     public function getStructuresData(Request $request)
     {
         try {
-            // Get user's accessible corporations
-            $userCorpIds = $this->getUserCorporations();
-            
+            // Corp scope for THIS view — defaults to the user's own corps
+            // (admins included); ?scope=all / ?scope=<corpId> override.
+            $userCorpIds = $this->getScopedCorporations();
+
             $query = DB::table('corporation_structures as cs')
                 ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
                 ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
@@ -84,11 +152,17 @@ class StructureManagerController extends Controller
                     DB::raw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) as hours_remaining'),
                     DB::raw('FLOOR(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) / 24) as days_remaining'),
                     DB::raw('MOD(TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires), 24) as remaining_hours'),
-                    DB::raw('CASE 
+                    // 3-tier model from FuelThresholds (locked at 7d/14d).
+                    // NOTE: this CASE uses cs.fuel_expires which only knows
+                    // about fuel BLOCKS — for Metenoxes the gas may be the
+                    // limiting factor and run out sooner. We override below
+                    // (after fetch) by checking structure_fuel_history for
+                    // any Metenoxes and replacing the status with the gas-
+                    // limited value when applicable.
+                    DB::raw('CASE
                         WHEN cs.fuel_expires IS NULL THEN "unknown"
-                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 168 THEN "critical"
-                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 336 THEN "warning"
-                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 720 THEN "normal"
+                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < ' . \StructureManager\Helpers\FuelThresholds::upwellFuelCriticalHours() . ' THEN "critical"
+                        WHEN TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < ' . \StructureManager\Helpers\FuelThresholds::upwellFuelWarningHours() . ' THEN "warning"
                         ELSE "good"
                     END as fuel_status')
                 )
@@ -105,30 +179,35 @@ class StructureManagerController extends Controller
                     'cs.updated_at'
                 );
             
-            // Filter by user's corporations (unless they have access to all)
+            // Scope filter — own corps by default, single corp or all
+            // depending on ?scope (resolved by getScopedCorporations()).
+            // null = admin explicitly chose scope=all.
             if ($userCorpIds !== null) {
                 $query->whereIn('cs.corporation_id', $userCorpIds);
             }
-            
-            // Apply corporation filter if selected
-            if ($request->has('corporation_id') && $request->corporation_id != 'all') {
-                $query->where('cs.corporation_id', $request->corporation_id);
+
+            // Hide structures whose ESI data is stale (corp removed its
+            // token, so SeAT can no longer refresh them). Configurable
+            // via the stale_structure_threshold_days setting; null cutoff
+            // = feature disabled.
+            $staleCutoff = \StructureManager\Helpers\FuelThresholds::staleStructureCutoff();
+            if ($staleCutoff !== null) {
+                $query->where('cs.updated_at', '>=', $staleCutoff);
             }
-            
-            // Apply fuel status filter
+
+            // Apply fuel status filter — 3-tier model from FuelThresholds.
             if ($request->has('fuel_status') && $request->fuel_status != 'all') {
+                $critHrs = \StructureManager\Helpers\FuelThresholds::upwellFuelCriticalHours();
+                $warnHrs = \StructureManager\Helpers\FuelThresholds::upwellFuelWarningHours();
                 switch($request->fuel_status) {
                     case 'critical':
-                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 168'); // < 7 days
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < ?', [$critHrs]);
                         break;
                     case 'warning':
-                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) BETWEEN 168 AND 336'); // 7-14 days
-                        break;
-                    case 'normal':
-                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) BETWEEN 336 AND 720'); // 14-30 days
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) BETWEEN ? AND ?', [$critHrs, $warnHrs]);
                         break;
                     case 'good':
-                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) > 720'); // > 30 days
+                        $query->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) > ?', [$warnHrs]);
                         break;
                 }
             }
@@ -146,11 +225,36 @@ class StructureManagerController extends Controller
                 if ($structure->type_id == 81826) { // Metenox type ID
                     $metenoxCalc = \StructureManager\Helpers\FuelCalculator::calculateFromActiveServices($structure->structure_id);
                     if (isset($metenoxCalc['magmatic_gas']) && isset($metenoxCalc['fuel_blocks'])) {
+                        $fuelDays = $metenoxCalc['fuel_blocks']['days_remaining'] ?? 0;
+                        $gasDays  = $metenoxCalc['magmatic_gas']['days_remaining'] ?? 0;
+                        $limitingFactor = $metenoxCalc['limiting_factor'] ?? 'unknown';
+
                         $structure->metenox_data = [
-                            'fuel_blocks_days' => $metenoxCalc['fuel_blocks']['days_remaining'] ?? 0,
-                            'magmatic_gas_days' => $metenoxCalc['magmatic_gas']['days_remaining'] ?? 0,
-                            'limiting_factor' => $metenoxCalc['limiting_factor'] ?? 'unknown'
+                            'fuel_blocks_days'  => $fuelDays,
+                            'magmatic_gas_days' => $gasDays,
+                            'limiting_factor'   => $limitingFactor,
                         ];
+
+                        // CRITICAL: Override fuel_status / hours_remaining /
+                        // days_remaining with the LIMITING factor's value.
+                        // The SQL CASE above only knows about fuel BLOCKS via
+                        // cs.fuel_expires; for a Metenox where gas runs out
+                        // first, the list view would otherwise show the
+                        // structure as "good" while it's actually critical
+                        // on gas. Match the value that NotifyUpwellLowFuel
+                        // and the webhook embed compute.
+                        $actualDays = min($fuelDays, $gasDays);
+                        $structure->days_remaining   = floor($actualDays);
+                        $structure->hours_remaining  = (int) round($actualDays * 24);
+                        $structure->remaining_hours  = (int) round(($actualDays - floor($actualDays)) * 24);
+                        $thresholds = \StructureManager\Helpers\FuelThresholds::class;
+                        if ($actualDays < $thresholds::UPWELL_FUEL_CRITICAL_DAYS) {
+                            $structure->fuel_status = 'critical';
+                        } elseif ($actualDays < $thresholds::UPWELL_FUEL_WARNING_DAYS) {
+                            $structure->fuel_status = 'warning';
+                        } else {
+                            $structure->fuel_status = 'good';
+                        }
                     }
                 }
                 
@@ -168,7 +272,8 @@ class StructureManagerController extends Controller
             \Log::error('Structure Manager - Error fetching structures data: ' . $e->getMessage());
             return response()->json([
                 'error' => true,
-                'message' => $e->getMessage(),
+                'message' => 'Failed to load structures data',
+                'debug' => config('app.debug') ? $e->getMessage() : null,
                 'data' => []
             ], 500);
         }
@@ -195,12 +300,19 @@ class StructureManagerController extends Controller
         if (!$structure) {
             abort(404);
         }
-        
+
+        // SECURITY: scope check - user must have access to this structure's corporation
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $services = DB::table('corporation_structure_services')
             ->where('structure_id', $id)
             ->get();
         
+        // Eager-load candidates so the detail view can render the
+        // Tier 2 forensics row without N+1 queries. The relation is
+        // empty for non-withdrawal events, so the load is cheap.
         $fuelHistory = StructureFuelHistory::where('structure_id', $id)
+            ->with('candidates')
             ->orderBy('created_at', 'desc')
             ->limit(30)
             ->get();
@@ -232,11 +344,23 @@ class StructureManagerController extends Controller
     
     public function getFuelHistory($id)
     {
+        // SECURITY: scope check - resolve corporation and enforce access
+        $structure = DB::table('corporation_structures')
+            ->where('structure_id', $id)
+            ->select('corporation_id')
+            ->first();
+
+        if (!$structure) {
+            abort(404);
+        }
+
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $history = StructureFuelHistory::where('structure_id', $id)
             ->orderBy('created_at', 'desc')
             ->limit(90) // 3 months of daily data
             ->get();
-        
+
         return response()->json($history);
     }
     
@@ -253,18 +377,18 @@ class StructureManagerController extends Controller
                 ->first();
             
             // Only create new record if fuel_expires changed or it's been 24 hours
-            if (!$lastRecord || 
+            if (!$lastRecord ||
                 $lastRecord->fuel_expires != $structure->fuel_expires ||
-                $lastRecord->created_at->diffInHours(now()) >= 24) {
-                
-                $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now());
-                
+                $lastRecord->created_at->diffInHours(now(), true) >= 24) {
+
+                $daysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
+
                 $fuelUsed = null;
                 $dailyConsumption = null;
-                
+
                 if ($lastRecord && $lastRecord->fuel_expires != $structure->fuel_expires) {
                     // Fuel was added
-                    $daysDiff = Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::parse($lastRecord->fuel_expires));
+                    $daysDiff = Carbon::parse($structure->fuel_expires)->diffInDays(Carbon::parse($lastRecord->fuel_expires), true);
                     if ($daysDiff > 0) {
                         // Estimate blocks added (assuming 40 blocks per day for large structures)
                         $fuelUsed = $daysDiff * -40; // Negative means fuel was added
@@ -352,6 +476,18 @@ class StructureManagerController extends Controller
      */
     public function getFuelAnalysis($id)
     {
+        // SECURITY: scope check - resolve corporation and enforce access
+        $structure = DB::table('corporation_structures')
+            ->where('structure_id', $id)
+            ->select('corporation_id')
+            ->first();
+
+        if (!$structure) {
+            abort(404);
+        }
+
+        $this->requireCorporationAccess($structure->corporation_id);
+
         $analysis = \StructureManager\Services\FuelConsumptionTracker::analyzeFuelConsumption($id, 30);
         return response()->json($analysis);
     }

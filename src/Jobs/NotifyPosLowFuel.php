@@ -8,9 +8,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use StructureManager\Helpers\FuelThresholds;
 use StructureManager\Models\StarbaseFuelHistory;
 use StructureManager\Models\StructureManagerSettings;
+use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
+use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -46,36 +49,51 @@ class NotifyPosLowFuel implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable;
 
     /**
+     * Max seconds the job is allowed to run before the worker kills it.
+     * Webhook POSTs are bounded separately via Http::timeout below.
+     *
+     * MUST be less than queue.connections.redis.retry_after (960s default
+     * in SeAT) — otherwise the queue worker reclaims the job and runs it
+     * again in parallel, causing duplicate webhook dispatches. 600s gives
+     * comfortable headroom for slow ESI + multi-corp SeAT installs.
+     */
+    public $timeout = 600;
+
+    /**
+     * How many times the job is retried if it throws.
+     */
+    public $tries = 3;
+
+    /**
+     * Delay (seconds) between retries, applied in sequence.
+     */
+    public $backoff = [60, 300, 900];
+
+    /**
      * Execute the job.
      */
     public function handle()
     {
-        try {
-            \Log::channel('stack')->info('NotifyPosLowFuel: Job started');
-            
-            // Get all enabled webhooks
-            $webhooks = WebhookConfiguration::getEnabled();
-            
-            if ($webhooks->isEmpty()) {
-                \Log::channel('stack')->debug('NotifyPosLowFuel: No enabled webhooks configured');
-                return;
-            }
-            
-            \Log::channel('stack')->info('NotifyPosLowFuel: Found ' . $webhooks->count() . ' enabled webhook(s)');
-            
-        } catch (\Exception $e) {
-            \Log::channel('stack')->error('NotifyPosLowFuel: Exception in initial setup - ' . $e->getMessage());
-            throw $e;
+        \Log::channel('stack')->info('NotifyPosLowFuel: Job started');
+
+        // Early bail if both pos.* categories are disabled — nothing this job can do.
+        if (!WebhookDispatcher::isCategoryEnabled('pos', 'fuel') && !WebhookDispatcher::isCategoryEnabled('pos', 'strontium')) {
+            \Log::channel('stack')->debug('NotifyPosLowFuel: Both pos.fuel and pos.strontium categories are disabled; skipping.');
+            return;
         }
 
-        // Get thresholds from settings
-        $fuelCriticalDays = StructureManagerSettings::get('pos_fuel_critical_days', 7);
-        $fuelWarningDays = StructureManagerSettings::get('pos_fuel_warning_days', 14);
-        $strontiumCriticalHours = StructureManagerSettings::get('pos_strontium_critical_hours', 6);
-        $strontiumWarningHours = StructureManagerSettings::get('pos_strontium_warning_hours', 12);
-        $charterCriticalDays = StructureManagerSettings::get('pos_charter_critical_days', 7);
-        
-        // Get critical stage alert intervals (in hours, 0 = disabled/only on status change)
+        // POS thresholds — configurable per install via Settings UI. Wormhole
+        // POS deployments need extended response times that fixed defaults
+        // cannot accommodate, so these stay tunable (matches v1.0.11 behavior).
+        // FuelThresholds::posXxx() reads from the settings table with the
+        // class constants as fallback defaults.
+        $fuelCriticalDays       = FuelThresholds::posFuelCritical();
+        $fuelWarningDays        = FuelThresholds::posFuelWarning();
+        $strontiumCriticalHours = FuelThresholds::posStrontiumCritical();
+        $strontiumWarningHours  = FuelThresholds::posStrontiumWarning();
+        $charterCriticalDays    = FuelThresholds::posCharterCritical();
+
+        // Critical-stage alert intervals (cadence, operator-preference).
         $fuelCriticalInterval = StructureManagerSettings::get('pos_fuel_notification_interval', 0);
         $strontiumCriticalInterval = StructureManagerSettings::get('pos_strontium_notification_interval', 0);
         
@@ -121,14 +139,15 @@ class NotifyPosLowFuel implements ShouldQueue
         $posesByCorp = $allPoses->groupBy('corporation_id');
 
         foreach ($posesByCorp as $corpId => $corpPoses) {
-            // Get webhooks for this corporation
-            $corpWebhooks = WebhookConfiguration::getForCorporation($corpId);
-            
-            if ($corpWebhooks->isEmpty()) {
-                \Log::channel('stack')->debug("NotifyPosLowFuel: No webhooks configured for corporation {$corpId}");
+            // Resolve category-specific bindings (fuel and strontium fire independently).
+            $fuelBindings      = WebhookDispatcher::resolveBindings('pos', 'fuel', (int) $corpId);
+            $strontiumBindings = WebhookDispatcher::resolveBindings('pos', 'strontium', (int) $corpId);
+
+            if (empty($fuelBindings) && empty($strontiumBindings)) {
+                \Log::channel('stack')->debug("NotifyPosLowFuel: No pos.* bindings for corporation {$corpId}");
                 continue;
             }
-            
+
             foreach ($corpPoses as $pos) {
                 // Get the latest history record for this POS
                 $latest = StarbaseFuelHistory::where('starbase_id', $pos->starbase_id)
@@ -166,20 +185,29 @@ class NotifyPosLowFuel implements ShouldQueue
                     'last_fuel_at' => $latest->last_fuel_notification_at,
                 ]);
 
-                // Process fuel/charter notifications
-                if ($this->shouldSendFuelNotification($latest, $fuelCriticalDays, $fuelWarningDays, $fuelCriticalInterval, $charterCriticalDays)) {
-                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING fuel notification for POS ' . $latest->starbase_id . ' to ' . $corpWebhooks->count() . ' webhook(s)');
-                    foreach ($corpWebhooks as $webhook) {
-                        $this->sendFuelNotification($latest, $webhook->webhook_url, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $webhook->role_mention ?? '');
+                // On recovery to good status, clear the final-alert latches so a
+                // future drop back into critical can fire a final alert again.
+                $this->resetLatchesOnRecovery($latest, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $strontiumCriticalHours, $strontiumWarningHours);
+
+                // Always upsert POS Structure Board timers regardless of
+                // webhook binding state — the board shows pending events
+                // even if no webhook is configured to ping them.
+                $this->upsertPosBoardTimers($latest, $fuelCriticalDays, $fuelWarningDays, $strontiumCriticalHours, $strontiumWarningHours, $charterCriticalDays);
+
+                // Process fuel/charter notifications (pos.fuel category)
+                if (!empty($fuelBindings) && $this->shouldSendFuelNotification($latest, $fuelCriticalDays, $fuelWarningDays, $fuelCriticalInterval, $charterCriticalDays)) {
+                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING pos.fuel notification for POS ' . $latest->starbase_id . ' to ' . count($fuelBindings) . ' webhook(s)');
+                    foreach ($fuelBindings as $binding) {
+                        $this->sendFuelNotification($latest, $binding['webhook_url'], $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $binding['role_mention'] ?? '');
                         $notificationsSent++;
                     }
                 }
 
-                // Process strontium notifications
-                if ($this->shouldSendStrontiumNotification($latest, $strontiumCriticalHours, $strontiumWarningHours, $strontiumCriticalInterval, $strontiumZeroNotifyOnce, $strontiumZeroGracePeriod)) {
-                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING strontium notification for POS ' . $latest->starbase_id . ' to ' . $corpWebhooks->count() . ' webhook(s)');
-                    foreach ($corpWebhooks as $webhook) {
-                        $this->sendStrontiumNotification($latest, $webhook->webhook_url, $strontiumCriticalHours, $strontiumWarningHours, $webhook->role_mention ?? '');
+                // Process strontium notifications (pos.strontium category)
+                if (!empty($strontiumBindings) && $this->shouldSendStrontiumNotification($latest, $strontiumCriticalHours, $strontiumWarningHours, $strontiumCriticalInterval, $strontiumZeroNotifyOnce, $strontiumZeroGracePeriod)) {
+                    \Log::channel('stack')->info('NotifyPosLowFuel: SENDING pos.strontium notification for POS ' . $latest->starbase_id . ' to ' . count($strontiumBindings) . ' webhook(s)');
+                    foreach ($strontiumBindings as $binding) {
+                        $this->sendStrontiumNotification($latest, $binding['webhook_url'], $strontiumCriticalHours, $strontiumWarningHours, $binding['role_mention'] ?? '');
                         $notificationsSent++;
                     }
                 }
@@ -187,6 +215,129 @@ class NotifyPosLowFuel implements ShouldQueue
         }
 
         \Log::channel('stack')->info("NotifyPosLowFuel: Job completed, sent {$notificationsSent} notifications");
+    }
+
+    /**
+     * Upsert Structure Board timer rows for this POS's fuel + strontium state.
+     *
+     * One row per sub-event per POS (dedup via source_reference):
+     *   - "pos-fuel:{starbase_id}"      for fuel/charter timing
+     *   - "pos-strontium:{starbase_id}" for strontium timing
+     *
+     * Rows evolve in place across status transitions; soft-dismissed on
+     * recovery to 'good'.
+     */
+    private function upsertPosBoardTimers($history, $fuelCriticalDays, $fuelWarningDays, $strontiumCriticalHours, $strontiumWarningHours, $charterCriticalDays): void
+    {
+        $fuelStatus = $this->determineFuelStatus($history, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays);
+        $strStatus  = $this->determineStrontiumStatus($history, $strontiumCriticalHours, $strontiumWarningHours);
+
+        $ownerName = DB::table('corporation_infos')
+            ->where('corporation_id', $history->corporation_id)
+            ->value('name');
+
+        $systemName = $history->metadata['system_name'] ?? null;
+
+        // --- Fuel/charter row ---
+        // POS fuel + charters are LEGIT board events: when they run out, the
+        // POS goes offline. Same semantic as Upwell fuel.
+        $fuelEventType = $fuelStatus === 'critical' ? 'fuel_critical'
+            : ($fuelStatus === 'warning' ? 'fuel_warning' : null);
+
+        // When does the POS actually go offline? Need to consider BOTH fuel
+        // and charters as limiting factors. determineFuelStatus already does
+        // this for status classification; mirror the same min() here so
+        // eve_time on the board reflects the actual depletion (a high-sec POS
+        // with 30d fuel but 5d charters goes offline in 5 days, not 30).
+        $actualDays = $history->actual_days_remaining ?? $history->fuel_days_remaining ?? 0;
+        if ($history->requires_charters && $history->charter_days_remaining !== null) {
+            $actualDays = min($actualDays, $history->charter_days_remaining);
+        }
+        $fuelExpires = Carbon::now()->addHours(max(0, $actualDays * 24));
+
+        if ($fuelEventType === null) {
+            Timer::where('source_reference', "pos-fuel:{$history->starbase_id}")
+                ->whereNull('dismissed_at')
+                ->update(['dismissed_at' => Carbon::now()]);
+        } else {
+            Timer::upsertAuto([
+                'source'                 => 'auto_fuel',
+                'event_type'             => $actualDays * 24 <= 1 ? 'fuel_final' : $fuelEventType,
+                'severity'               => $fuelStatus === 'critical' ? 'critical' : 'warning',
+                'structure_id'           => $history->starbase_id,
+                'structure_name'         => $history->starbase_name ?? 'Unnamed POS',
+                'structure_type'         => $history->metadata['tower_type'] ?? 'Control Tower',
+                // structure_type_id is critical for icon rendering — Timer
+                // model's getStructureImageAttribute falls back to Astrahus
+                // (35832) when null, which made every POS render with an
+                // Upwell-default icon.
+                'structure_type_id'      => $history->tower_type_id ?? null,
+                'system_name'            => $systemName,
+                'corporation_id'         => $history->corporation_id,
+                'owner_corporation_name' => $ownerName,
+                'eve_time'               => $fuelExpires,
+                'source_reference'       => "pos-fuel:{$history->starbase_id}",
+                'dismissed_at'           => null,
+            ]);
+        }
+
+        // --- Strontium row: REMOVED (was a semantic mismatch) ---
+        // POS strontium is a defensive reagent that consumes only when the
+        // POS is in REINFORCED state to extend the reinforcement timer. It
+        // is NOT fuel and a low-strontium POS does NOT go offline during
+        // normal operation — operators just have less defense if attacked.
+        //
+        // Per the Structure Board's EVENT_GROUPS contract (Timer.php), the
+        // 'fuel' group is for resources that, when depleted, take the
+        // structure offline (Upwell fuel, POS fuel + charters). Strontium
+        // doesn't fit that and shouldn't pollute the board with rows that
+        // aren't actionable timers.
+        //
+        // The webhook notification path for low strontium continues to fire
+        // independently from this method (see processStarbase upstream),
+        // so operators still get the alert via Discord/Slack — just no
+        // misleading "fuel warning" entries on the board.
+        //
+        // Existing pos-strontium:* board rows from previous SM versions are
+        // cleaned up by the migration shipped alongside this change.
+        Timer::where('source_reference', 'like', 'pos-strontium:%')
+            ->whereNull('dismissed_at')
+            ->update(['dismissed_at' => Carbon::now()]);
+    }
+
+    /**
+     * Clear final-alert flags once fuel/strontium have recovered out of critical.
+     *
+     * Previously the `*_final_alert_sent` flags were set true when a final alert
+     * fired and were only ever cleared by the orphan-cleanup path. That meant a
+     * POS could receive a final alert once, be refuelled, and then never again
+     * fire a final alert even when legitimately dropping to 1 hour remaining.
+     *
+     * We reset as soon as status leaves 'critical' (i.e. becomes 'warning' or
+     * 'good'). This covers partial refuels that don't fully restore the bay, at
+     * the cost of re-arming on every recovery above the critical threshold.
+     */
+    private function resetLatchesOnRecovery($history, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays, $strontiumCriticalHours, $strontiumWarningHours)
+    {
+        $fuelStatus = $this->determineFuelStatus($history, $fuelCriticalDays, $fuelWarningDays, $charterCriticalDays);
+        $strontiumStatus = $this->determineStrontiumStatus($history, $strontiumCriticalHours, $strontiumWarningHours);
+        $dirty = false;
+
+        if ($fuelStatus !== 'critical' && ($history->fuel_final_alert_sent ?? false)) {
+            $history->fuel_final_alert_sent = false;
+            $dirty = true;
+            \Log::channel('stack')->debug("NotifyPosLowFuel: Reset fuel_final_alert_sent for POS {$history->starbase_id} (recovered to {$fuelStatus})");
+        }
+
+        if ($strontiumStatus !== 'critical' && ($history->strontium_final_alert_sent ?? false)) {
+            $history->strontium_final_alert_sent = false;
+            $dirty = true;
+            \Log::channel('stack')->debug("NotifyPosLowFuel: Reset strontium_final_alert_sent for POS {$history->starbase_id} (recovered to {$strontiumStatus})");
+        }
+
+        if ($dirty) {
+            $history->save();
+        }
     }
 
     /**
@@ -216,11 +367,14 @@ class NotifyPosLowFuel implements ShouldQueue
         $lastNotificationAt = $history->last_fuel_notification_at;
         $finalAlertSent = $history->fuel_final_alert_sent ?? false;
         
-        // Check for final alert (1 hour remaining)
+        // Check for final alert (1 hour remaining).
+        // Guard: require hoursRemaining > 0 to avoid spurious alerts when the tracker
+        // hasn't populated fuel data yet (ESI lag on newly-anchored POSes or right
+        // after orphan-cleanup creates a zeroed record).
         $actualDays = $history->actual_days_remaining ?? $history->fuel_days_remaining;
         $hoursRemaining = $actualDays * 24;
-        
-        if ($hoursRemaining <= 1 && !$finalAlertSent) {
+
+        if ($hoursRemaining > 0 && $hoursRemaining <= 1 && !$finalAlertSent) {
             \Log::channel('stack')->info("NotifyPosLowFuel: FINAL ALERT triggered for POS {$history->starbase_id} (< 1 hour remaining)");
             return true;
         }
@@ -233,17 +387,17 @@ class NotifyPosLowFuel implements ShouldQueue
         
         // Trigger #2: Critical interval reminders (only in critical stage)
         if ($currentStatus === 'critical' && $criticalInterval > 0 && $lastNotificationAt) {
-            $hoursSinceLastNotification = Carbon::now()->diffInHours($lastNotificationAt);
-            
+            $hoursSinceLastNotification = Carbon::now()->diffInHours($lastNotificationAt, true);
+
             if ($hoursSinceLastNotification >= $criticalInterval) {
                 \Log::channel('stack')->info("NotifyPosLowFuel: Critical interval reached for POS {$history->starbase_id} ({$hoursSinceLastNotification}h since last notification, interval: {$criticalInterval}h)");
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Determine fuel/charter status level
      * (No changes from original)
@@ -308,7 +462,7 @@ class NotifyPosLowFuel implements ShouldQueue
         if ($hoursRemaining <= 0 && $history->state === 4 && $zeroNotifyOnce) {
             // If we've been at 0 strontium for more than grace period, treat it as "owner doesn't care"
             if ($lastNotificationAt) {
-                $hoursSinceFirst = Carbon::now()->diffInHours($lastNotificationAt);
+                $hoursSinceFirst = Carbon::now()->diffInHours($lastNotificationAt, true);
                 
                 if ($hoursSinceFirst >= $zeroGracePeriod) {
                     // After grace period, only notify on status changes
@@ -340,8 +494,8 @@ class NotifyPosLowFuel implements ShouldQueue
         }
         
         if ($currentStatus === 'critical' && $criticalInterval > 0 && $lastNotificationAt) {
-            $hoursSinceLastNotification = Carbon::now()->diffInHours($lastNotificationAt);
-            
+            $hoursSinceLastNotification = Carbon::now()->diffInHours($lastNotificationAt, true);
+
             if ($hoursSinceLastNotification >= $criticalInterval) {
                 \Log::channel('stack')->info("NotifyPosLowFuel: Critical strontium interval reached for POS {$history->starbase_id} ({$hoursSinceLastNotification}h since last notification, interval: {$criticalInterval}h)");
                 return true;
@@ -600,18 +754,26 @@ class NotifyPosLowFuel implements ShouldQueue
             'allowed_mentions' => $allowedMentions,
         ];
 
-        try {
-            $response = Http::post($webhookUrl, $payload);
-
-            if ($response->successful()) {
-                $alertType = $isFinalAlert ? 'FINAL' : $severity;
-                Log::info("NotifyPosLowFuel: Successfully sent {$alertType} {$category} notification for " . count($poses) . " POS(es)");
-            } else {
-                Log::error("NotifyPosLowFuel: Discord webhook failed - " . $response->status() . ": " . $response->body());
-            }
-        } catch (\Exception $e) {
-            Log::error("NotifyPosLowFuel: Discord webhook exception - " . $e->getMessage());
+        // SECURITY: revalidate the stored URL every time it is about to be posted
+        // to, because a DB-level tamper would otherwise reach any host. The settings
+        // page also validates on save; this is a defense-in-depth check.
+        if (!WebhookConfiguration::isValidWebhookUrl($webhookUrl)) {
+            Log::error("NotifyPosLowFuel: Refusing to POST to an invalid webhook URL (not a Discord/Slack https URL). Edit the webhook in settings to re-save.");
+            return;
         }
+
+        // v2.0.0 — route through WebhookDeliveryService so the delivery
+        // outcome (status code, latency, error) gets recorded to
+        // structure_manager_webhook_deliveries for the diagnostic panel.
+        $alertType = $isFinalAlert ? 'FINAL' : $severity;
+        $summary = sprintf('%s %s alert — %d POS(es)', $alertType, $category, count($poses));
+        $categoryKey = 'pos.' . strtolower(str_replace('/', '_', $category));
+        \StructureManager\Services\WebhookDeliveryService::sendByUrl(
+            $webhookUrl,
+            $payload,
+            $categoryKey,
+            $summary
+        );
     }
 
     /**

@@ -6,7 +6,11 @@ return [
     'control_towers' => 'Control Towers (POS)',
     'fuel_reserves' => 'Fuel Reserves',
     'logistics_report' => 'Logistics Report',
+    'economics' => 'Fuel Economics',
     'critical_alerts' => 'Critical Alerts',
+    'command_board' => 'Structure Board',
+    'notifications' => 'Notifications',
     'settings' => 'Settings',
+    'diagnostics' => 'Diagnostics',
     'help' => 'Help & Documentation',
 ];

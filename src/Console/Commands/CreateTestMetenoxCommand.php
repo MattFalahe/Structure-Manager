@@ -4,6 +4,7 @@ namespace StructureManager\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use StructureManager\Helpers\TypeIdRegistry;
 use Carbon\Carbon;
 
 class CreateTestMetenoxCommand extends Command
@@ -34,14 +35,16 @@ class CreateTestMetenoxCommand extends Command
     const TEST_ASTRAHUS_ID = 9999999998;
     
     /**
-     * Metenox Moon Drill type ID
+     * Metenox Moon Drill type ID.
+     * @deprecated use TypeIdRegistry::METENOX
      */
-    const METENOX_TYPE_ID = 81826;
-    
+    const METENOX_TYPE_ID = TypeIdRegistry::METENOX;
+
     /**
-     * Astrahus type ID
+     * Astrahus type ID.
+     * @deprecated use TypeIdRegistry::ASTRAHUS
      */
-    const ASTRAHUS_TYPE_ID = 35832;
+    const ASTRAHUS_TYPE_ID = TypeIdRegistry::ASTRAHUS;
     
     /**
      * Magmatic Gas type ID

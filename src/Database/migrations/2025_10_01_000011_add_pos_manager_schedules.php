@@ -3,7 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Seat\Services\Models\Schedule;
 
-return new class extends Migration
+class AddPosManagerSchedules extends Migration
 {
     /**
      * Run the migrations.
@@ -42,4 +42,4 @@ return new class extends Migration
         Schedule::where('command', 'structure-manager:track-poses-fuel')->delete();
         Schedule::where('command', 'structure-manager:analyze-pos-consumption')->delete();
     }
-};
+}

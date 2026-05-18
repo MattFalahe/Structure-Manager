@@ -13,181 +13,28 @@ class FuelCalculator
      */
     
     /**
-     * Magmatic Gas type ID
+     * Magmatic Gas type ID.
+     * @deprecated use TypeIdRegistry::MAGMATIC_GAS
      */
-    const MAGMATIC_GAS_TYPE_ID = 81143;
+    const MAGMATIC_GAS_TYPE_ID = TypeIdRegistry::MAGMATIC_GAS;
     
     /**
-     * CRITICAL: Map services to their source modules
-     * One module can provide multiple services but only consumes fuel ONCE
-     * Service names are CASE-SENSITIVE and must match EVE API exactly
+     * Service name → module slug mapping.
+     * @deprecated use TypeIdRegistry::SERVICE_TO_MODULE_MAP
      */
-    const SERVICE_TO_MODULE_MAP = [
-        // Research Lab provides 3 services but is 1 module
-        'Blueprint Copying' => 'research_lab',
-        'Material Efficiency Research' => 'research_lab',
-        'Time Efficiency Research' => 'research_lab',
-        
-        // Invention Lab provides 1 service
-        'Invention' => 'invention_lab',
-        
-        // Manufacturing Plant provides 1 service
-        'Manufacturing (Standard)' => 'manufacturing_plant',
-        
-        // Capital Shipyard provides 1 service
-        'Manufacturing (Capitals)' => 'capital_shipyard',
-        
-        // Supercapital Shipyard provides 1 service (Sotiyo only)
-        'Manufacturing (Supercapitals)' => 'supercapital_shipyard',
-        
-        // Reprocessing Facility provides 1 service
-        'Reprocessing' => 'reprocessing_facility',
-        
-        // Moon Drill provides 1 service (Athanor/Tatara)
-        'Moon Drilling' => 'moon_drill',
-        
-        // Automatic Moon Drilling (Metenox Moon Drill - deployable structure)
-        'Automatic Moon Drilling' => 'metenox_moon_drill',
-        
-        // Reactors provide 1 service each
-        'Composite Reactions' => 'composite_reactor',
-        'Biochemical Reactions' => 'biochemical_reactor',
-        'Hybrid Reactions' => 'hybrid_reactor',
-        
-        // Market Hub provides 1 service
-        'Market' => 'market_hub',
-        
-        // Cloning Center provides 1 service
-        'Clone Bay' => 'cloning_center',
-        
-        // Navigation structures
-        'Jump Gate' => 'ansiblex_jump_bridge',
-        'Cynosural Beacon' => 'pharolux_cyno_beacon',
-        'Cynosural Jammer' => 'tenebrex_cyno_jammer',
-    ];
+    const SERVICE_TO_MODULE_MAP = TypeIdRegistry::SERVICE_TO_MODULE_MAP;
+
+    /**
+     * Service module fuel consumption rates (blocks per hour).
+     * @deprecated use TypeIdRegistry::SERVICE_FUEL_RATES
+     */
+    const SERVICE_FUEL_RATES = TypeIdRegistry::SERVICE_FUEL_RATES;
     
     /**
-     * Service module fuel consumption rates (blocks per hour)
-     * Based on actual EVE Online mechanics as of 2025
+     * Structure type definitions.
+     * @deprecated use TypeIdRegistry::UPWELL_TYPE_IDS
      */
-    const SERVICE_FUEL_RATES = [
-        // Citadel Services
-        'cloning_center' => [
-            'base' => 10,
-            'citadel_bonus' => 7.5,  // -25% on Citadels
-        ],
-        'market_hub' => [
-            'base' => 40,
-            'citadel_bonus' => 30,  // -25% on Citadels
-            'restrictions' => 'Large/X-Large only',
-        ],
-        
-        // Manufacturing & Research
-        'manufacturing_plant' => [
-            'base' => 12,
-            'engineering_bonus' => 9,  // -25% on Engineering Complexes
-        ],
-        'research_lab' => [
-            'base' => 12,
-            'engineering_bonus' => 9,
-            'faction_base' => 10,  // Hyasyoda variant
-            'faction_engineering_bonus' => 7.5,
-        ],
-        'invention_lab' => [
-            'base' => 12,
-            'engineering_bonus' => 9,
-        ],
-        'capital_shipyard' => [
-            'base' => 24,
-            'engineering_bonus' => 18,
-            'restrictions' => 'Large/X-Large only, no high-sec',
-        ],
-        'supercapital_shipyard' => [
-            'base' => 36,
-            'engineering_bonus' => 27,
-            'restrictions' => 'Sotiyo only, sov null-sec only',
-        ],
-        
-        // Refinery Services
-        'reprocessing_facility' => [
-            'base' => 10,
-            'athanor_bonus' => 8,   // -20% on Athanor
-            'tatara_bonus' => 7.5,  // -25% on Tatara
-        ],
-        'moon_drill' => [
-            'base' => 5,
-            // NO BONUSES - Moon Drill always uses 5 blocks/hour (120/day) on ALL refineries
-            'restrictions' => 'Refineries only',
-        ],
-        'composite_reactor' => [
-            'base' => 15,
-            'athanor_bonus' => 12,   // -20% on Athanor
-            'tatara_bonus' => 11.25, // -25% on Tatara
-            'restrictions' => 'Refineries only, no high-sec',
-        ],
-        'biochemical_reactor' => [
-            'base' => 15,
-            'athanor_bonus' => 12,   // -20% on Athanor
-            'tatara_bonus' => 11.25, // -25% on Tatara
-            'restrictions' => 'Refineries only, no high-sec',
-        ],
-        'hybrid_reactor' => [
-            'base' => 15,
-            'athanor_bonus' => 12,   // -20% on Athanor
-            'tatara_bonus' => 11.25, // -25% on Tatara
-            'restrictions' => 'Refineries only, no high-sec',
-        ],
-        
-        // Navigation Structures (Flex Structures)
-        'ansiblex_jump_bridge' => [
-            'base' => 30,
-            'restrictions' => 'Requires sov, one per system',
-        ],
-        'pharolux_cyno_beacon' => [
-            'base' => 15,
-            'restrictions' => 'Requires sov, one per system',
-        ],
-        'tenebrex_cyno_jammer' => [
-            'base' => 40,
-            'restrictions' => 'Requires sov, up to 3 per system',
-        ],
-        
-        // Metenox Moon Drill (deployable structure, not Upwell)
-        'metenox_moon_drill' => [
-            'base' => 5,  // 5 fuel blocks per hour
-            'magmatic_gas' => 200,  // 200 magmatic gas per hour
-            'note' => 'Metenox Moon Drills consume 5 fuel blocks/hour (120/day) + 200 magmatic gas/hour (4,800/day). CRITICAL: Magmatic gas often runs out BEFORE fuel blocks!',
-            'restrictions' => 'Deployable structure, requires magmatic gas in addition to fuel blocks',
-        ],
-    ];
-    
-    /**
-     * Structure type definitions
-     */
-    const STRUCTURE_TYPES = [
-        // Engineering Complexes
-        35825 => ['name' => 'Raitaru', 'category' => 'engineering', 'size' => 'medium'],
-        35826 => ['name' => 'Azbel', 'category' => 'engineering', 'size' => 'large'],
-        35827 => ['name' => 'Sotiyo', 'category' => 'engineering', 'size' => 'xlarge'],
-        
-        // Citadels
-        35832 => ['name' => 'Astrahus', 'category' => 'citadel', 'size' => 'medium'],
-        35833 => ['name' => 'Fortizar', 'category' => 'citadel', 'size' => 'large'],
-        35834 => ['name' => 'Keepstar', 'category' => 'citadel', 'size' => 'xlarge'],
-        40340 => ['name' => 'Palatine Keepstar', 'category' => 'citadel', 'size' => 'xlarge'],
-        
-        // Refineries
-        35835 => ['name' => 'Athanor', 'category' => 'refinery', 'size' => 'medium'],
-        35836 => ['name' => 'Tatara', 'category' => 'refinery', 'size' => 'large'],
-        
-        // Navigation Structures
-        35841 => ['name' => 'Ansiblex Jump Gate', 'category' => 'navigation', 'size' => 'medium'],
-        35840 => ['name' => 'Pharolux Cyno Beacon', 'category' => 'navigation', 'size' => 'medium'],
-        35839 => ['name' => 'Tenebrex Cyno Jammer', 'category' => 'navigation', 'size' => 'medium'],
-        
-        // Metenox Moon Drill (Deployable)
-        81826 => ['name' => 'Metenox Moon Drill', 'category' => 'deployable', 'size' => 'medium'],
-    ];
+    const STRUCTURE_TYPES = TypeIdRegistry::UPWELL_TYPE_IDS;
     
     /**
      * Typical service configurations for estimation
@@ -214,14 +61,10 @@ class FuelCalculator
     ];
     
     /**
-     * Fuel block types from EVE
+     * Fuel block types from EVE.
+     * @deprecated use TypeIdRegistry::FUEL_BLOCK_NAMES
      */
-    const FUEL_BLOCKS = [
-        4051 => 'Nitrogen Fuel Block',
-        4246 => 'Hydrogen Fuel Block',
-        4247 => 'Helium Fuel Block',
-        4312 => 'Oxygen Fuel Block',
-    ];
+    const FUEL_BLOCKS = TypeIdRegistry::FUEL_BLOCK_NAMES;
     
     /**
      * Get estimated fuel consumption based on active services
@@ -553,6 +396,93 @@ class FuelCalculator
         ];
     }
     
+    /**
+     * =========================================================================
+     * CROSS-PLUGIN INTEGRATION (Manager Core + Mining Manager)
+     * =========================================================================
+     * Added 2026-04-24 to support Mining Manager's extraction_at_risk
+     * notification — MM subscribes to `structure.alert.*` events on MC's
+     * EventBus and uses this helper to confirm the alerting refinery has
+     * an active moon extraction worth warning about.
+     *
+     * @pending-sm-work  This is the FIRST piece of a larger cross-plugin
+     *                   integration. Next pieces (same plugin):
+     *
+     *   1. ✅ hasActiveMoonExtraction() helper — this method (ships now)
+     *   2. ✅ structure.alert.fuel_critical publish from NotifyUpwellLowFuel
+     *          (see publishFuelCriticalEvent() in that Job; subscriber-side
+     *          filtering — was previously gated to refineries-with-active-
+     *          extraction here, but moved to MM's StructureAlertHandler so
+     *          non-MM subscribers can also receive citadel/EC fuel alerts)
+     *   3. ✅ Progressive combat events: structure.alert.shield_reinforced,
+     *          structure.alert.armor_reinforced, structure.alert.hull_reinforced
+     *          — scan character_notifications for StructureLostShields /
+     *          StructureLostArmor / StructureUnderAttack types.
+     *   4. ✅ structure.alert.destroyed — requires disappearance-detection
+     *          tracking table + StructureDestroyed notification scan.
+     *          Full design in memory:
+     *          project_structure_manager_destruction_detection.md
+     *
+     * Mining Manager already subscribes to the full `structure.alert.*`
+     * wildcard pattern, so every new flavor published from SM starts
+     * working on MM's side with no MM-side changes.
+     * =========================================================================
+     */
+
+    /**
+     * Check if a refinery (Athanor/Tatara) has an active moon extraction
+     * running right now. Used by NotifyUpwellLowFuel to scope the
+     * `structure.alert.fuel_critical` event to refineries where a low-fuel
+     * state has real operational consequences beyond "structure goes
+     * offline" — a lost chunk is material ISK.
+     *
+     * Returns false (and does NOT throw) when Mining Manager isn't
+     * installed, so Structure Manager can call this unconditionally
+     * without class_exists guards at every callsite.
+     *
+     * @param int $structureId
+     * @return bool
+     */
+    public static function hasActiveMoonExtraction(int $structureId): bool
+    {
+        // Mining Manager not installed — safe no-op
+        if (!class_exists('MiningManager\\Models\\MoonExtraction')) {
+            return false;
+        }
+
+        try {
+            return \MiningManager\Models\MoonExtraction::query()
+                ->where('structure_id', $structureId)
+                ->whereNotIn('status', ['cancelled', 'expired'])
+                // Plugin lifecycle max ~55h after chunk_arrival. Same window
+                // MM uses internally for "active extraction" queries.
+                ->where('chunk_arrival_time', '>', \Carbon\Carbon::now()->subHours(55))
+                ->exists();
+        } catch (\Throwable $e) {
+            // Defensive — if MM tables aren't yet migrated or the query
+            // blows up for any reason, fall back to "no active extraction"
+            // so we don't surface a false SM error for a transient issue.
+            //
+            // Logged at warning (not debug) because this failure means the
+            // SM ↔ MM cross-plugin alert chain is silently broken: SM's
+            // own webhooks for low-fuel still fire, but the structure.alert.*
+            // event won't be published and MM's extraction_at_risk
+            // notification never fires. Without warning-level visibility,
+            // operators wouldn't notice the integration is degraded.
+            //
+            // Common causes that warrant operator attention:
+            //  - MM's moon_extractions table missing/migrated incorrectly
+            //  - DB connection issue
+            //  - MM's MoonExtraction model class loaded but signature drift
+            \Log::warning("[SM] hasActiveMoonExtraction check failed for structure {$structureId}: " . $e->getMessage(), [
+                'structure_id' => $structureId,
+                'error' => $e->getMessage(),
+                'trace_first_frame' => $e->getTrace()[0] ?? null,
+            ]);
+            return false;
+        }
+    }
+
     /**
      * Parse fuel notification YAML text (unchanged)
      */

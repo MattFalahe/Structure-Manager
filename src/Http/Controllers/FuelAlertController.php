@@ -5,27 +5,38 @@ namespace StructureManager\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use StructureManager\Helpers\FuelCalculator;
+use StructureManager\Helpers\TypeIdRegistry;
 use Carbon\Carbon;
 
 class FuelAlertController extends Controller
 {
     /**
-     * Metenox Moon Drill type ID
+     * Metenox Moon Drill type ID.
+     * @deprecated use TypeIdRegistry::METENOX
      */
-    const METENOX_TYPE_ID = 81826;
-    
-    /** 
-     * Magmatic Gas type ID
+    const METENOX_TYPE_ID = TypeIdRegistry::METENOX;
+
+    /**
+     * Magmatic Gas type ID.
+     * @deprecated use TypeIdRegistry::MAGMATIC_GAS
      */
-    const MAGMATIC_GAS_TYPE_ID = 81143;
+    const MAGMATIC_GAS_TYPE_ID = TypeIdRegistry::MAGMATIC_GAS;
     
     /**
      * Get user's accessible corporation IDs
+     *
+     * Returns null when the user has explicit structure-manager.admin permission
+     * (full cross-corporation access). Otherwise returns an array of corp IDs the
+     * user's linked characters belong to, which may be empty.
      */
     private function getUserCorporations()
     {
-        // Get corporation IDs from user's characters via refresh_tokens and character_affiliations
-        $corporationIds = DB::table('refresh_tokens')
+        // SECURITY: Only users with explicit admin permission get cross-corp access.
+        if (auth()->user() && auth()->user()->can('structure-manager.admin')) {
+            return null;
+        }
+
+        return DB::table('refresh_tokens')
             ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
             ->where('refresh_tokens.user_id', auth()->id())
             ->whereNull('refresh_tokens.deleted_at')
@@ -33,10 +44,54 @@ class FuelAlertController extends Controller
             ->unique()
             ->filter()
             ->toArray();
-        
-        return !empty($corporationIds) ? $corporationIds : null;
     }
-    
+
+    /**
+     * The corporations the CURRENT VIEW should be filtered to.
+     *
+     * Distinct from getUserCorporations() — that reports actual access
+     * RIGHTS (admin = null = everything). This reports the current VIEW
+     * SCOPE: it defaults to the user's own corporations even for admins,
+     * so an admin landing on the Critical Alerts / Logistics pages sees
+     * their own corp(s) first instead of every corp on the install.
+     *
+     *   ?scope=mine     (default) -> user's own corporations
+     *   ?scope=all                -> null (all corps) — admins only
+     *   ?scope=<corpId>           -> that single corp (admins: any;
+     *                                others: only their own, else own)
+     */
+    private function getScopedCorporations()
+    {
+        $user    = auth()->user();
+        $isAdmin = $user && $user->can('structure-manager.admin');
+
+        $ownCorps = DB::table('refresh_tokens')
+            ->join('character_affiliations', 'refresh_tokens.character_id', '=', 'character_affiliations.character_id')
+            ->where('refresh_tokens.user_id', auth()->id())
+            ->whereNull('refresh_tokens.deleted_at')
+            ->pluck('character_affiliations.corporation_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $scope = (string) request()->query('scope', 'mine');
+
+        if ($scope === 'all') {
+            return $isAdmin ? null : $ownCorps;
+        }
+
+        if ($scope !== 'mine' && ctype_digit($scope)) {
+            $corpId = (int) $scope;
+            if ($isAdmin || in_array($corpId, $ownCorps)) {
+                return [$corpId];
+            }
+            return $ownCorps;
+        }
+
+        return $ownCorps;
+    }
+
     /**
      * Show critical alerts view
      */
@@ -60,23 +115,34 @@ class FuelAlertController extends Controller
     public function getCriticalAlerts()
     {
         try {
-            // Get user's accessible corporation IDs
-            $userCorps = $this->getUserCorporations();
+            // Corp scope for THIS view — own corps by default (admins
+            // included); ?scope=all / ?scope=<corpId> override.
+            $userCorps = $this->getScopedCorporations();
             
             // ========================================
             // PART 1: Fetch Upwell Structures
             // ========================================
+            // Threshold for inclusion: warning hours (locked at 14d via FuelThresholds)
+            $warnHrs = \StructureManager\Helpers\FuelThresholds::upwellFuelWarningHours();
+
             $upwellQuery = DB::table('corporation_structures as cs')
                 ->join('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
                 ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
                 ->join('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
                 ->whereNotNull('cs.fuel_expires')
-                ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < 336'); // < 14 days
+                ->whereRaw('TIMESTAMPDIFF(HOUR, NOW(), cs.fuel_expires) < ?', [$warnHrs]);
             
             if ($userCorps !== null) {
                 $upwellQuery->whereIn('cs.corporation_id', $userCorps);
             }
-            
+
+            // Hide structures with stale ESI data (corp removed its token).
+            // Configurable via stale_structure_threshold_days; null = off.
+            $staleCutoff = \StructureManager\Helpers\FuelThresholds::staleStructureCutoff();
+            if ($staleCutoff !== null) {
+                $upwellQuery->where('cs.updated_at', '>=', $staleCutoff);
+            }
+
             $structures = $upwellQuery->select(
                     'cs.structure_id',
                     'us.name as structure_name',
@@ -105,7 +171,9 @@ class FuelAlertController extends Controller
                     $structure->blocks_needed = 0;
                 }
                 
-                $structure->status = $structure->hours_remaining < 168 ? 'critical' : 'warning';
+                $structure->status = $structure->hours_remaining < \StructureManager\Helpers\FuelThresholds::upwellFuelCriticalHours()
+                    ? 'critical'
+                    : 'warning';
                 
                 // Add Metenox limiting factor data if applicable
                 if ($structure->type_id == self::METENOX_TYPE_ID) {
@@ -145,14 +213,26 @@ class FuelAlertController extends Controller
                             }
                         }
                         
+                        $actualDays = min($fuelDaysRemaining, $gasDaysRemaining);
                         $structure->metenox_data = [
                             'fuel_blocks_quantity' => $fuelBlocks,
                             'magmatic_gas_quantity' => $magmaticGas,
                             'fuel_blocks_days' => round($fuelDaysRemaining, 1),
                             'magmatic_gas_days' => round($gasDaysRemaining, 1),
                             'limiting_factor' => $limitingFactor,
-                            'actual_days_remaining' => round(min($fuelDaysRemaining, $gasDaysRemaining), 1)
+                            'actual_days_remaining' => round($actualDays, 1)
                         ];
+
+                        // Override hours_remaining + status with the limiting
+                        // resource's value. cs.fuel_expires only tracks fuel
+                        // blocks; for a Metenox where gas is limiting, the
+                        // page should reflect the GAS countdown — same value
+                        // the webhook embed reports.
+                        $structure->hours_remaining = (int) round($actualDays * 24);
+                        $structure->days_remaining  = (int) floor($actualDays);
+                        $structure->status = $structure->hours_remaining < \StructureManager\Helpers\FuelThresholds::upwellFuelCriticalHours()
+                            ? 'critical'
+                            : 'warning';
                     } catch (\Exception $e) {
                         \Log::warning("Failed to fetch Metenox data for structure {$structure->structure_id}: " . $e->getMessage());
                         $structure->metenox_data = [
@@ -184,13 +264,22 @@ class FuelAlertController extends Controller
                 ->join('corporation_starbases as cs', 'sfh.starbase_id', '=', 'cs.starbase_id')
                 ->join('invTypes as it', 'sfh.tower_type_id', '=', 'it.typeID')
                 ->whereNotNull('sfh.actual_days_remaining')
-                ->where('sfh.actual_days_remaining', '<', 14) // < 14 days
-                ->whereIn('sfh.state', [3, 4]); // FIXED: Only ONLINE and REINFORCED POSes (using integer state from history)
+                // POS fuel warning — read live from settings (configurable per
+                // install via FuelThresholds::posFuelWarning, default 14 days).
+                ->where('sfh.actual_days_remaining', '<', \StructureManager\Helpers\FuelThresholds::posFuelWarning())
+                ->whereIn('sfh.state', [3, 4]); // Only ONLINE and REINFORCED POSes (integer state from history)
             
             if ($userCorps !== null) {
                 $posQuery->whereIn('sfh.corporation_id', $userCorps);
             }
-            
+
+            // NOTE: the stale-structure hide is intentionally NOT applied to
+            // POSes — see PosManagerController::getPosesData(). A POS's
+            // corporation_starbases row freezes when the tower is stable or
+            // offline, so updated_at age is not a reliable staleness signal
+            // for towers. POS critical alerts are already gated to ONLINE +
+            // REINFORCED towers via the sfh.state filter above.
+
             $poses = $posQuery->select(
                     'sfh.starbase_id as structure_id',
                     'sfh.starbase_name as structure_name',
@@ -284,12 +373,20 @@ class FuelAlertController extends Controller
             ->join('corporation_infos as ci', 'cs.corporation_id', '=', 'ci.corporation_id')
             ->whereNotNull('cs.fuel_expires');
         
-        // Filter by user's corporations
-        $userCorps = $this->getUserCorporations();
+        // Corp scope for THIS view — own corps by default (admins
+        // included); ?scope=all / ?scope=<corpId> override.
+        $userCorps = $this->getScopedCorporations();
         if ($userCorps !== null) {
             $query->whereIn('cs.corporation_id', $userCorps);
         }
-        
+
+        // Hide structures with stale ESI data (corp removed its token).
+        // Configurable via stale_structure_threshold_days; null = off.
+        $staleCutoff = \StructureManager\Helpers\FuelThresholds::staleStructureCutoff();
+        if ($staleCutoff !== null) {
+            $query->where('cs.updated_at', '>=', $staleCutoff);
+        }
+
         $structures = $query->select(
                 'cs.structure_id',
                 'us.name as structure_name',

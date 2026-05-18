@@ -49,8 +49,28 @@ class CleanupHistoryCommand extends Command
         
         // Also clean up orphaned consumption records
         $this->cleanupConsumptionRecords();
-        
+
+        // Clean up processed ESI notifications (keep 30 days for audit trail)
+        $this->cleanupEsiNotifications();
+
+        // v2.0.0 — webhook delivery telemetry (30-day retention)
+        $this->cleanupWebhookDeliveries();
+
         return 0;
+    }
+
+    /**
+     * Clean up old webhook delivery telemetry rows.
+     * 30-day retention matches the diagnostic 24h-window UI without
+     * keeping the table unbounded on active alliance installs (a busy
+     * corp can produce thousands of dispatches per day).
+     */
+    private function cleanupWebhookDeliveries()
+    {
+        $deleted = \StructureManager\Services\WebhookDeliveryService::pruneOldDeliveries(30);
+        if ($deleted > 0) {
+            $this->info("Deleted {$deleted} old webhook delivery telemetry rows.");
+        }
     }
     
     /**
@@ -69,5 +89,23 @@ class CleanupHistoryCommand extends Command
             ->delete();
             
         $this->info("Deleted {$deletedPosConsumption} old POS consumption records.");
+    }
+
+    /**
+     * Clean up old processed ESI notifications.
+     * Keep unprocessed forever (shouldn't exist, but safety) and processed for 30 days.
+     */
+    private function cleanupEsiNotifications()
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('structure_manager_esi_notifications')) {
+            return;
+        }
+
+        $deletedEsi = \DB::table('structure_manager_esi_notifications')
+            ->where('processed', true)
+            ->where('created_at', '<', Carbon::now()->subDays(30))
+            ->delete();
+
+        $this->info("Deleted {$deletedEsi} old processed ESI notification records.");
     }
 }
