@@ -1894,9 +1894,10 @@
             into <code>character_notifications</code> and walks them through the FULL Structure
             Manager dispatch pipeline (Structure Board upsert, EventBus publish, Discord
             webhook embed). When a <strong>Test webhook URL</strong> is set, fake traffic
-            routes there ONLY and production webhook bindings are skipped — but if you leave
-            it empty, injected notifications will hit your real Discord channels stamped with
-            a <code>[TEST INJECTION]</code> banner. Fake test structures and injected
+            routes there ONLY (stamped with a <code>[TEST INJECTION]</code> banner) and
+            production webhook bindings are skipped. If you leave it empty, the webhook
+            dispatch is skipped entirely: the Structure Board upsert and EventBus publish
+            still fire, but no Discord embed goes out. Fake test structures and injected
             notification rows live in safe ID ranges
             <em>(structures 2.3B, characters 2.4B, notifications 8e18)</em>, but they WILL
             appear in the Structure Board and Recent Notifications UI until you clean them up.
@@ -2322,7 +2323,7 @@
         {{-- Generate test Metenox --}}
         <div class="dev-only-card">
             <h5>Generate test Metenox + Astrahus</h5>
-            <small>Runs <code>structure-manager:create-test-metenox</code>. Creates a fake Metenox Moon Drill (ID 9999999999) plus a linked Astrahus reserve structure with magmatic gas assets. Exercises the dual-fuel (blocks + gas) tracking logic.</small>
+            <small>Runs <code>structure-manager:create-test-metenox</code>. Creates a fake Metenox Moon Drill (ID 9999999999) plus a linked Astrahus reserve with magmatic gas assets — exercises the dual-fuel (blocks + gas) tracking logic. Also seeds the Metenox's <code>MoonMaterialBay</code> at ~90% with a mixed moon-ore payload (Hydrocarbons, Atmospheric Gases, Evaporite Deposits, Silicates, Cobaltite, Euxenite) so Mining Manager v2.0.1's Metenox cargo readout renders with data end-to-end from this one click.</small>
             <form method="POST" action="{{ route('structure-manager.diagnostic.test-data.metenox') }}" style="margin-top:0.8rem;">
                 @csrf
                 <label class="confirm-label">
@@ -2391,7 +2392,7 @@
     const $tabs  = $('.diag-tab');
     const $panes = $('.diag-tab-pane');
 
-    function setActive(target) {
+    function setActive(target, syncUrl) {
         $tabs.removeClass('active');
         $tabs.filter('[data-diag-target="' + target + '"]').addClass('active');
 
@@ -2407,7 +2408,9 @@
         // ?diag_tab=<target> so the server populates it. This is what
         // makes the heavy Tier 1 tabs cheap on cold page loads.
         var pane = document.querySelector('[data-diag-pane="' + target + '"]');
-        if (pane && pane.getAttribute('data-lazy') === 'true') {
+        var isLazy = pane && pane.getAttribute('data-lazy') === 'true';
+
+        if (isLazy) {
             try {
                 var url = new URL(window.location.href);
                 url.searchParams.set('diag_tab', target);
@@ -2415,12 +2418,32 @@
             } catch (e) {
                 window.location.href = window.location.pathname + '?diag_tab=' + encodeURIComponent(target);
             }
+            return;
+        }
+
+        // Non-lazy panes: sync the URL via replaceState so the Referer
+        // header carries diag_tab=<target> on form POSTs from inside this
+        // tab. Without this, controllers that finish with back() land the
+        // user on Health Checks (the bootstrap default) instead of the
+        // tab they were actually working in. No page reload — pure URL
+        // update. Only runs on user-driven tab switches (syncUrl=true),
+        // not on the initial bootstrap call below, so we don't pollute a
+        // freshly-loaded /diagnostic URL with ?diag_tab=health.
+        if (syncUrl) {
+            try {
+                var url2 = new URL(window.location.href);
+                url2.searchParams.set('diag_tab', target);
+                history.replaceState(null, '', url2.toString());
+            } catch (e) {
+                // History API unsupported. Tab still switches visually;
+                // back() will fall back to the bootstrap default.
+            }
         }
     }
 
     $tabs.on('click', function () {
         const target = $(this).data('diag-target');
-        if (target) setActive(target);
+        if (target) setActive(target, true);
     });
 
     // Default landing tab: ALWAYS Health Checks on a fresh visit.
@@ -2439,9 +2462,9 @@
     } catch (e) {}
 
     if (urlTab && validTargets.includes(urlTab)) {
-        setActive(urlTab);
+        setActive(urlTab, false);
     } else {
-        setActive('health');
+        setActive('health', false);
     }
 
     // ====================================================================

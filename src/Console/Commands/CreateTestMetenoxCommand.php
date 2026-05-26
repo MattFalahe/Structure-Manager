@@ -87,6 +87,7 @@ class CreateTestMetenoxCommand extends Command
         $this->createMetenoxStructure($corpId, $systemId, $profileId);
         $this->createMetenoxName($systemId);
         $this->createMetenoxFuelBay($corpId);
+        $this->createMetenoxMoonMaterialBay($corpId);
         $this->createMetenoxService();
         $this->createMetenoxFuelHistory($corpId);
         
@@ -109,10 +110,13 @@ class CreateTestMetenoxCommand extends Command
         $this->info('View your test structures at:');
         $this->line('  Metenox: ' . url('structure-manager/structure/' . self::TEST_METENOX_ID));
         $this->line('  Astrahus: ' . url('structure-manager/structure/' . self::TEST_ASTRAHUS_ID));
+        if (\Illuminate\Support\Facades\Route::has('mining-manager.moon.metenox-cargo')) {
+            $this->line('  Mining Manager — Metenox Cargo readout: ' . url('mining-manager/moon/metenox-cargo'));
+        }
         $this->newLine();
         $this->comment('When done testing, cleanup with:');
         $this->line('  php artisan structure-manager:create-test-metenox --cleanup');
-        
+
         return 0;
     }
     
@@ -209,7 +213,94 @@ class CreateTestMetenoxCommand extends Command
             ]
         );
     }
-    
+
+    /**
+     * Create Metenox MoonMaterialBay contents (the drill's output bay).
+     *
+     * Adds a realistic mix of R4 + R8 moon ore stacks so Mining Manager's
+     * Metenox Cargo readout has something to display when this test command
+     * is used end-to-end. Has zero effect on Structure Manager itself —
+     * SM only reads `location_flag = 'StructureFuel'`, this method writes
+     * to `'MoonMaterialBay'`. Adding it here keeps the entire test Metenox
+     * (structure + fuel + service + output cargo) creatable in a single
+     * artisan command rather than requiring a separate SQL paste for the
+     * cargo side.
+     *
+     * Item-id range: TEST_METENOX_ID + 10..15, leaving + 1/+ 2 for fuel
+     * and a few slots open for future additions without collisions.
+     *
+     * Type IDs (confirmed against SDE):
+     *   16633 Hydrocarbons         (R4)
+     *   16634 Atmospheric Gases    (R4)
+     *   16635 Evaporite Deposits   (R4)
+     *   16636 Silicates            (R4)
+     *   16640 Cobaltite            (R8) — higher value
+     *   16641 Euxenite             (R8) — higher value
+     *
+     * Total volume: 9,000,000 units × 0.05 m³ = 450,000 m³, which is 90%
+     * of the Metenox MoonMaterialBay's 500,000 m³ capacity (attribute
+     * 5693 verified via SDE + everef.net/types/81826). Chosen specifically
+     * so MM's `mining-manager:scan-metenox-cargo-fill` cron fires the
+     * metenox_cargo_full notification on first scan at the default 85%
+     * threshold — no operator setup needed to demonstrate the alert path
+     * end-to-end. Mining Manager's threshold input is clamped to 50-99%
+     * so 90% test data leaves room to lower the threshold while still
+     * exercising the cross-up transition logic.
+     *
+     * In real production a Metenox at 90% means a pull is overdue —
+     * realistic for an unmanaged drill in a 12-14 day cycle.
+     */
+    private function createMetenoxMoonMaterialBay($corpId)
+    {
+        $this->line('  Adding moon ore stacks to MoonMaterialBay (for MM cargo readout)...');
+        $this->line('  Target: ~90% fill of the 500,000 m³ bay so MM\'s cargo-full alert fires on first scan.');
+
+        $cargoStacks = [
+            ['offset' => 10, 'type_id' => 16633, 'quantity' => 2600000, 'label' => 'Hydrocarbons'],
+            ['offset' => 11, 'type_id' => 16634, 'quantity' => 1850000, 'label' => 'Atmospheric Gases'],
+            ['offset' => 12, 'type_id' => 16635, 'quantity' => 2200000, 'label' => 'Evaporite Deposits'],
+            ['offset' => 13, 'type_id' => 16636, 'quantity' => 1400000, 'label' => 'Silicates'],
+            ['offset' => 14, 'type_id' => 16640, 'quantity' =>  520000, 'label' => 'Cobaltite'],
+            ['offset' => 15, 'type_id' => 16641, 'quantity' =>  430000, 'label' => 'Euxenite'],
+        ];
+
+        $totalUnits = 0;
+        foreach ($cargoStacks as $stack) {
+            DB::table('corporation_assets')->updateOrInsert(
+                [
+                    'corporation_id' => $corpId,
+                    'item_id' => self::TEST_METENOX_ID + $stack['offset'],
+                ],
+                [
+                    'location_id' => self::TEST_METENOX_ID,
+                    'location_type' => 'item',
+                    'type_id' => $stack['type_id'],
+                    'quantity' => $stack['quantity'],
+                    'location_flag' => 'MoonMaterialBay',
+                    'is_singleton' => 0,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]
+            );
+            $totalUnits += $stack['quantity'];
+            $this->line(sprintf(
+                '    %-20s × %s units',
+                $stack['label'],
+                number_format($stack['quantity'])
+            ));
+        }
+
+        // All moon materials are 0.05 m³/unit; Metenox capacity is 500k m³.
+        $totalM3 = $totalUnits * 0.05;
+        $fillPct = round(($totalM3 / 500000) * 100, 1);
+        $this->line(sprintf(
+            '  TOTAL: %s units = %s m³ (%s%% of 500,000 m³ capacity)',
+            number_format($totalUnits),
+            number_format($totalM3),
+            $fillPct
+        ));
+    }
+
     /**
      * Create Metenox service
      */

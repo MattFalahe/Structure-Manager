@@ -155,7 +155,7 @@
                     </h3>
                     <p>
                         Version:
-                        <img src="https://img.shields.io/github/v/release/MattFalahe/Structure-Manager?label=release&color=667eea" alt="Version" style="vertical-align: middle;">
+                        <img src="https://img.shields.io/packagist/v/mattfalahe/structure-manager?label=release&color=667eea" alt="Version" style="vertical-align: middle;">
                         <img src="https://img.shields.io/badge/SeAT-5.0-764ba2" alt="SeAT 5.0" style="vertical-align: middle;">
                     </p>
                     <p>License: GPL-2.0</p>
@@ -190,6 +190,78 @@
                             {!! trans('structure-manager::help.support_list') !!}
                         </div>
                     </div>
+                </div>
+
+                {{-- Version Status — installed vs latest on Packagist. Ported
+                     from SeAT Broadcast's Help page (same VersionChecker
+                     pattern); shape is stable so subsequent plugins can
+                     reuse this markup verbatim with their own service. --}}
+                @php
+                    $vs = $versionStatus ?? ['current' => '?', 'current_source' => 'config', 'is_dev_branch' => false, 'latest' => null, 'status' => 'unknown', 'message' => '', 'release_url' => null];
+                    $statusBadgeClass = [
+                        'current'    => 'badge-success',
+                        'outdated'   => 'badge-warning',
+                        'ahead'      => 'badge-info',
+                        'dev_branch' => 'badge-info',
+                        'unknown'    => 'badge-secondary',
+                    ][$vs['status']] ?? 'badge-secondary';
+                    $statusLabel = [
+                        'current'    => '✓ Up to date',
+                        'outdated'   => '⚠ Update available',
+                        'ahead'      => '🚀 Pre-release',
+                        'dev_branch' => '🌱 Development branch',
+                        'unknown'    => '— Unable to check',
+                    ][$vs['status']] ?? '— Unknown';
+                    // Show the raw branch ref as-is (no 'v' prefix); tagged versions get the v.
+                    $installedDisplay = $vs['is_dev_branch'] ? $vs['current'] : ('v' . $vs['current']);
+                    $sourceHint = $vs['current_source'] === 'composer'
+                        ? "resolved via Composer's installed.json"
+                        : 'resolved via structure-manager.config.php (fallback, Composer metadata unavailable)';
+                @endphp
+                <div class="help-card">
+                    <h3><i class="fas fa-tag"></i> Version Status</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0.5rem 0;">
+                        <div>
+                            <strong>Installed:</strong>
+                            <span class="badge badge-secondary" style="font-size: 0.9rem;" title="{{ $sourceHint }}">
+                                {{ $installedDisplay }}
+                            </span>
+                        </div>
+                        <div>
+                            <strong>Latest release:</strong>
+                            @if($vs['latest'])
+                                <span class="badge badge-secondary" style="font-size: 0.9rem;">v{{ $vs['latest'] }}</span>
+                            @else
+                                <span class="badge badge-secondary" style="font-size: 0.9rem;">unknown</span>
+                            @endif
+                        </div>
+                        <div>
+                            <span class="badge {{ $statusBadgeClass }}" style="font-size: 0.9rem;">{{ $statusLabel }}</span>
+                        </div>
+                        @if($vs['release_url'])
+                            <div>
+                                <a href="{{ $vs['release_url'] }}" target="_blank" rel="noopener" class="btn btn-sm btn-sm-primary">
+                                    <i class="fas fa-external-link-alt"></i> View release notes
+                                </a>
+                            </div>
+                        @endif
+                    </div>
+                    <small class="text-muted">{{ $vs['message'] }}</small>
+                    @if($vs['status'] === 'outdated')
+                        <div class="info-box" style="margin-top: 0.75rem;">
+                            <i class="fas fa-arrow-circle-up"></i>
+                            <strong>Upgrade recipe (SeAT Docker stack):</strong>
+                            <pre style="margin-top: 0.4rem; margin-bottom: 0;"><code>docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml down
+docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-compose.traefik.yml up -d</code></pre>
+                            <small class="text-muted" style="display: block; margin-top: 0.4rem;">
+                                Container boot pulls the latest plugin via composer, runs new migrations, and re-seeds schedules automatically.
+                            </small>
+                        </div>
+                    @endif
+                    <small class="text-muted" style="display: block; margin-top: 0.4rem; font-size: 0.75rem;">
+                        <i class="fas fa-info-circle"></i>
+                        Installed version {{ $sourceHint }}. Latest checked via Packagist's public API (6h cache, safe on outages).
+                    </small>
                 </div>
 
                 {{-- Welcome --}}

@@ -131,8 +131,14 @@
         font-weight: bold;
     }
 
-    /* Dual-fuel display containers (Metenox purple, POS pink stripes) */
-    .metenox-dual-fuel {
+    /* Dual-fuel display containers (Metenox purple, POS pink stripes).
+       Canonical structure-manager.css applies display:flex to
+       .metenox-dual-fuel for a compact horizontal widget. This view
+       uses the class for a tall card (header + two stacked resource
+       rows + footer note), so we restore block layout here. Selector
+       specificity matches the canonical rule so source order wins. */
+    .structure-manager-wrapper .metenox-dual-fuel {
+        display: block;
         background: transparent;
         border: 2px solid #9c27b0;
         border-radius: 0.5rem;

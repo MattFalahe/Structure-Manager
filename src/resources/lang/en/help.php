@@ -1022,7 +1022,7 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
             <li>First-time attacker resolution adds ~250ms to alert dispatch (one ESI call). Acceptable for a critical security ping.</li>
             <li>Subsequent attacks by the same pilot / corp / alliance resolve instantly from the 7-day cache.</li>
             <li>Real-world threat actors tend to be recurring — cache hit rate is high once an install has been running for a few weeks.</li>
-            <li>Per CCP\'s third-party developer guidelines, ESI calls include a User-Agent identifying the plugin: <code>SeAT-StructureManager/2.0.0 (+https://github.com/MattFalahe/structure-manager)</code>.</li>
+            <li>Per CCP\'s third-party developer guidelines, ESI calls include a User-Agent identifying the plugin: <code>SeAT-StructureManager/2.0.1 (+https://github.com/MattFalahe/structure-manager)</code>.</li>
         </ul>',
     'id_resolver_opsec' => '<strong>Opsec note:</strong> attacker character / corp / alliance IDs are <strong>public information</strong> in EVE. CCP exposes them through public ESI and zKillboard already renders them on every kill. Looking them up does not leak defender intel. Names rarely change in EVE (paid service for characters; even rarer for corps/alliances), so the 7-day cache TTL is a balance between freshness and ESI load. Operators can force-refresh a single resolution via <code>IdResolver::forget(\'character\', $id)</code> in tinker if a known rename happens.',
     'id_resolver_admin_force_refresh' => '<strong>Force-refresh a single entity:</strong>

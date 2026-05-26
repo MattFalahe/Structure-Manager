@@ -499,6 +499,11 @@ class StructureManagerController extends Controller
      */
     public function help()
     {
-        return view('structure-manager::help.index');
+        // Latest-version check shown in the Overview card. The service caches
+        // for 6h + has a 3s timeout, so a Packagist outage can never slow the
+        // Help page meaningfully or break the render.
+        $versionStatus = app(\StructureManager\Services\VersionChecker::class)->getStatus();
+
+        return view('structure-manager::help.index', compact('versionStatus'));
     }
 }

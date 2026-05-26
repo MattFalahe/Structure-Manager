@@ -5,6 +5,41 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
+## 🛠️ Version 2.0.1 — *May 2026*
+
+Patch release on top of v2.0.0 "The Ecosystem Era". UI/UX corrections caught while shaking down v2.0.0 in production, a small Help-page Version Status card ported from SeAT Broadcast, and a test-fixture upgrade that pairs with Mining Manager's upcoming v2.0.1 Metenox cargo readout.
+
+### 🐛 Bug Fixes
+
+**Critical Alerts — Metenox dual-fuel box layout**
+The "Dual Fuel System Status" panel was rendering its header, fuel-blocks row, magmatic-gas row, and "Structure has no fuel" footer all on one horizontal line. The canonical `structure-manager.css` was applying `display: flex` to `.metenox-dual-fuel` for a compact widget elsewhere; the view-local CSS for Critical Alerts didn't override it, so canonical specificity won. The local rule now matches that specificity and explicitly sets `display: block`, restoring the intended stacked card layout.
+
+**Diagnostic page — tab preservation across form POSTs**
+Clicking any action button on a non-lazy diagnostic tab (Test Data, Notification Lab) used to bounce you back to Health Checks after the controller's `back()` redirect. Tab clicks now keep the URL in sync via `history.replaceState`, so form POSTs carry the `diag_tab` parameter in the Referer and land you back on the tab you were working in. Deep links to a specific tab also work cleanly now.
+
+### ✨ Enhancements
+
+**Version Status card on the Help page.**
+New card sits right under the Plugin Info block on Help & Documentation. Shows the installed version (resolved via Composer's `installed.json`, falling back to `structure-manager.config.php` if Composer metadata is unavailable), the latest stable release from Packagist (cached 6 hours, fail-safe on Packagist outages), and an at-a-glance status badge: ✓ Up to date / ⚠ Update available / 🚀 Pre-release / 🌱 Development branch / — Unable to check. When an update is available a one-click "View release notes" link plus an upgrade-recipe block appear. Pattern ported verbatim from SeAT Broadcast where it was introduced first; the same shape will roll out to the other plugins.
+
+### 📊 Documentation
+
+**Notification Lab intro corrected.** Previous text claimed that leaving the Test webhook URL empty would route injected notifications to your real Discord channels with a `[TEST INJECTION]` banner. The code in `StructureEventHandler::dispatchTestNotification` does the safer thing: when the URL is empty, the webhook dispatch is skipped entirely (board upsert and EventBus publish still fire, but no Discord embed is sent). Intro now accurately describes both behaviours.
+
+**Diagnostic Test Data tab — Metenox button description.** Updated to note the new `MoonMaterialBay` cargo seeding so operators know exactly what the button writes.
+
+### 🧪 Test Fixtures
+
+**`MoonMaterialBay` cargo seeded by the test-Metenox command.** `structure-manager:create-test-metenox` now writes a realistic mix of moon-ore stacks (Hydrocarbons, Atmospheric Gases, Evaporite Deposits, Silicates, Cobaltite, Euxenite) into the test Metenox's cargo bay so the Mining Manager v2.0.1 Metenox cargo readout renders end-to-end from a single artisan call. SM itself doesn't read `MoonMaterialBay` rows; this lives in SM because SM owns the test Metenox lifecycle. Default fill is ~90% so MM's "cargo full" alert fires on the fixture without further tweaking.
+
+### 🚀 Upgrade
+
+No migrations, no schema changes. Pure view, asset, controller, and service-version updates — restart the front container to pick up the blade + JS changes.
+
+ESI User-Agent bumps to `SeAT-StructureManager/2.0.1` per CCP's third-party developer guidelines.
+
+---
+
 ## 🎉 Version 2.0.0 — The Ecosystem Era — *May 2026*
 
 Structure Manager v2.0.0 is the first public canonical release of the ecosystem-era plugin family. Where the original Structure Manager was a single-purpose fuel tracker, v2.0.0 sits at the centre of a connected plugin suite where Manager Core provides shared infrastructure, Mining Manager consumes Structure Manager's combat events for extraction-at-risk alerting, and SeAT Broadcast (`seat-discord-pings`) will consume the tactical-planning events for fleet calendar planning.
