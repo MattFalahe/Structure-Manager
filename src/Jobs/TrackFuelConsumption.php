@@ -211,7 +211,36 @@ class TrackFuelConsumption implements ShouldQueue
             ->where('location_flag', 'StructureFuel')
             ->where('type_id', self::MAGMATIC_GAS_TYPE_ID)
             ->sum('quantity');
-        
+
+        // Race guard: SeAT's corporation_assets refresh is non-atomic
+        // (DELETE-then-INSERT, per-corp). An hourly snapshot landing inside
+        // that window can read 0 for one fuel type while the other reads
+        // correctly. A real depletion burns fuel + gas proportionally, so
+        // an asymmetric 0 is almost certainly the race rather than the
+        // bay being out. Skip this snapshot — the next hour's poll will
+        // catch the assets table whole. Without this guard, the race
+        // writes a bogus row that breaks the structure detail page's
+        // consumption chart and flips the limiting_factor display.
+        // Same heuristic as the notification path (see
+        // NotifyUpwellLowFuel::getStructureFuelData).
+        $fuelDaysCheck = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;
+        $gasDaysCheck  = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
+        if (
+            ($fuelBlocks == 0 && $gasDaysCheck > 7)
+            || ($magmaticGas == 0 && $fuelDaysCheck > 7)
+        ) {
+            Log::warning(sprintf(
+                'TrackFuelConsumption: suspected corp-assets refresh race on Metenox %d '
+                . '(fuel=%d, gas=%d, fuelDays=%.1f, gasDays=%.1f), skipping snapshot',
+                $structure->structure_id,
+                $fuelBlocks,
+                $magmaticGas,
+                $fuelDaysCheck,
+                $gasDaysCheck
+            ));
+            return ['tracked' => false, 'method' => null];
+        }
+
         // Get last record
         $lastRecord = StructureFuelHistory::where('structure_id', $structure->structure_id)
             ->orderBy('created_at', 'desc')
@@ -252,6 +281,17 @@ class TrackFuelConsumption implements ShouldQueue
                 'is_metenox' => true,
             ];
             
+            // Pass metadata as ARRAY, not a json_encode()'d string. The
+            // model has `metadata` cast to 'array' which means Laravel
+            // handles JSON-encoding on save and decoding on read. Passing
+            // a pre-encoded string here triggers DOUBLE-ENCODING — the
+            // column ends up as a JSON string wrapping a JSON object,
+            // which makes JSON_EXTRACT(metadata, '$.fuel_blocks') return
+            // NULL in MariaDB and breaks every downstream query that goes
+            // through the column. Same bug fixed for trackStructureReserves
+            // in v2.0.0; this is the matching fix for the Metenox snapshot
+            // path. See the cleanup migration shipped in v2.0.2 for
+            // unwrapping the rows written by previous releases.
             $record = StructureFuelHistory::create([
                 'structure_id' => $structure->structure_id,
                 'corporation_id' => $structure->corporation_id,
@@ -261,7 +301,7 @@ class TrackFuelConsumption implements ShouldQueue
                 'daily_consumption' => null,
                 'consumption_rate' => null,
                 'tracking_type' => $trackingMethod,
-                'metadata' => json_encode($metadata),
+                'metadata' => $metadata,
                 'magmatic_gas_quantity' => $magmaticGas,
                 'magmatic_gas_days' => round($gasDaysRemaining, 1),
             ]);
@@ -289,9 +329,33 @@ class TrackFuelConsumption implements ShouldQueue
     {
         // METHOD 1: Get fuel blocks from fuel bay ONLY (not reserves)
         $fuelBayData = $this->getFuelBayQuantity($structure->structure_id);
-        
+
         // METHOD 2: Calculate from days_remaining (FALLBACK)
         $currentDaysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
+
+        // Race guard: if the bay reads 0 but cs.fuel_expires says the
+        // structure still has fuel for many hours, SeAT's corporation_assets
+        // refresh is mid-DELETE-INSERT for this corp. Skip the snapshot —
+        // taking it would poison the consumption chart (false "consumption
+        // anomaly" or "unexplained_delta" via the v2.0.0 event classifier)
+        // and downstream queries that join against the snapshot. The next
+        // hourly poll catches the table whole. cs.fuel_expires lags real
+        // depletion by at most the ESI structure-info refresh cadence
+        // (15-20 min), so a >12h threshold is conservative against false
+        // skips of genuine depletions (where cs.fuel_expires would be
+        // near 0 anyway).
+        if (
+            $fuelBayData['available'] === false
+            && $currentDaysRemaining > 0.5
+        ) {
+            Log::warning(sprintf(
+                'TrackFuelConsumption: suspected corp-assets refresh race on Upwell %d '
+                . '(bay reads 0 but cs.fuel_expires says %.2fd remaining), skipping snapshot',
+                $structure->structure_id,
+                $currentDaysRemaining
+            ));
+            return ['tracked' => false, 'method' => null];
+        }
 
         // Get last record for comparison
         $lastRecord = StructureFuelHistory::where('structure_id', $structure->structure_id)
@@ -314,12 +378,26 @@ class TrackFuelConsumption implements ShouldQueue
 
         // Calculate consumption if we have a previous record
         if ($lastRecord && $shouldCreateRecord) {
-            $realHoursPassed = $lastRecord->created_at->diffInHours(now(), true);
-            
+            // v2.0.2 — minute-precision elapsed time. diffInHours floors
+            // to whole hours, which mis-attributes ~2-hour cron gaps as
+            // 1 hour and inflates the implied burn rate. See the Tier 1.5
+            // forensics memory section for the production audit that
+            // confirmed this as the dominant false-positive cause.
+            $realHoursPassed = $lastRecord->created_at->diffInMinutes(now(), true) / 60.0;
+
             if ($realHoursPassed > 0) {
                 // METHOD 1: Use actual fuel bay quantities (BEST - ONLY FUEL BAY)
                 if ($fuelBayData['available'] && $lastRecord->metadata) {
-                    $metadata = json_decode($lastRecord->metadata, true);
+                    // Defensive read — Eloquent casts metadata to array on
+                    // the model. v2.0.2 dropped the json_encode() on the
+                    // write side, so the cast properly returns an array
+                    // for new rows. Legacy rows that the 000007 cleanup
+                    // migration unwrapped also come back as arrays. Falling
+                    // back to json_decode() catches any future write path
+                    // that bypasses the cast.
+                    $metadata = is_array($lastRecord->metadata)
+                        ? $lastRecord->metadata
+                        : (json_decode($lastRecord->metadata ?? '', true) ?: []);
                     $previousFuelBlocks = $metadata['fuel_blocks'] ?? null;
                     
                     if ($previousFuelBlocks !== null && $previousFuelBlocks > 0) {
@@ -419,8 +497,20 @@ class TrackFuelConsumption implements ShouldQueue
                     ? (int) $lastMeta['total_reserves']
                     : $currentReserves; // first-snapshot fallback
 
+                // v2.0.2 — minute-precision elapsed-time math fed to the
+                // classifier. Carbon::diffInHours returns INT (floor); a
+                // 1h 59m gap reads as 1 hour, so expected_consumption is
+                // computed against 1× the hourly rate while the bay actually
+                // burned ~2× that. The classifier then sees a 2× over-burn
+                // and (above 1.5×) classifies as withdrawal_bay even though
+                // no fuel actually left the structure. Switching to
+                // diffInMinutes / 60.0 gives minute-granular floats with no
+                // other behaviour change. The production audit on 2026-05-30
+                // (Tier 1.5 in project_structure_manager_fuel_forensics.md)
+                // confirmed this as the dominant cause of the false
+                // theft-detection rows.
                 $hoursElapsed = $lastRecord
-                    ? max(0.001, $lastRecord->created_at->diffInHours(now(), true))
+                    ? max(0.001, $lastRecord->created_at->diffInMinutes(now(), true) / 60.0)
                     : 0.0;
 
                 $expectedHourly = FuelEventClassifier::expectedHourlyConsumption(
@@ -444,6 +534,9 @@ class TrackFuelConsumption implements ShouldQueue
                 // Leave classification at the unclassified defaults
             }
 
+            // Pass metadata as ARRAY (see trackMetenoxFuel for the full
+            // background on the double-encoding bug). Same fix, same model
+            // cast, same downstream consequences if pre-encoded.
             $record = StructureFuelHistory::create([
                 'structure_id' => $structure->structure_id,
                 'corporation_id' => $structure->corporation_id,
@@ -453,7 +546,7 @@ class TrackFuelConsumption implements ShouldQueue
                 'daily_consumption' => $dailyConsumption,
                 'consumption_rate' => $dailyConsumption,
                 'tracking_type' => $trackingMethod,
-                'metadata' => json_encode($metadata),
+                'metadata' => $metadata,
                 'magmatic_gas_quantity' => null,
                 'magmatic_gas_days' => null,
                 'event_type' => $classification['event_type'],

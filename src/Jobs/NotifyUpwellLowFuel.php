@@ -281,6 +281,32 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 ->where('type_id', $reagentTypeId)
                 ->sum('quantity');
 
+            // Race guard: cyno reagents live in the same StructureFuel bay
+            // as fuel blocks. If the reagent reads 0 but cs.fuel_expires
+            // shows the structure still has many hours of fuel, the assets
+            // table is mid-DELETE-INSERT for this corp and the reagent
+            // rows are temporarily missing. Cross-check against
+            // cs.fuel_expires (same bay, same race) before alerting.
+            if ($qty == 0) {
+                $fuelExpires = DB::table('corporation_structures')
+                    ->where('structure_id', $row->structure_id)
+                    ->value('fuel_expires');
+                if ($fuelExpires !== null) {
+                    $hoursOfFuelLeft = Carbon::now()->diffInHours(Carbon::parse($fuelExpires), false);
+                    if ($hoursOfFuelLeft > 12) {
+                        Log::warning(sprintf(
+                            'NotifyUpwellLowFuel: suspected corp-assets refresh race on cyno reagent '
+                            . 'at structure %d (%s reads 0 but cs.fuel_expires shows %.1fh of fuel), '
+                            . 'skipping this row',
+                            $row->structure_id,
+                            $reagentName,
+                            $hoursOfFuelLeft
+                        ));
+                        continue;
+                    }
+                }
+            }
+
             $status = $this->classifyReagentStatus($qty, $warnThreshold, $critThreshold);
 
             if ($status === 'good') {
@@ -763,6 +789,31 @@ class NotifyUpwellLowFuel implements ShouldQueue
             ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
             ->sum('quantity');
 
+        // Race guard: SeAT's corporation_assets refresh is non-atomic
+        // (DELETE-then-INSERT, per-corp). A poll landing inside that window
+        // can read 0 for the bay's fuel rows even when the structure has
+        // plenty of fuel left. For non-Metenox Upwell, the status decision
+        // itself comes from $hoursRemaining (cs.fuel_expires based) and is
+        // therefore safe, but the embed would render "0 blocks remaining"
+        // inside the same race window, which looks like the structure is
+        // about to go offline when it isn't. Skip the poll; the next 10-min
+        // run picks up the assets table whole. Metenox has its own guard
+        // further down (after the gas read) because the asymmetric 0 case
+        // is the one that actually drives a false CRITICAL there.
+        if (
+            $structure->type_id != self::METENOX_TYPE_ID
+            && $fuelBlocks == 0
+            && $hoursRemaining > 12
+        ) {
+            Log::warning(sprintf(
+                'NotifyUpwellLowFuel: suspected corp-assets refresh race on Upwell %d '
+                . '(live fuel=0 but cs.fuel_expires says %.1fh remaining), skipping this poll',
+                $structure->structure_id,
+                $hoursRemaining
+            ));
+            return null;
+        }
+
         // Get active services count
         $activeServices = DB::table('corporation_structure_services')
             ->where('structure_id', $structure->structure_id)
@@ -816,6 +867,34 @@ class NotifyUpwellLowFuel implements ShouldQueue
             $fuelDays = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;
             $gasDays = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
             $actualDays = min($fuelDays, $gasDays);
+
+            // Race guard: SeAT's corporation_assets refresh is non-atomic
+            // (DELETE-then-INSERT, per-corp). A poll inside the window can
+            // read 0 for one fuel type while the other reads correctly.
+            // A real depletion burns fuel + gas proportionally, so an
+            // asymmetric 0 (one resource 0 while the other has many days
+            // left) is almost certainly the race rather than the structure
+            // being out. This is the case that drove false CRITICAL embeds
+            // because the Metenox path below overrides days_remaining from
+            // $actualDays = min(fuel, gas) — a race-induced 0 makes
+            // actualDays = 0 which then triggers critical. Bail; the next
+            // 10-minute poll picks the assets table back up whole.
+            $raceSuspicionDays = 7;
+            if (
+                ($fuelBlocks == 0 && $gasDays > $raceSuspicionDays)
+                || ($magmaticGas == 0 && $fuelDays > $raceSuspicionDays)
+            ) {
+                Log::warning(sprintf(
+                    'NotifyUpwellLowFuel: suspected corp-assets refresh race on Metenox %d '
+                    . '(fuel=%d, gas=%d, fuelDays=%.1f, gasDays=%.1f), skipping this poll',
+                    $structure->structure_id,
+                    $fuelBlocks,
+                    $magmaticGas,
+                    $fuelDays,
+                    $gasDays
+                ));
+                return null;
+            }
 
             $limitingFactor = 'none';
             if ($fuelDays > 0 || $gasDays > 0) {

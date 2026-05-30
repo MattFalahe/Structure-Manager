@@ -8,7 +8,7 @@
 
 > Structure Manager works fully standalone. Installing Manager Core alongside it unlocks faster detection (~2 min vs 15-20 min), cross-plugin event broadcasting, shared director key pool, and the Fuel Economics page. Every ecosystem feature is purely additive — leaving Manager Core out keeps all v1 functionality intact at SeAT's native cadence.
 
-📋 **[v2.0.1 release notes →](CHANGELOG.MD)**
+📋 **[v2.0.2 release notes →](CHANGELOG.MD)**
 
 ## Features
 

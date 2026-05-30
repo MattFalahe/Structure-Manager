@@ -67,9 +67,16 @@
                             </option>
                         @endforeach
                     </select>
+                    @if($isAdmin)
+                        <label style="color:#dfe3eb; font-size:0.85rem; margin:0 0 0 0.5rem;">Scope:</label>
+                        <select name="scope" onchange="this.form.submit()" title="Corporation scope">
+                            <option value="mine" {{ $currentScope === 'mine' ? 'selected' : '' }}>My Corporations</option>
+                            <option value="all"  {{ $currentScope === 'all'  ? 'selected' : '' }}>All Corporations</option>
+                        </select>
+                    @endif
                     <button type="submit"><i class="fas fa-redo-alt"></i> Apply</button>
                 </form>
-                <a href="{{ route('structure-manager.economics.index') }}?period={{ $periodDays }}&refresh=1"
+                <a href="{{ route('structure-manager.economics.index') }}?period={{ $periodDays }}&scope={{ $currentScope }}&refresh=1"
                    style="background:#2a2f3a; color:#dfe3eb; border:1px solid #454d55; padding:0.35rem 0.9rem; border-radius:4px; text-decoration:none; font-size:0.85rem;">
                     <i class="fas fa-bolt"></i> Force refresh
                 </a>
@@ -98,8 +105,8 @@
                 Period: <strong>{{ $payload['period_start'] }} → {{ $payload['period_end'] }}</strong>
                 ({{ $periodDays }} days)
                 &nbsp;&middot;&nbsp; Scope:
-                @if($isAdmin)
-                    <strong>All corporations</strong> (admin)
+                @if($isAdmin && $currentScope === 'all')
+                    <strong>All corporations</strong> (admin override)
                 @else
                     <strong>Your corporations only</strong>
                 @endif

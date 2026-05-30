@@ -2793,6 +2793,225 @@ class DiagnosticController extends Controller
             'items' => $orphanChecks,
         ];
 
+        // ---- Group 2.5: Snapshot poll coverage (last 24h) ------------------
+        //
+        // Counts actual rows in *_fuel_history per structure / starbase over
+        // the past 24h vs the expected cadence (hourly for Upwell, every
+        // 10 min for POS). Surfaces:
+        //   - a summary line (total structures, total missed polls)
+        //   - the top N worst offenders so a sustained issue on a specific
+        //     structure stands out without flooding the page on large installs
+        //
+        // Why this matters: the v2.0.2 race guards intentionally SKIP writing
+        // a snapshot when SeAT's corporation_assets table is mid-refresh,
+        // rather than write a wrong value. The trade-off is gaps in the
+        // history rather than poisoned rows — which is preferable for every
+        // downstream consumer (consumption chart, event classifier, refuel
+        // detection all normalise by hours_elapsed) but worth surfacing here
+        // so operators can spot if the underlying SeAT problem is rare
+        // (1-3 misses/24h = noise) or sustained (12+/24h = SeAT-side
+        // investigation needed). Excessive misses also predict that real
+        // critical notifications will be 10 min delayed at most.
+        //
+        // Cap the per-structure list at 10 rows so a misconfigured install
+        // doesn't render a 200-row group; the summary still reports the
+        // full total miss count across all structures regardless.
+        $coverageChecks = [];
+        $MAX_FLAGGED_PER_TABLE = 10;
+        $oneDayAgo = now()->subDay();
+
+        // Upwell coverage — structure_fuel_history (hourly cron, 24 expected)
+        if (Schema::hasTable('structure_fuel_history') && Schema::hasTable('corporation_structures')) {
+            try {
+                $pollCounts = DB::table('structure_fuel_history')
+                    ->where('created_at', '>=', $oneDayAgo)
+                    ->select('structure_id', DB::raw('COUNT(*) as cnt'))
+                    ->groupBy('structure_id')
+                    ->pluck('cnt', 'structure_id')
+                    ->all();
+
+                // Only include structures known to SeAT for >24h, otherwise a
+                // freshly-added structure looks like a permanent miss.
+                $structures = DB::table('corporation_structures as cs')
+                    ->leftJoin('universe_structures as us', 'cs.structure_id', '=', 'us.structure_id')
+                    ->whereNotNull('cs.fuel_expires')
+                    ->where(function ($q) use ($oneDayAgo) {
+                        $q->where('cs.created_at', '<', $oneDayAgo)
+                          ->orWhereNull('cs.created_at');
+                    })
+                    ->select('cs.structure_id', 'us.name as structure_name')
+                    ->get();
+
+                $totalStructures = $structures->count();
+                $totalMissed = 0;
+                $flagged = [];
+
+                foreach ($structures as $s) {
+                    $actual = (int) ($pollCounts[$s->structure_id] ?? 0);
+                    // Hourly cron — 24 expected. Cap at 24 so a structure
+                    // with multiple snapshots per hour (shouldn't happen but
+                    // defensive) doesn't underflow.
+                    $missed = max(0, 24 - min($actual, 24));
+                    $totalMissed += $missed;
+                    if ($missed > 0) {
+                        $flagged[] = [
+                            'structure_id' => $s->structure_id,
+                            'name'         => $s->structure_name ?? ('Structure #' . $s->structure_id),
+                            'actual'       => $actual,
+                            'missed'       => $missed,
+                        ];
+                    }
+                }
+
+                usort($flagged, fn($a, $b) => $b['missed'] <=> $a['missed']);
+                $totalFlagged = count($flagged);
+
+                $summaryStatus = $totalMissed === 0
+                    ? 'ok'
+                    : ($totalFlagged < max(1, (int) ($totalStructures * 0.5)) && $totalMissed < $totalStructures * 4 ? 'info' : 'warn');
+
+                $summaryMessage = $totalMissed === 0
+                    ? sprintf('%d Upwell structure(s) all have full 24/24 coverage in the past 24h.', $totalStructures)
+                    : sprintf(
+                        '%d of %d structures missed at least one snapshot in the last 24h (%d total misses). Expected: 24 per structure (hourly track-fuel cron). Frequent misses can indicate SeAT corp-assets refresh races (see NotifyUpwellLowFuel and TrackFuelConsumption race-guard warnings in laravel.log), cron queue lag, or sustained ESI scope issues.',
+                        $totalFlagged,
+                        $totalStructures,
+                        $totalMissed
+                    );
+
+                $coverageChecks[] = [
+                    'label'   => 'Upwell snapshot coverage (last 24h)',
+                    'status'  => $summaryStatus,
+                    'message' => $summaryMessage,
+                ];
+
+                foreach (array_slice($flagged, 0, $MAX_FLAGGED_PER_TABLE) as $row) {
+                    $coverageChecks[] = [
+                        'label'   => sprintf('• %s (%d/24)', $row['name'], $row['actual']),
+                        'status'  => $row['missed'] >= 12 ? 'warn' : ($row['missed'] >= 4 ? 'info' : 'ok'),
+                        'message' => sprintf('%d missed snapshot(s) in the last 24h.', $row['missed']),
+                    ];
+                }
+                if ($totalFlagged > $MAX_FLAGGED_PER_TABLE) {
+                    $coverageChecks[] = [
+                        'label'   => sprintf('… and %d more flagged structure(s)', $totalFlagged - $MAX_FLAGGED_PER_TABLE),
+                        'status'  => 'info',
+                        'message' => 'Top 10 shown by miss count. Re-check after a known SeAT incident to see if the list shrinks.',
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $coverageChecks[] = [
+                    'label'   => 'Upwell snapshot coverage (last 24h)',
+                    'status'  => 'warn',
+                    'message' => 'Coverage check failed: ' . $e->getMessage(),
+                ];
+            }
+        }
+
+        // POS coverage — starbase_fuel_history (10-min cron, 144 expected)
+        if (Schema::hasTable('starbase_fuel_history') && Schema::hasTable('corporation_starbases')) {
+            try {
+                $pollCounts = DB::table('starbase_fuel_history')
+                    ->where('created_at', '>=', $oneDayAgo)
+                    ->select('starbase_id', DB::raw('COUNT(*) as cnt'))
+                    ->groupBy('starbase_id')
+                    ->pluck('cnt', 'starbase_id')
+                    ->all();
+
+                $starbases = DB::table('corporation_starbases as csb')
+                    ->leftJoin('universe_structures as us', 'csb.starbase_id', '=', 'us.structure_id')
+                    ->where(function ($q) use ($oneDayAgo) {
+                        $q->where('csb.created_at', '<', $oneDayAgo)
+                          ->orWhereNull('csb.created_at');
+                    })
+                    ->select('csb.starbase_id', 'us.name as starbase_name', 'csb.state')
+                    ->get();
+
+                $totalPos = $starbases->count();
+                $totalMissed = 0;
+                $flagged = [];
+
+                foreach ($starbases as $sb) {
+                    // POSes only get polled while online/reinforced — skip
+                    // offline/unanchoring/anchored states (state codes are
+                    // strings in SeAT v5: 'online'=4, 'reinforced'=3, etc.).
+                    // A POS in 'offline' legitimately has no fuel history rows
+                    // and shouldn't be counted as a miss.
+                    $state = (string) ($sb->state ?? '');
+                    if (!in_array($state, ['online', 'reinforced', '4', '3'], true)) {
+                        continue;
+                    }
+
+                    $actual = (int) ($pollCounts[$sb->starbase_id] ?? 0);
+                    $missed = max(0, 144 - min($actual, 144));
+                    $totalMissed += $missed;
+                    if ($missed >= 6) {
+                        // Only flag POSes that missed 6+ polls (~ 1h of polls).
+                        // Random 1-2 misses on the 10-min cron are noise.
+                        $flagged[] = [
+                            'starbase_id' => $sb->starbase_id,
+                            'name'        => $sb->starbase_name ?? ('POS #' . $sb->starbase_id),
+                            'actual'      => $actual,
+                            'missed'      => $missed,
+                        ];
+                    }
+                }
+
+                usort($flagged, fn($a, $b) => $b['missed'] <=> $a['missed']);
+                $totalFlagged = count($flagged);
+
+                $summaryStatus = $totalMissed === 0
+                    ? 'ok'
+                    : ($totalFlagged < max(1, (int) ($totalPos * 0.5)) ? 'info' : 'warn');
+
+                $summaryMessage = $totalPos === 0
+                    ? 'No online or reinforced POSes to check.'
+                    : ($totalMissed === 0
+                        ? sprintf('%d active POS(es) all have full 144/144 coverage in the past 24h.', $totalPos)
+                        : sprintf(
+                            '%d of %d active POS(es) missed 6+ snapshots in the last 24h (%d total misses). Expected: 144 per POS (10-min track-poses-fuel cron). Flagging threshold is 6+ to filter noise. Sustained misses point at cron worker lag or ESI key issues.',
+                            $totalFlagged,
+                            $totalPos,
+                            $totalMissed
+                        ));
+
+                $coverageChecks[] = [
+                    'label'   => 'POS snapshot coverage (last 24h)',
+                    'status'  => $summaryStatus,
+                    'message' => $summaryMessage,
+                ];
+
+                foreach (array_slice($flagged, 0, $MAX_FLAGGED_PER_TABLE) as $row) {
+                    $coverageChecks[] = [
+                        'label'   => sprintf('• %s (%d/144)', $row['name'], $row['actual']),
+                        'status'  => $row['missed'] >= 72 ? 'warn' : 'info',
+                        'message' => sprintf('%d missed snapshot(s) in the last 24h.', $row['missed']),
+                    ];
+                }
+                if ($totalFlagged > $MAX_FLAGGED_PER_TABLE) {
+                    $coverageChecks[] = [
+                        'label'   => sprintf('… and %d more flagged POS(es)', $totalFlagged - $MAX_FLAGGED_PER_TABLE),
+                        'status'  => 'info',
+                        'message' => 'Top 10 shown by miss count.',
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $coverageChecks[] = [
+                    'label'   => 'POS snapshot coverage (last 24h)',
+                    'status'  => 'warn',
+                    'message' => 'Coverage check failed: ' . $e->getMessage(),
+                ];
+            }
+        }
+
+        if (!empty($coverageChecks)) {
+            $groups[] = [
+                'title' => 'Snapshot poll coverage (last 24h)',
+                'description' => 'Counts actual fuel-history snapshots per structure vs the expected hourly (Upwell) or 10-minute (POS) cadence. Missed snapshots arise from SeAT corp-assets refresh races (the v2.0.2 race guards intentionally skip writing rows during the SeAT DELETE-INSERT window rather than recording wrong values), worker queue lag, or sustained ESI scope issues. Rare misses are healthy gap-tolerance; sustained or clustered misses are a signal to investigate upstream.',
+                'items' => $coverageChecks,
+            ];
+        }
+
         // ---- Group 3: Stale dedup rows -------------------------------------
         $staleChecks = [];
 

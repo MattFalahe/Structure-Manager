@@ -200,7 +200,53 @@ class FuelAlertController extends Controller
                         // Calculate days remaining for each
                         $fuelDaysRemaining = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;
                         $gasDaysRemaining = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
-                        
+
+                        // Race guard: SeAT's corporation_assets refresh is
+                        // non-atomic (DELETE-then-INSERT, per-corp). A page
+                        // render landing inside that window can read 0 for
+                        // one fuel type while the other reads correctly. A
+                        // real depletion burns both proportionally; an
+                        // asymmetric 0 (one resource 0 while the other has
+                        // many days left) is almost certainly the race.
+                        // Mirrors NotifyUpwellLowFuel's notification-side
+                        // guard. When triggered, surface metenox_data with
+                        // limiting_factor='unknown' so the view renders
+                        // "AWAITING FUEL DATA" instead of misleading 0s,
+                        // and skip the days/hours/status override so the
+                        // page falls back to cs.fuel_expires display.
+                        $raceSuspicionDays = 7;
+                        $raceSuspected = (
+                            ($fuelBlocks == 0 && $gasDaysRemaining > $raceSuspicionDays)
+                            || ($magmaticGas == 0 && $fuelDaysRemaining > $raceSuspicionDays)
+                        );
+
+                        if ($raceSuspected) {
+                            \Log::warning(sprintf(
+                                'FuelAlertController: suspected corp-assets refresh race on Metenox %d '
+                                . '(fuel=%d, gas=%d, fuelDays=%.1f, gasDays=%.1f), falling back to '
+                                . 'cs.fuel_expires display for this page render',
+                                $structure->structure_id,
+                                $fuelBlocks,
+                                $magmaticGas,
+                                $fuelDaysRemaining,
+                                $gasDaysRemaining
+                            ));
+                            $structure->metenox_data = [
+                                'fuel_blocks_quantity'   => 0,
+                                'magmatic_gas_quantity'  => 0,
+                                'fuel_blocks_days'       => 0,
+                                'magmatic_gas_days'      => 0,
+                                'limiting_factor'        => 'unknown',
+                                'actual_days_remaining'  => 0,
+                            ];
+                            // Skip the hours_remaining/status override;
+                            // cs.fuel_expires path is correct for fuel-side
+                            // and a tolerable cosmetic miss for gas-limited
+                            // Metenox during the brief refresh window. The
+                            // next page load will catch the table whole.
+                            continue;
+                        }
+
                         // Determine limiting factor
                         $limitingFactor = 'none';
                         if ($fuelDaysRemaining > 0 || $gasDaysRemaining > 0) {
@@ -212,7 +258,7 @@ class FuelAlertController extends Controller
                                 $limitingFactor = $fuelDaysRemaining < $gasDaysRemaining ? 'fuel_blocks' : 'magmatic_gas';
                             }
                         }
-                        
+
                         $actualDays = min($fuelDaysRemaining, $gasDaysRemaining);
                         $structure->metenox_data = [
                             'fuel_blocks_quantity' => $fuelBlocks,

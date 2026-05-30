@@ -167,8 +167,12 @@ class TrackPosesFuel implements ShouldQueue
             
             if ($lastHistory && $lastHistory->fuel_blocks_quantity) {
                 $fuelBlocksUsed = $lastHistory->fuel_blocks_quantity - $fuelBlocks;
-                $hoursSinceLastCheck = Carbon::now()->diffInHours($lastHistory->created_at, true);
-                
+                // v2.0.2 — minute-precision elapsed time. See the matching
+                // change in TrackFuelConsumption for the full background;
+                // diffInHours floors and inflates per-hour rate calculations
+                // when the cron gap isn't a clean integer hour.
+                $hoursSinceLastCheck = Carbon::now()->diffInMinutes($lastHistory->created_at, true) / 60.0;
+
                 if ($hoursSinceLastCheck > 0 && $fuelBlocksUsed > 0) {
                     $fuelHourlyConsumption = round($fuelBlocksUsed / $hoursSinceLastCheck, 4);
                 }

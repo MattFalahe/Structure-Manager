@@ -5,6 +5,44 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
+## 🛠️ Version 2.0.2 — *May 2026*
+
+Patch release on top of v2.0.1. Three independent bug-fix tracks that surfaced once v2.0.1 was running in production: a SeAT corp-assets refresh race causing false Metenox CRITICAL alerts and asymmetric "0 blocks" embed values, a metadata-encoding regression that started breaking the structure detail page once the related v2.0.2 write-side fix landed, and a Tier 1 fuel-event classification path that was over-flagging legitimate consumption as `withdrawal_bay` with wide forensics suspect-list fanout. Plus a Fuel Economics admin scope selector and a new diagnostic surface that makes the SeAT data-quality signal visible.
+
+### 🐛 Bug Fixes
+
+**SeAT corp-assets refresh race guards.** SeAT polls `corporation_assets` via a non-atomic DELETE-then-INSERT per corporation. SM's fuel-tracking code reads that table live every 10 minutes (notifications) and hourly (snapshots), and polls landing inside the refresh window were reading 0 for one fuel type while the other read correctly. For Metenox this caused false CRITICAL embeds saying "Fuel Blocks [LIMITING] 0 blocks (0h)" even when the structure had 100+ days of fuel left; for non-Metenox Upwell it caused the embed to read "0 blocks remaining" inside the same window. Six sites now apply a race-detection guard that skips the snapshot or notification when an asymmetric 0 or a 0-vs-`cs.fuel_expires` contradiction is detected: `NotifyUpwellLowFuel::getStructureFuelData` (Metenox and Upwell paths), `NotifyUpwellLowFuel::processCynoReagents` (Liquid Ozone + Strontium Clathrate), `FuelAlertController` Metenox page section, `TrackFuelConsumption::trackMetenoxFuel` snapshot writer, and `TrackFuelConsumption::trackStructureFuel` snapshot writer. Suspected races now land as warnings in `laravel.log` instead of false embeds in Discord.
+
+**Metadata double-encoding on snapshot writes.** `TrackFuelConsumption::trackMetenoxFuel` and `trackStructureFuel` were passing `json_encode($metadata)` into the `structure_fuel_history.metadata` column while the model has the column cast to `array`. The cast then encoded the already-encoded string a second time, leaving the column with `"{...}"` (a JSON string wrapping a JSON object). Consequence: `JSON_EXTRACT` returned NULL in MariaDB, and Eloquent's `array` cast returned a string on read, eventually surfacing as a `TypeError: json_decode(): Argument #1 ($json) must be of type string, array given` on the structure detail page after the read sites' defensive paths were exhausted. Now passes the array straight through and lets Eloquent handle encoding. Forward-only cleanup migration `2026_05_01_000007` unwraps existing double-encoded rows in `structure_fuel_history` and `starbase_fuel_history` via `JSON_UNQUOTE`. Idempotent: re-runs are no-ops on already-clean rows.
+
+**Defensive metadata decode at read sites.** Fixing the write side exposed a hidden bug at four read sites that did `json_decode($model->metadata, true)`. When the column actually returned an array (post-fix), those threw. Patched with the `is_array() ? as-is : decode()` pattern other sites in the codebase already used. Sites: `FuelConsumptionTracker::analyzeFuelConsumption` prev/curr pair and latestRecord decode, `TrackFuelConsumption::trackStructureFuel` previous-snapshot read, `SimulateFastConsumption::consumeFuel` POS metadata read.
+
+**Tier 1 fuel-event classification false-positive fixes.** The fuel-theft detection path was over-flagging legitimate consumption as `withdrawal_bay`, with Tier 2 forensics fanning out wide suspect lists on top. A 2026-05-30 production audit on a single Azbel surfaced 25 false `withdrawal_bay` rows over 7 days, every one with `gap_minutes` 118-120 and `reserves_delta = 0`. Root cause was a `Carbon::diffInHours()` integer-floor: a 1h 59m gap reads as 1 whole hour, so `expected_consumption` is computed against half the actual elapsed time and the classifier sees a 2× over-burn. Three surgical fixes now stack on the `withdrawal_bay` promotion path:
+
+  - **Minute-precision elapsed-time math.** Four sites that used `diffInHours($date, true)` for math (not for `>= N` integer threshold checks) now use `diffInMinutes($date, true) / 60.0`: `TrackFuelConsumption::trackStructureFuel` (both `$hoursElapsed` passed to the classifier and `$realHoursPassed` for consumption math), `TrackPosesFuel::handle`, `FuelConsumptionTracker::analyzeFuelConsumption`.
+  - **Reserves-delta sanity check.** Before promoting to `withdrawal_bay`, the classifier now requires `reserves_delta < 0`. Real theft moves fuel somewhere; a quiet reserves column with a bay over-burn is service-spike-shaped, not theft-shaped. Downgrades to `consumption_anomaly`: still visible on the panel, no forensics dispatch.
+  - **Minimum-magnitude gate.** New `FuelEventClassifier::THEFT_MAGNITUDE_HOURS = 12` constant. Promotes to `withdrawal_bay` only if `unexplained_delta >= expected_hourly × 12`. Real fuel theft moves meaningful quantities; the operational cost of moving fuel out and reselling it makes anything smaller not worth the risk. Auto-scales by the structure's own burn rate: Astrahus needs at least 144 unexplained blocks, Azbel at least 324, Keepstar at least 1440.
+
+Walking the 7-day production audit through all three gates: zero false positives survive. Genuine thefts (large unexplained drop plus reserves drop) still classify as `withdrawal_bay` and dispatch forensics unchanged.
+
+**Critical Alerts page Metenox layout.** When a Metenox's assets reads are mid-refresh (the same race that drove the wrong Discord embeds), the page now falls back to the existing "AWAITING FUEL DATA" placeholder and `cs.fuel_expires` time display instead of rendering misleading 0s and overriding `hours_remaining`. Pure UX guard, no data-side effect.
+
+### ✨ Enhancements
+
+**Fuel Economics admin corp-scope selector.** New header dropdown on the Fuel Economics page, gated to admins, toggles between "My Corporations" (the new default) and "All Corporations". Non-admin behaviour is unchanged: they remain scoped to their own corps, and the dropdown isn't rendered for them. The admin-visible default changes from the previous unscoped view to "My Corporations" — admins click the dropdown once per session to widen the view when they want it. Auto-submits on selection. The "Force refresh" link preserves the active scope in the URL.
+
+**Snapshot poll coverage panel on Diagnostic → Data Integrity.** New group surfaces how many fuel-history snapshots each tracked structure (or active POS) has accumulated in the past 24h vs the expected hourly (Upwell) or 10-minute (POS) cadence. Surfaces a summary line plus the top 10 worst offenders. Pairs with the v2.0.2 race guards: gaps that come from the guards skipping a poll during SeAT's asset-refresh race are visible here so operators can tell rare healthy noise (1-3 misses/24h) from sustained upstream problems (12+/24h pointing at ESI scope or queue worker lag). Lazy-loads with the existing 300s Data Integrity cache pattern; no view changes needed.
+
+### 🚀 Upgrade
+
+One forward-only migration (`2026_05_01_000007_unwrap_double_encoded_fuel_history_metadata`) runs automatically on container restart, unwrapping any double-encoded `structure_fuel_history` and `starbase_fuel_history` rows from previous releases. Idempotent: safe to run repeatedly. Logs the affected row count.
+
+Restart the front container to pick up the blade, controller, and service changes.
+
+ESI User-Agent bumps to `SeAT-StructureManager/2.0.2` per CCP's third-party developer guidelines.
+
+---
+
 ## 🛠️ Version 2.0.1 — *May 2026*
 
 Patch release on top of v2.0.0 "The Ecosystem Era". UI/UX corrections caught while shaking down v2.0.0 in production, a small Help-page Version Status card ported from SeAT Broadcast, and a test-fixture upgrade that pairs with Mining Manager's upcoming v2.0.1 Metenox cargo readout.

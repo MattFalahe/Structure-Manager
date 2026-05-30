@@ -126,7 +126,11 @@ class SimulateFastConsumption extends Command
      */
     private function consumeFuel($pos)
     {
-        $metadata = json_decode($pos->metadata, true) ?? [];
+        // Defensive read — metadata may already be an array if the model
+        // casts the column, or a JSON string on raw queries. Handle both.
+        $metadata = is_array($pos->metadata)
+            ? $pos->metadata
+            : (json_decode($pos->metadata ?? '', true) ?: []);
         $fuelPerHour = $metadata['fuel_per_hour'] ?? 40;
         
         // Calculate 20-minute consumption (1/3 of hourly rate)

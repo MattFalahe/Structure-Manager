@@ -52,14 +52,34 @@ class FuelConsumptionTracker
                 continue;
             }
             
-            $realHoursPassed = $previous->created_at->diffInHours($current->created_at, true);
-            
+            // v2.0.2 — minute-precision elapsed-time math. Carbon::diffInHours
+            // returns INT (floor), so a 1h 59m 42s gap returns 1 hour even
+            // though the structure burned ~2 hours of fuel. That mismatch
+            // was the dominant cause of false `withdrawal_bay` rows in the
+            // 2026-05-30 production audit — see the Tier 1.5 section in
+            // project_structure_manager_fuel_forensics.md. Using
+            // diffInMinutes / 60.0 gives us minute-granular floats that the
+            // classifier already expects, without changing thresholds.
+            $realHoursPassed = $previous->created_at->diffInMinutes($current->created_at, true) / 60.0;
+
             if ($realHoursPassed == 0) continue;
             
             // Prefer fuel_bay method if available
             if ($current->tracking_type === 'fuel_bay' && $previous->tracking_type === 'fuel_bay') {
-                $prevMeta = json_decode($previous->metadata, true);
-                $currMeta = json_decode($current->metadata, true);
+                // Defensive read: Eloquent's `array` cast on the metadata
+                // column means the model already hands us an array. v2.0.2
+                // dropped the json_encode() on the write side, so new rows
+                // come back as arrays directly; legacy rows that the
+                // 000007 cleanup migration touched also resolve to arrays.
+                // Any straggler edge case (raw string column from a
+                // future write path that bypasses the cast) is decoded
+                // here so we never throw on json_decode(array).
+                $prevMeta = is_array($previous->metadata)
+                    ? $previous->metadata
+                    : (json_decode($previous->metadata ?? '', true) ?: []);
+                $currMeta = is_array($current->metadata)
+                    ? $current->metadata
+                    : (json_decode($current->metadata ?? '', true) ?: []);
                 
                 if (isset($prevMeta['fuel_blocks']) && isset($currMeta['fuel_blocks'])) {
                     $blockChange = $prevMeta['fuel_blocks'] - $currMeta['fuel_blocks'];
@@ -178,7 +198,10 @@ class FuelConsumptionTracker
         $currentFuelStatus = null;
         
         if ($latestRecord && $latestRecord->metadata) {
-            $metadata = json_decode($latestRecord->metadata, true);
+            // Defensive read — see comment in the prev/curr decode above.
+            $metadata = is_array($latestRecord->metadata)
+                ? $latestRecord->metadata
+                : (json_decode($latestRecord->metadata ?? '', true) ?: []);
             $fuelBayBlocks = $metadata['fuel_blocks'] ?? 0;
             
             $currentFuelStatus = [

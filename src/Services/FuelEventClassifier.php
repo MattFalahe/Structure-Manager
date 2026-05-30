@@ -55,6 +55,27 @@ class FuelEventClassifier
     public const ANOMALY_TOLERANCE = 0.50;
 
     /**
+     * Minimum scale of unexplained consumption before classifying as
+     * `withdrawal_bay`. Expressed as hours of expected consumption — so a
+     * structure with `expected_hourly = 27` needs `unexplained >= 12 × 27 =
+     * 324 blocks` before the classifier promotes the event to theft.
+     * Below this threshold the row records as `consumption_anomaly` (still
+     * visible on the panel, no `WithdrawalForensicsJob` dispatch).
+     *
+     * Rationale: real fuel theft moves meaningful quantities. A thief who
+     * pulls 4-6 hours of fuel isn't worth the operational cost (ESI access,
+     * fuel-block resale, corp drama) for a few thousand ISK; they either
+     * empty a hangar or don't bother. Setting the bar at 12 hours catches
+     * scale-of-theft events while letting service-activation windows and
+     * residual classifier variance pass.
+     *
+     * Sized for the structure's own burn rate — 12 hours on a Keepstar
+     * (~120/hr) = 1440 blocks, 12 hours on an Astrahus (~12/hr) = 144
+     * blocks. Auto-scales by service load.
+     */
+    public const THEFT_MAGNITUDE_HOURS = 12;
+
+    /**
      * Reserve-drop threshold (blocks) below which a reserve withdrawal
      * fires its own classification even when the bay was burning normally.
      * Set deliberately high to avoid false-positives on small operational
@@ -200,7 +221,58 @@ class FuelEventClassifier
             ];
         }
 
-        // Over 1.5× expected — too much for normal service activation
+        // v2.0.2 — reserves-delta sanity check before promoting to
+        // withdrawal_bay. Real fuel theft has to move blocks somewhere; a
+        // genuine bay withdrawal is fuel leaving the corp (CorpSAG hangars
+        // emptied, or moved into the bay from reserves and then drawn out).
+        // If reservesDelta says reserves DIDN'T drop (>= 0) while the bay
+        // over-burned, the much more likely explanation is a service
+        // activation spike — operator brings a Manufacturing/Reprocessing
+        // module online for a few hours, bay rate jumps from baseline 27/hr
+        // to ~54/hr, no fuel actually left the corp's stockpile. Downgrade
+        // to consumption_anomaly so the row still surfaces "something
+        // unusual happened during this window" without dispatching
+        // WithdrawalForensicsJob and fanning out a wide suspect list on
+        // what isn't really theft.
+        //
+        // Only downgrade when reservesDelta is KNOWN to be non-negative.
+        // When reservesDelta is null (no reserves baseline available), keep
+        // the existing withdrawal_bay classification so the safety net for
+        // installs with incomplete reserves tracking is preserved.
+        //
+        // The 2026-05-30 production audit showed reservesDelta = 0 across
+        // every false-positive row in the 7-day sample for a single Azbel;
+        // this gate would land all of them as consumption_anomaly instead.
+        // Real thefts (bay over-burn + reservesDelta < 0) still classify
+        // as withdrawal_bay via the path below.
+        if ($reservesDelta !== null && $reservesDelta >= 0) {
+            return [
+                'event_type' => StructureFuelHistory::EVENT_CONSUMPTION_ANOMALY,
+                'expected_consumption' => $expectedConsumption,
+                'unexplained_delta' => $unexplained,
+                'reserves_delta' => $reservesDelta,
+            ];
+        }
+
+        // v2.0.2 — minimum-magnitude gate before promoting to withdrawal_bay.
+        // Real fuel theft moves meaningful quantities (operational risk
+        // vs. resale value floors this around 12h of structure burn — see
+        // THEFT_MAGNITUDE_HOURS docblock). Anything smaller is service-
+        // activation noise that happened to also coincide with a reserves
+        // dip. Downgrade to consumption_anomaly so the row still shows on
+        // the panel without firing forensics. A real bay theft well above
+        // this threshold still classifies as withdrawal_bay.
+        if ($unexplained < ($expectedHourly * self::THEFT_MAGNITUDE_HOURS)) {
+            return [
+                'event_type' => StructureFuelHistory::EVENT_CONSUMPTION_ANOMALY,
+                'expected_consumption' => $expectedConsumption,
+                'unexplained_delta' => $unexplained,
+                'reserves_delta' => $reservesDelta,
+            ];
+        }
+
+        // Over 1.5× expected AND reserves actually dropped AND the magnitude
+        // is theft-scale — fuel left the corp in quantities worth investigating.
         return [
             'event_type' => StructureFuelHistory::EVENT_WITHDRAWAL_BAY,
             'expected_consumption' => $expectedConsumption,

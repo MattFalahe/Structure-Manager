@@ -45,9 +45,12 @@ class EconomicsController extends Controller
             return view('structure-manager::economics.disabled');
         }
 
-        $forceRefresh = (bool) $request->input('refresh', false);
-        $periodDays   = $this->resolvePeriod($request);
-        $corpScope    = $this->resolveCorpScope();
+        $forceRefresh  = (bool) $request->input('refresh', false);
+        $periodDays    = $this->resolvePeriod($request);
+        $user          = auth()->user();
+        $isAdmin       = (bool) ($user && $user->can('structure-manager.admin'));
+        $currentScope  = $this->resolveScopeParam($request, $isAdmin);
+        $corpScope     = $this->resolveCorpScope($currentScope, $isAdmin);
 
         // Cache key includes the period + the corp scope (so admin's view
         // and a per-corp user's view don't collide). 5-minute TTL matches
@@ -62,7 +65,8 @@ class EconomicsController extends Controller
             'payload'      => $payload,
             'periodDays'   => $periodDays,
             'periods'      => FuelEconomicsService::PERIODS_DAYS,
-            'isAdmin'      => $corpScope === null,
+            'isAdmin'      => $isAdmin,
+            'currentScope' => $currentScope,
         ]);
     }
 
@@ -85,17 +89,38 @@ class EconomicsController extends Controller
     }
 
     /**
-     * Resolve which corp_ids the current user can see.
+     * Resolve the desired scope from the request, with admin enforcement.
      *
-     * Returns null when the user has structure-manager.admin (= full
-     * cross-corp access). Otherwise returns the array of corp_ids the
-     * user's linked characters belong to (may be empty for a user with
-     * no characters; the service treats empty as "no work to do").
+     *   ?scope=mine (default) -> the user's own corporations
+     *   ?scope=all            -> all corporations on the install (admin only;
+     *                            non-admins silently fall back to 'mine')
+     *
+     * Default is 'mine' for everyone, including admins. This matches
+     * Critical Alerts and the wider "show me what's mine first" philosophy
+     * across SM. Admins flip to 'all' via the header dropdown when they
+     * want the wide view.
      */
-    private function resolveCorpScope(): ?array
+    private function resolveScopeParam(Request $request, bool $isAdmin): string
     {
-        $user = auth()->user();
-        if ($user && $user->can('structure-manager.admin')) {
+        $raw = strtolower((string) $request->query('scope', 'mine'));
+        if ($raw === 'all' && $isAdmin) {
+            return 'all';
+        }
+        return 'mine';
+    }
+
+    /**
+     * Resolve which corp_ids the current request should be scoped to.
+     *
+     *   scope=all  + admin -> null (unscoped; service shows every corp)
+     *   scope=mine OR non-admin -> array of corp_ids the user's linked
+     *                              characters belong to (may be empty
+     *                              for a user with no characters; the
+     *                              service treats empty as "no work").
+     */
+    private function resolveCorpScope(string $scope, bool $isAdmin): ?array
+    {
+        if ($scope === 'all' && $isAdmin) {
             return null;
         }
 
