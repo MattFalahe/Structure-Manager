@@ -127,7 +127,7 @@ Manager Core can be installed at any time; Structure Manager auto-detects it on 
 - **Notification intervals**: Configure reminder frequencies for fuel and strontium
 
 ### 📚 Help & Documentation
-- **Complete in-app help system** with 9 major sections
+- **Complete in-app help system** with 18 sections
 - **18 FAQ entries** covering common questions (including v2.0.0 forensics + external reserves + webhook delivery)
 - **6 troubleshooting guides** with step-by-step solutions
 - **Searchable documentation** for quick answers
@@ -256,6 +256,14 @@ Plan your fuel hauling operations:
 - Total volume and hauler trip calculations
 - CSV export for external planning tools
 
+### Structure Compliance
+Check every Upwell structure your corp owns against your alliance's recommended fits:
+- Per-structure verdict (Compliant / Compliant + upgraded / Partial / Non-compliant / No doctrine / No data), worst-first
+- Slot-by-slot current / required / diff, grouped by slot and padded to the structure's real slot count
+- Doctrines defined per structure type and security band (null / low / high / wormhole), scoped per-corp or per-alliance
+- Copy the current, recommended, or missing-to-complete fit as a multibuy list; hand the missing list to Buyback Manager when it's installed
+- Reads SeAT core only (corp structures + assets); no extra ESI scopes, so "No data" is never treated as non-compliant
+
 ### Settings
 Configure the plugin to match your needs:
 - **Notification Settings**: Webhook URLs, intervals, role mentions, thresholds
@@ -279,7 +287,7 @@ Comprehensive in-app documentation:
 - Getting started guide
 - Fuel mechanics reference
 - Troubleshooting guides
-- FAQ section with 15 entries
+- FAQ section with 18 entries
 - Artisan command reference
 
 ## Permissions
