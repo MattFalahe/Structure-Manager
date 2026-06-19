@@ -160,6 +160,16 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                     '[Structure Manager] Pre-timer reminder subscriber registration failed: ' . $e->getMessage()
                 );
             }
+
+            // Expose structure-doctrine compliance to other plugins (HR Manager)
+            // as a PluginBridge capability. No-op when MC is absent.
+            try {
+                ManagerCoreIntegration::registerComplianceCapability();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    '[Structure Manager] Compliance capability registration failed: ' . $e->getMessage()
+                );
+            }
         }
 
         // Family B (cross-plugin timer.* events): observer fires

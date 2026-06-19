@@ -439,4 +439,58 @@ Route::group([
         'middleware' => 'can:structure-manager.admin',
     ]);
 
+    // ============================================
+    // Doctrine Compliance
+    // ============================================
+
+    // Compliance comparison page (the sidebar entry). View-tier.
+    Route::get('/compliance', [
+        'as'         => 'structure-manager.compliance',
+        'uses'       => 'ComplianceController@index',
+        'middleware' => 'can:structure-manager.view',
+    ]);
+
+    // Manage doctrines (admin-tier) — list + the two global compliance settings.
+    Route::get('/doctrines', [
+        'as'         => 'structure-manager.doctrines.index',
+        'uses'       => 'StructureDoctrineController@index',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::get('/doctrines/create', [
+        'as'         => 'structure-manager.doctrines.create',
+        'uses'       => 'StructureDoctrineController@create',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::post('/doctrines', [
+        'as'         => 'structure-manager.doctrines.store',
+        'uses'       => 'StructureDoctrineController@store',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
+    Route::get('/doctrines/{id}/edit', [
+        'as'         => 'structure-manager.doctrines.edit',
+        'uses'       => 'StructureDoctrineController@edit',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where('id', '[0-9]+');
+
+    Route::put('/doctrines/{id}', [
+        'as'         => 'structure-manager.doctrines.update',
+        'uses'       => 'StructureDoctrineController@update',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where('id', '[0-9]+');
+
+    Route::delete('/doctrines/{id}', [
+        'as'         => 'structure-manager.doctrines.destroy',
+        'uses'       => 'StructureDoctrineController@destroy',
+        'middleware' => 'can:structure-manager.admin',
+    ])->where('id', '[0-9]+');
+
+    Route::post('/doctrines/settings', [
+        'as'         => 'structure-manager.doctrines.settings',
+        'uses'       => 'StructureDoctrineController@saveSettings',
+        'middleware' => 'can:structure-manager.admin',
+    ]);
+
 });

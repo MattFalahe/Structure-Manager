@@ -634,6 +634,61 @@ class ManagerCoreIntegration
     }
 
     /**
+     * Expose Structure Manager's doctrine-compliance report as a Manager Core
+     * PluginBridge capability so other plugins (HR Manager) can read it without
+     * owning the compute. The capability returns the SAME payload the in-app
+     * Structure Compliance page renders:
+     *
+     *   structure-manager:compliance.getForCorporation(int $corporationId): array
+     *
+     * Called at boot. No-op when MC is absent (Structure Manager keeps its own
+     * page either way — this is purely the cross-plugin surface).
+     */
+    public static function registerComplianceCapability(): void
+    {
+        if (!class_exists('\ManagerCore\Services\PluginBridge')) {
+            return;
+        }
+
+        try {
+            // Resolve via the class constant (no leading backslash) so we land
+            // on MC's singleton — see registerStructureEventHandler() for why.
+            $bridge = app(\ManagerCore\Services\PluginBridge::class);
+            $bridge->registerCapability(
+                'structure-manager',
+                'compliance.getForCorporation',
+                fn ($corporationId) => app(\StructureManager\Services\StructureComplianceService::class)
+                    ->forCorporation((int) $corporationId)
+            );
+            Log::debug('[Structure Manager] Registered compliance.getForCorporation capability with Manager Core');
+        } catch (\Throwable $e) {
+            Log::warning('[Structure Manager] Could not register compliance capability with Manager Core: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Publish a `structure.doctrine.changed` EventBus event when a doctrine (or
+     * a compliance setting) changes, so consumers can invalidate any cached
+     * compliance view. No-op when MC's EventBus is absent. The topic must be
+     * registered in \ManagerCore\Topics or the EventBus drops it silently.
+     *
+     * @param array $payload e.g. ['scope_type'=>'corp', 'scope_id'=>123, 'action'=>'created']
+     */
+    public static function publishDoctrineChanged(array $payload): void
+    {
+        if (!class_exists('\ManagerCore\Services\EventBus')) {
+            return;
+        }
+
+        try {
+            app(\ManagerCore\Services\EventBus::class)
+                ->publish('structure.doctrine.changed', 'structure-manager', $payload);
+        } catch (\Throwable $e) {
+            Log::warning('[Structure Manager] Could not publish structure.doctrine.changed: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Dispatch Manager Core's ESI fast-poll job immediately.
      *
      * Called from the diagnostic page's "Run Now" button. Dispatches the

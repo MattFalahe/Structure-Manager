@@ -79,6 +79,13 @@ return [
                 'route' => 'structure-manager.command-board.index',
                 'permission' => 'structure-manager.command-board.view',
             ],
+            [
+                'name'  => 'Structure Compliance',
+                'label' => 'structure-manager::menu.compliance',
+                'icon'  => 'fas fa-clipboard-check',
+                'route' => 'structure-manager.compliance',
+                'permission' => 'structure-manager.view',
+            ],
             // Notifications is no longer a top-level sidebar entry — it lives
             // inside Settings as a nav-pill (Settings > Notifications), matching
             // Mining Manager's pattern. The /notifications route still exists

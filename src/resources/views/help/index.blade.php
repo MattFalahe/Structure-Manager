@@ -59,6 +59,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a href="#" class="nav-link" data-section="compliance">
+                                <i class="fas fa-clipboard-check"></i>
+                                Structure Compliance
+                                <span class="v2-badge v2-badge-nav">v2.0.3</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a href="#" class="nav-link" data-section="upwell-notifications">
                                 <i class="fas fa-building"></i>
                                 Upwell Notifications
@@ -589,6 +596,50 @@ php artisan structure-manager:track-poses-fuel</code></pre>
                         <strong>Smart Notifications:</strong>
                         Separate cooldowns for fuel (6 hours) and strontium (2 hours) prevent alert fatigue while ensuring critical issues aren't missed.
                     </div>
+                </div>
+            </div>
+
+            {{-- Structure Compliance Section (v2.0.3) --}}
+            <div id="compliance" class="help-section">
+                <div class="help-card">
+                    <h3><i class="fas fa-clipboard-check"></i> Structure Compliance <span class="v2-badge">v2.0.3</span></h3>
+                    <p>The <strong>Structure Compliance</strong> page checks every Upwell structure your corp owns against the recommended fit your alliance defines, per structure type and security band. It reads SeAT core only (corp structures + assets), needs no extra ESI scopes, and changes nothing in-game.</p>
+                    <p>Reach it from the sidebar (<i class="fas fa-clipboard-check"></i> <strong>Structure Compliance</strong>, view-tier). Recommended fits are managed from the <strong>Manage doctrines</strong> button (admin-tier).</p>
+                </div>
+
+                <div class="help-card">
+                    <h3><i class="fas fa-tasks"></i> How a structure is judged</h3>
+                    <p>Each structure gets one of six statuses:</p>
+                    <ul>
+                        <li><strong>Compliant</strong> &mdash; every required rig, service module and slot module is present.</li>
+                        <li><strong>Compliant + upgraded</strong> &mdash; compliant, plus a higher-tier module (T2 where T1 is listed) or an extra rig.</li>
+                        <li><strong>Partial</strong> &mdash; some required modules present, some missing or the wrong module.</li>
+                        <li><strong>Non-compliant</strong> &mdash; none of the required modules match.</li>
+                        <li><strong>No doctrine</strong> &mdash; no doctrine defined for this structure type + band. The card explains the band/scope mismatch.</li>
+                        <li><strong>No data</strong> &mdash; corp assets aren't synced, so fitted modules can't be read. Never counted as non-compliant.</li>
+                    </ul>
+                    <p>Expand a structure for a slot-by-slot <strong>current / required / diff</strong> table, grouped by slot (high / med / low / rig / service) and padded to the structure's real slot count so empty slots show too.</p>
+                </div>
+
+                <div class="help-card">
+                    <h3><i class="fas fa-edit"></i> Defining doctrines</h3>
+                    <p>On <strong>Manage doctrines</strong>, paste the recommended fit in <strong>EFT format</strong> &mdash; the same text you copy out of the in-game fitting window. The first line is the hull (<code>[Astrahus, Staging]</code>); rigs and service modules are the required spine. Pick the <strong>security band</strong> (high / low / null / wormhole, each running its own fit) and the <strong>scope</strong> (per-corp or per-alliance, in Compliance settings).</p>
+                    <ul>
+                        <li><strong>Exact-or-upgrade:</strong> a higher tier than listed, or an extra rig, still counts as compliant.</li>
+                        <li><strong>Fighters / ammo</strong> are presence-of-any gates (the specific type is the pilot's choice) &mdash; toggle per doctrine.</li>
+                        <li><strong>Offline service modules</strong> can optionally count as non-compliant (a global Compliance setting).</li>
+                        <li>Module names must match their in-game names; the SDE resolves them (the published type wins when a name is ambiguous).</li>
+                    </ul>
+                </div>
+
+                <div class="help-card">
+                    <h3><i class="fas fa-shopping-cart"></i> Copy &amp; Appraise</h3>
+                    <p>Each structure offers Copy buttons for the <strong>current fit</strong>, the <strong>recommended fit</strong>, and the <strong>missing-to-complete</strong> shopping list, all as EVE multibuy text. When <strong>Buyback Manager</strong> is installed, an <strong>Appraise</strong> button sends the missing list straight to its appraisal page.</p>
+                </div>
+
+                <div class="help-card">
+                    <h3><i class="fas fa-project-diagram"></i> Cross-plugin (Manager Core)</h3>
+                    <p>Structure Manager owns structure-compliance data for the plugin family. With Manager Core installed it exposes the report as the PluginBridge capability <code>structure-manager:compliance.getForCorporation</code> (HR Manager renders it inside its Corp Health page), and publishes <code>structure.doctrine.changed</code> on the EventBus when a doctrine or setting changes. Both are no-ops when Manager Core is absent &mdash; the page works fully standalone.</p>
                 </div>
             </div>
 
@@ -1168,6 +1219,9 @@ php artisan structure-manager:track-poses-fuel</code></pre>
 
                     <h4><i class="fas fa-chess"></i> {{ trans('structure-manager::help.command_board_page_title') }}</h4>
                     {!! trans('structure-manager::help.command_board_page_desc') !!}
+
+                    <h4><i class="fas fa-clipboard-check"></i> {{ trans('structure-manager::help.compliance_page_title') }}</h4>
+                    {!! trans('structure-manager::help.compliance_page_desc') !!}
 
                     <h4><i class="fas fa-cog"></i> {{ trans('structure-manager::help.settings_page_title') }}</h4>
                     {!! trans('structure-manager::help.settings_page_desc') !!}

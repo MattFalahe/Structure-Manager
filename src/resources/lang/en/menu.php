@@ -9,6 +9,7 @@ return [
     'economics' => 'Fuel Economics',
     'critical_alerts' => 'Critical Alerts',
     'command_board' => 'Structure Board',
+    'compliance' => 'Structure Compliance',
     'notifications' => 'Notifications',
     'settings' => 'Settings',
     'diagnostics' => 'Diagnostics',

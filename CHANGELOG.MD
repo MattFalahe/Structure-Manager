@@ -5,6 +5,37 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
+## ✅ Version 2.0.3 — *June 2026*
+
+Adds **Structure Compliance** — a new page that checks every Upwell structure your corp owns against the recommended fit (rigs + service modules) your alliance defines per structure type and security band. Structure Manager also becomes the OWNER of structure-compliance data for the plugin family: it exposes the report to other plugins (HR Manager) through a Manager Core PluginBridge capability and publishes a change event on the EventBus.
+
+> Think of it as a fit-check for your citadels. You paste each doctrine once (EFT format, the same text you copy out of the in-game fitting window), pick its security band, and the page shows every structure as Compliant / Compliant + upgraded / Partial / Non-compliant / No doctrine, with a slot-by-slot diff and Copy / Appraise buttons for whatever's missing. Reads SeAT core only (corp structures + assets); no extra ESI scopes.
+
+### ✅ New: Structure Compliance
+
+- **Doctrine Compliance page** (new sidebar entry, view-tier): every Upwell structure your corp owns, compared against its doctrine. Worst-first ordering, collapsible per-structure cards, a green/amber/red verdict, and a three-column **current / required / diff** breakdown grouped by slot (high / med / low / rig / service), padded to the structure's real slot count so empty slots show too.
+- **Doctrines keyed by (scope, type, security band).** One recommended fit per structure type per band: null / low / high / wormhole run different fits (WH detected by a J-coded system name). Scope is **per-corp or per-alliance** (a setting), and matching is forgiving: a doctrine applies to a structure scoped to its own corp OR its alliance.
+- **Exact-or-upgrade matching.** A higher-tier same-family module (T2 where T1 is listed) or an extra rig still counts as compliant, badged **"Compliant + upgraded"**. Fighters / ammo are presence-of-any gates (the type is the pilot's choice); a fitted-but-offline service module optionally fails compliance (a setting).
+- **Manage doctrines page** (admin-tier): paste the recommended fit in EFT, pick the band, set the fighter/ammo gates. Module names resolve against the SDE (published types win when a name is ambiguous, e.g. the two "Azbel" rows).
+- **Copy / Appraise.** Copy the current fit, the recommended fit, or the missing-to-complete shopping list as an EVE multibuy list; when **Buyback Manager** is installed, "Appraise" sends the missing list straight to its appraisal page.
+- **No data, never wrong.** A structure with no corp-asset data reads "No data" (not non-compliant); a structure with no matching doctrine reads "No doctrine" with a diagnosis of why (band vs scope mismatch).
+
+### 🌐 Cross-plugin (Manager Core)
+
+- **Capability** — `structure-manager:compliance.getForCorporation` exposes the full per-corp report over Manager Core's PluginBridge. HR Manager consumes it to render structure compliance inside Corp Health without owning the compute.
+- **Event** — `structure.doctrine.changed` is published on the EventBus whenever a doctrine or compliance setting changes (payload: scope, structure type, band, action) so consumers can refresh. Registered in Manager Core's Topics registry.
+- Both are **no-ops when Manager Core is absent** — the page works fully standalone.
+
+### 🚀 Upgrade
+
+One new table (`structure_manager_doctrines`) is created automatically on container restart. No data migration; no breaking changes.
+
+Restart the front container to pick up the new page, routes, and capability registration.
+
+ESI User-Agent bumps to `SeAT-StructureManager/2.0.3`.
+
+---
+
 ## 🛠️ Version 2.0.2 — *May 2026*
 
 Patch release on top of v2.0.1. Three independent bug-fix tracks that surfaced once v2.0.1 was running in production: a SeAT corp-assets refresh race causing false Metenox CRITICAL alerts and asymmetric "0 blocks" embed values, a metadata-encoding regression that started breaking the structure detail page once the related v2.0.2 write-side fix landed, and a Tier 1 fuel-event classification path that was over-flagging legitimate consumption as `withdrawal_bay` with wide forensics suspect-list fanout. Plus a Fuel Economics admin scope selector and a new diagnostic surface that makes the SeAT data-quality signal visible.

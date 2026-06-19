@@ -8,7 +8,7 @@
 
 > Structure Manager works fully standalone. Installing Manager Core alongside it unlocks faster detection (~2 min vs 15-20 min), cross-plugin event broadcasting, shared director key pool, and the Fuel Economics page. Every ecosystem feature is purely additive — leaving Manager Core out keeps all v1 functionality intact at SeAT's native cadence.
 
-📋 **[v2.0.2 release notes →](CHANGELOG.MD)**
+📋 **[v2.0.3 release notes →](CHANGELOG.MD)**
 
 ## Features
 
@@ -76,6 +76,16 @@
 - **Real-time dashboard widget** for quick overview
 - **Limiting factor badges** for Metenox and POS resources
 
+### ✅ Structure Doctrine Compliance (v2.0.3)
+Compare every Upwell structure your corp owns against the recommended fit your alliance defines:
+- **Doctrine per (structure type, security band)** — null / low / high / wormhole run different fits (WH detected by a J-coded system name); scope is per-corp or per-alliance
+- **EFT-format doctrines** — paste the recommended fit (the text from the in-game fitting window); rigs + service modules are the required spine, the structure type + band are how it matches your structures
+- **Exact-or-upgrade matching** — a higher tier (T2 where T1 is listed) or an extra rig still passes, badged "Compliant + upgraded"; fighters/ammo are presence-of-any gates; an offline service module optionally fails (a setting)
+- **Slot-by-slot diff** — a green/amber/red verdict plus a current / required / diff table grouped by slot (high / med / low / rig / service), padded to the structure's real slot count so empty slots show
+- **Copy / Appraise** — copy the current, recommended, or missing-to-complete fit as an EVE multibuy list; "Appraise" hands the missing list to Buyback Manager when it's installed
+- **Reads SeAT core only** — corp structures + assets, no extra ESI scopes; a structure with no synced corp assets reads "No data" (never falsely non-compliant), and one with no matching doctrine reads "No doctrine" with a band-vs-scope diagnosis
+- **Cross-plugin** — exposes `compliance.getForCorporation` over Manager Core's PluginBridge (HR Manager renders it inside Corp Health) and publishes `structure.doctrine.changed` on the EventBus
+
 ### 🛰️ ESI Notification Events (v2.0.0)
 - **Attack alerts** — StructureUnderAttack, LostShields, LostArmor, Destroyed (plus Skyhook variants)
 - **Lifecycle alerts** — Anchoring (with 24h timer), Unanchoring, Ownership Transferred, Skyhook Deployed
@@ -94,7 +104,7 @@ Structure Manager v2.0.0 is built to work with [Manager Core](https://github.com
 **With Manager Core installed:**
 - ⚡ **~2-minute ESI detection** via the shared director key pool (vs SeAT's native 15-20 min cadence)
 - 💰 **Fuel Economics page** — projected ISK costs over weekly / monthly / quarterly / yearly windows using MC's pricing service
-- 📡 **Cross-plugin events** — Structure Manager publishes `structure.alert.*` and `structure_manager.timer.*` events on MC's EventBus
+- 📡 **Cross-plugin events** — Structure Manager publishes `structure.alert.*`, `structure_manager.timer.*`, and `structure.doctrine.changed` events on MC's EventBus, and exposes the `structure-manager:compliance.getForCorporation` capability over the PluginBridge (HR Manager consumes it to show structure compliance inside Corp Health)
 - 🤝 **Ecosystem benefits** — Mining Manager flags moon extractions as at-risk when their parent structure enters reinforce; SeAT Broadcast (`seat-discord-pings`) will (when its calendar build lands) consume the tactical-planning events for fleet calendaring
 
 **Without Manager Core:**

@@ -1686,6 +1686,16 @@ SeAT Structure Manager | Structure ID: 1042938412345</pre>',
         <li><strong>Auto-cleanup:</strong> Elapsed and resolved timers are pruned automatically so the board stays current</li>
     </ul>',
 
+    'compliance_page_title' => 'Structure Compliance',
+    'compliance_page_desc' => '<ul>
+        <li><strong>Fit check for every structure:</strong> Compares each Upwell structure your corp owns against the recommended fit your alliance defines, per structure type and security band</li>
+        <li><strong>Verdict at a glance:</strong> Compliant / Compliant + upgraded / Partial / Non-compliant / No doctrine / No data, worst-first</li>
+        <li><strong>Slot-by-slot diff:</strong> Expand a structure for a current / required / diff table grouped by slot (high / med / low / rig / service)</li>
+        <li><strong>Copy / Appraise:</strong> Copy the current, recommended, or missing-to-complete fit as an EVE multibuy list; hand the missing list to Buyback Manager when it is installed</li>
+        <li><strong>Manage doctrines:</strong> Admins paste recommended fits in EFT format and set the security band plus fighter/ammo gates (admin-tier button on the page)</li>
+        <li><strong>Reads SeAT core only:</strong> Corp structures and assets, no extra ESI scopes. See the dedicated Structure Compliance section of this help page for the full walkthrough.</li>
+    </ul>',
+
     'settings_page_title' => 'Settings',
     'settings_page_desc' => '<ul>
         <li><strong>Fuel thresholds:</strong> Warning and critical day cutoffs that drive fuel alerts</li>
