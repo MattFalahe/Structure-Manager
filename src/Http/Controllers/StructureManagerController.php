@@ -358,7 +358,7 @@ class StructureManagerController extends Controller
 
         $history = StructureFuelHistory::where('structure_id', $id)
             ->orderBy('created_at', 'desc')
-            ->limit(90) // 3 months of daily data
+            ->limit(90) // Upwell history is hourly, so this is about four days
             ->get();
 
         return response()->json($history);

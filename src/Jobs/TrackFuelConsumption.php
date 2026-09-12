@@ -4,6 +4,7 @@ namespace StructureManager\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Cache;
@@ -54,6 +55,22 @@ class TrackFuelConsumption implements ShouldQueue
      * @deprecated use TypeIdRegistry::METENOX
      */
     const METENOX_TYPE_ID = TypeIdRegistry::METENOX;
+
+    /**
+     * The schedule row's allow_overlap=false only guards the console command,
+     * which dispatches this job and returns immediately. Without this
+     * middleware a slow run just accumulates concurrent jobs on the same
+     * tables. dontRelease() drops the duplicate: the next hourly run is the
+     * retry.
+     */
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('structure-manager:track-fuel'))
+                ->dontRelease()
+                ->expireAfter($this->timeout + 60),
+        ];
+    }
 
     /**
      * Execute the job.
@@ -179,17 +196,10 @@ class TrackFuelConsumption implements ShouldQueue
 
         Log::info("TrackFuelConsumption: Completed. Tracked: $tracked (Fuel Bay: $fuelBaySuccess, Fallback: $fallbackMethod, Metenox: $metenoxTracked), Reserves: $reservesTracked, External reserves: $externalReservesTracked, Depleted: $depletedRows, Skipped: $skipped");
 
-        // Clean old history (keep 6 months)
-        $deleted = StructureFuelHistory::where('created_at', '<', Carbon::now()->subMonths(6))->delete();
-        if ($deleted > 0) {
-            Log::info("TrackFuelConsumption: Cleaned $deleted old history records");
-        }
-        
-        // Clean old reserve records (keep 3 months)
-        $deletedReserves = StructureFuelReserves::where('created_at', '<', Carbon::now()->subMonths(3))->delete();
-        if ($deletedReserves > 0) {
-            Log::info("TrackFuelConsumption: Cleaned $deletedReserves old reserve records");
-        }
+        // Retention pruning lives in structure-manager:cleanup-history (daily
+        // at 03:00), not here. Running it inline meant two unindexed
+        // full-table deletes on every poll, duplicating work the cleanup
+        // command already does.
     }
     
     /**

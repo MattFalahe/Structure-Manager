@@ -381,7 +381,15 @@ class FuelAlertController extends Controller
                     'requires_charters' => (bool)($pos->requires_charters ?? false),
                     'limiting_factor' => $pos->limiting_factor ?? 'fuel',
                     'space_type' => $pos->space_type ?? 'Unknown',
-                    'actual_days_remaining' => round($pos->actual_days_remaining ?? 0, 1)
+                    'actual_days_remaining' => round($pos->actual_days_remaining ?? 0, 1),
+                    // Whole hours, exact. actual_days_remaining is a
+                    // decimal(10,2) and the front end turns it back into days
+                    // and hours, so 143 hours (5.9583 days) rounds to 6.0 and
+                    // renders as "6d 0h" while the POS detail page correctly
+                    // says "5d 23h". A tower only ever has a whole number of
+                    // cycles left, so recover the hour count here instead of
+                    // asking the browser to undo the rounding.
+                    'actual_hours_remaining' => (int) round(($pos->actual_days_remaining ?? 0) * 24)
                 ];
             }
             

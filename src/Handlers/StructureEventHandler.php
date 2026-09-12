@@ -90,6 +90,15 @@ class StructureEventHandler
      */
     public static function handle($notification): void
     {
+        // POS notifications carry no structureID and resolve through
+        // corporation_starbases instead, so they go to their own handler
+        // rather than being threaded through Upwell resolution.
+        if (PosEventHandler::handles($notification->type ?? null)) {
+            PosEventHandler::handle($notification);
+
+            return;
+        }
+
         $instance = new self();
         $instance->dispatch($notification);
     }
@@ -128,7 +137,11 @@ class StructureEventHandler
             self::LIFECYCLE_TYPES,
             self::FUEL_EVENT_TYPES,
             self::SERVICES_OFFLINE_TYPES,
-            self::SOVEREIGNTY_TYPES
+            self::SOVEREIGNTY_TYPES,
+            // POS types are handled by PosEventHandler but ride the same
+            // ingestion pipeline, so they have to appear here for the sweep
+            // and the Manager Core registration to pick them up.
+            PosEventHandler::registeredTypes()
         );
     }
 

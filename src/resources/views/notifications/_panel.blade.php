@@ -67,7 +67,11 @@
         padding: 1rem 1.1rem;
         margin-bottom: 0.8rem;
     }
-    .notif-wrapper .category-row[data-enabled="0"] {
+    /* Dim only the BODY of a switched-off category. The title row keeps full
+       contrast on purpose: a greyed-out heading reads as "this feature is
+       unavailable" rather than "this feature is off", and the toggle and MC
+       badge sitting beside it have to stay legible to be usable. */
+    .notif-wrapper .category-row[data-enabled="0"] > *:not(.category-title-row) {
         opacity: 0.55;
     }
     .notif-wrapper .category-title-row {

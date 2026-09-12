@@ -268,60 +268,60 @@ class TypeIdRegistry
     public const POS_TOWERS = [
         // ---------- T1 Racial Towers (modifier 1.0) ----------
         // Large
-        12235 => ['name' => 'Amarr Control Tower',           'size' => 'large',  'faction' => 'T1', 'modifier' => 1.0],
-        16213 => ['name' => 'Caldari Control Tower',         'size' => 'large',  'faction' => 'T1', 'modifier' => 1.0],
-        12236 => ['name' => 'Gallente Control Tower',        'size' => 'large',  'faction' => 'T1', 'modifier' => 1.0],
-        16214 => ['name' => 'Minmatar Control Tower',        'size' => 'large',  'faction' => 'T1', 'modifier' => 1.0],
+        12235 => ['name' => 'Amarr Control Tower',                 'size' => 'large',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 40, 'strontium_per_cycle' => 400],
+        16213 => ['name' => 'Caldari Control Tower',               'size' => 'large',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 40, 'strontium_per_cycle' => 400],
+        12236 => ['name' => 'Gallente Control Tower',              'size' => 'large',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 40, 'strontium_per_cycle' => 400],
+        16214 => ['name' => 'Minmatar Control Tower',              'size' => 'large',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 40, 'strontium_per_cycle' => 400],
         // Medium
-        20059 => ['name' => 'Amarr Control Tower Medium',    'size' => 'medium', 'faction' => 'T1', 'modifier' => 1.0],
-        20061 => ['name' => 'Caldari Control Tower Medium',  'size' => 'medium', 'faction' => 'T1', 'modifier' => 1.0],
-        20063 => ['name' => 'Gallente Control Tower Medium', 'size' => 'medium', 'faction' => 'T1', 'modifier' => 1.0],
-        20065 => ['name' => 'Minmatar Control Tower Medium', 'size' => 'medium', 'faction' => 'T1', 'modifier' => 1.0],
+        20059 => ['name' => 'Amarr Control Tower Medium',          'size' => 'medium', 'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 20, 'strontium_per_cycle' => 200],
+        20061 => ['name' => 'Caldari Control Tower Medium',        'size' => 'medium', 'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 20, 'strontium_per_cycle' => 200],
+        20063 => ['name' => 'Gallente Control Tower Medium',       'size' => 'medium', 'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 20, 'strontium_per_cycle' => 200],
+        20065 => ['name' => 'Minmatar Control Tower Medium',       'size' => 'medium', 'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 20, 'strontium_per_cycle' => 200],
         // Small
-        20060 => ['name' => 'Amarr Control Tower Small',     'size' => 'small',  'faction' => 'T1', 'modifier' => 1.0],
-        20062 => ['name' => 'Caldari Control Tower Small',   'size' => 'small',  'faction' => 'T1', 'modifier' => 1.0],
-        20064 => ['name' => 'Gallente Control Tower Small',  'size' => 'small',  'faction' => 'T1', 'modifier' => 1.0],
-        20066 => ['name' => 'Minmatar Control Tower Small',  'size' => 'small',  'faction' => 'T1', 'modifier' => 1.0],
+        20060 => ['name' => 'Amarr Control Tower Small',           'size' => 'small',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 10, 'strontium_per_cycle' => 100],
+        20062 => ['name' => 'Caldari Control Tower Small',         'size' => 'small',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 10, 'strontium_per_cycle' => 100],
+        20064 => ['name' => 'Gallente Control Tower Small',        'size' => 'small',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 10, 'strontium_per_cycle' => 100],
+        20066 => ['name' => 'Minmatar Control Tower Small',        'size' => 'small',  'faction' => 'T1',       'modifier' => 1.0, 'fuel_per_cycle' => 10, 'strontium_per_cycle' => 100],
 
         // ---------- Faction Towers (modifier 0.9, -10% fuel) ----------
         // Large
-        27539 => ['name' => 'Angel Control Tower',           'size' => 'large',  'faction' => 'Faction', 'modifier' => 0.9],
-        27530 => ['name' => 'Blood Control Tower',           'size' => 'large',  'faction' => 'Faction', 'modifier' => 0.9],
-        27533 => ['name' => 'Guristas Control Tower',        'size' => 'large',  'faction' => 'Faction', 'modifier' => 0.9],
-        27780 => ['name' => 'Sansha Control Tower',          'size' => 'large',  'faction' => 'Faction', 'modifier' => 0.9],
-        27536 => ['name' => 'Serpentis Control Tower',       'size' => 'large',  'faction' => 'Faction', 'modifier' => 0.9],
+        27539 => ['name' => 'Angel Control Tower',                 'size' => 'large',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 36, 'strontium_per_cycle' => 400],
+        27530 => ['name' => 'Blood Control Tower',                 'size' => 'large',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 36, 'strontium_per_cycle' => 400],
+        27533 => ['name' => 'Guristas Control Tower',              'size' => 'large',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 36, 'strontium_per_cycle' => 400],
+        27780 => ['name' => 'Sansha Control Tower',                'size' => 'large',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 36, 'strontium_per_cycle' => 400],
+        27536 => ['name' => 'Serpentis Control Tower',             'size' => 'large',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 36, 'strontium_per_cycle' => 400],
         // Medium
-        27607 => ['name' => 'Angel Control Tower Medium',    'size' => 'medium', 'faction' => 'Faction', 'modifier' => 0.9],
-        27589 => ['name' => 'Blood Control Tower Medium',    'size' => 'medium', 'faction' => 'Faction', 'modifier' => 0.9],
-        27595 => ['name' => 'Guristas Control Tower Medium', 'size' => 'medium', 'faction' => 'Faction', 'modifier' => 0.9],
-        27782 => ['name' => 'Sansha Control Tower Medium',   'size' => 'medium', 'faction' => 'Faction', 'modifier' => 0.9],
-        27601 => ['name' => 'Serpentis Control Tower Medium','size' => 'medium', 'faction' => 'Faction', 'modifier' => 0.9],
+        27607 => ['name' => 'Angel Control Tower Medium',          'size' => 'medium', 'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 18, 'strontium_per_cycle' => 200],
+        27589 => ['name' => 'Blood Control Tower Medium',          'size' => 'medium', 'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 18, 'strontium_per_cycle' => 200],
+        27595 => ['name' => 'Guristas Control Tower Medium',       'size' => 'medium', 'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 18, 'strontium_per_cycle' => 200],
+        27782 => ['name' => 'Sansha Control Tower Medium',         'size' => 'medium', 'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 18, 'strontium_per_cycle' => 200],
+        27601 => ['name' => 'Serpentis Control Tower Medium',      'size' => 'medium', 'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' => 18, 'strontium_per_cycle' => 200],
         // Small
-        27610 => ['name' => 'Angel Control Tower Small',     'size' => 'small',  'faction' => 'Faction', 'modifier' => 0.9],
-        27592 => ['name' => 'Blood Control Tower Small',     'size' => 'small',  'faction' => 'Faction', 'modifier' => 0.9],
-        27598 => ['name' => 'Guristas Control Tower Small',  'size' => 'small',  'faction' => 'Faction', 'modifier' => 0.9],
-        27784 => ['name' => 'Sansha Control Tower Small',    'size' => 'small',  'faction' => 'Faction', 'modifier' => 0.9],
-        27604 => ['name' => 'Serpentis Control Tower Small', 'size' => 'small',  'faction' => 'Faction', 'modifier' => 0.9],
+        27610 => ['name' => 'Angel Control Tower Small',           'size' => 'small',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' =>  9, 'strontium_per_cycle' => 100],
+        27592 => ['name' => 'Blood Control Tower Small',           'size' => 'small',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' =>  9, 'strontium_per_cycle' => 100],
+        27598 => ['name' => 'Guristas Control Tower Small',        'size' => 'small',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' =>  9, 'strontium_per_cycle' => 100],
+        27784 => ['name' => 'Sansha Control Tower Small',          'size' => 'small',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' =>  9, 'strontium_per_cycle' => 100],
+        27604 => ['name' => 'Serpentis Control Tower Small',       'size' => 'small',  'faction' => 'Faction',  'modifier' => 0.9, 'fuel_per_cycle' =>  9, 'strontium_per_cycle' => 100],
 
         // ---------- Officer Towers (modifier 0.8, -20% fuel) ----------
         // Large
-        27532 => ['name' => 'Dark Blood Control Tower',           'size' => 'large',  'faction' => 'Officer', 'modifier' => 0.8],
-        27540 => ['name' => 'Domination Control Tower',           'size' => 'large',  'faction' => 'Officer', 'modifier' => 0.8],
-        27535 => ['name' => 'Dread Guristas Control Tower',       'size' => 'large',  'faction' => 'Officer', 'modifier' => 0.8],
-        27538 => ['name' => 'Shadow Control Tower',               'size' => 'large',  'faction' => 'Officer', 'modifier' => 0.8],
-        27786 => ['name' => 'True Sansha Control Tower',          'size' => 'large',  'faction' => 'Officer', 'modifier' => 0.8],
+        27532 => ['name' => 'Dark Blood Control Tower',            'size' => 'large',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 32, 'strontium_per_cycle' => 400],
+        27540 => ['name' => 'Domination Control Tower',            'size' => 'large',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 32, 'strontium_per_cycle' => 400],
+        27535 => ['name' => 'Dread Guristas Control Tower',        'size' => 'large',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 32, 'strontium_per_cycle' => 400],
+        27538 => ['name' => 'Shadow Control Tower',                'size' => 'large',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 32, 'strontium_per_cycle' => 400],
+        27786 => ['name' => 'True Sansha Control Tower',           'size' => 'large',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 32, 'strontium_per_cycle' => 400],
         // Medium
-        27591 => ['name' => 'Dark Blood Control Tower Medium',    'size' => 'medium', 'faction' => 'Officer', 'modifier' => 0.8],
-        27609 => ['name' => 'Domination Control Tower Medium',    'size' => 'medium', 'faction' => 'Officer', 'modifier' => 0.8],
-        27597 => ['name' => 'Dread Guristas Control Tower Medium','size' => 'medium', 'faction' => 'Officer', 'modifier' => 0.8],
-        27603 => ['name' => 'Shadow Control Tower Medium',        'size' => 'medium', 'faction' => 'Officer', 'modifier' => 0.8],
-        27788 => ['name' => 'True Sansha Control Tower Medium',   'size' => 'medium', 'faction' => 'Officer', 'modifier' => 0.8],
+        27591 => ['name' => 'Dark Blood Control Tower Medium',     'size' => 'medium', 'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 16, 'strontium_per_cycle' => 200],
+        27609 => ['name' => 'Domination Control Tower Medium',     'size' => 'medium', 'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 16, 'strontium_per_cycle' => 200],
+        27597 => ['name' => 'Dread Guristas Control Tower Medium', 'size' => 'medium', 'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 16, 'strontium_per_cycle' => 200],
+        27603 => ['name' => 'Shadow Control Tower Medium',         'size' => 'medium', 'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 16, 'strontium_per_cycle' => 200],
+        27788 => ['name' => 'True Sansha Control Tower Medium',    'size' => 'medium', 'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' => 16, 'strontium_per_cycle' => 200],
         // Small
-        27594 => ['name' => 'Dark Blood Control Tower Small',     'size' => 'small',  'faction' => 'Officer', 'modifier' => 0.8],
-        27612 => ['name' => 'Domination Control Tower Small',     'size' => 'small',  'faction' => 'Officer', 'modifier' => 0.8],
-        27600 => ['name' => 'Dread Guristas Control Tower Small', 'size' => 'small',  'faction' => 'Officer', 'modifier' => 0.8],
-        27606 => ['name' => 'Shadow Control Tower Small',         'size' => 'small',  'faction' => 'Officer', 'modifier' => 0.8],
-        27790 => ['name' => 'True Sansha Control Tower Small',    'size' => 'small',  'faction' => 'Officer', 'modifier' => 0.8],
+        27594 => ['name' => 'Dark Blood Control Tower Small',      'size' => 'small',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' =>  8, 'strontium_per_cycle' => 100],
+        27612 => ['name' => 'Domination Control Tower Small',      'size' => 'small',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' =>  8, 'strontium_per_cycle' => 100],
+        27600 => ['name' => 'Dread Guristas Control Tower Small',  'size' => 'small',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' =>  8, 'strontium_per_cycle' => 100],
+        27606 => ['name' => 'Shadow Control Tower Small',          'size' => 'small',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' =>  8, 'strontium_per_cycle' => 100],
+        27790 => ['name' => 'True Sansha Control Tower Small',     'size' => 'small',  'faction' => 'Officer',  'modifier' => 0.8, 'fuel_per_cycle' =>  8, 'strontium_per_cycle' => 100],
     ];
 
     /**
@@ -377,9 +377,16 @@ class TypeIdRegistry
             return (float) $sdeRate;
         }
 
-        // Hardcoded path: size base × modifier
+        // Hardcoded path. 'fuel_per_cycle' is the effective rate with the
+        // faction bonus already in it, so it is directly comparable to the
+        // SDE quantity above; base x modifier is kept as a last resort for
+        // any entry that predates the explicit column.
         $tower = self::POS_TOWERS[$typeId] ?? null;
         if ($tower !== null) {
+            if (isset($tower['fuel_per_cycle'])) {
+                return (float) $tower['fuel_per_cycle'];
+            }
+
             $base = self::POS_BASE_FUEL_RATES[$tower['size']] ?? null;
             if ($base !== null) {
                 return (float) ($base * $tower['modifier']);
@@ -387,6 +394,64 @@ class TypeIdRegistry
         }
 
         return null;
+    }
+
+    /**
+     * Strontium consumed per reinforced cycle (one hour) for a tower.
+     *
+     * Same SDE-first, hardcoded-fallback shape as posTowerHourlyRate(). This
+     * exists because strontium previously had NO fallback at all: callers
+     * queried the SDE directly, so a missing or partial SDE import left the
+     * reinforcement timer blank with nothing to fall back on.
+     *
+     * Unlike fuel, strontium does NOT scale with the faction bonus. It is a
+     * flat 100 / 200 / 400 per cycle by hull size across T1, faction and
+     * officer alike (verified against invControlTowerResources).
+     *
+     * Returns null only when the tower is unknown to both sources.
+     */
+    public static function posTowerStrontiumRate(int $typeId): ?float
+    {
+        $sdeRate = self::strontiumRateForTower($typeId);
+        if ($sdeRate !== null) {
+            return (float) $sdeRate;
+        }
+
+        $tower = self::POS_TOWERS[$typeId] ?? null;
+        if ($tower !== null && isset($tower['strontium_per_cycle'])) {
+            return (float) $tower['strontium_per_cycle'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Strontium per reinforced cycle straight from the SDE.
+     * Mirrors hourlyFuelRateForTower(); purpose 4 is the reinforced row.
+     */
+    public static function strontiumRateForTower(int $towerTypeId): ?int
+    {
+        static $cache = [];
+        if (array_key_exists($towerTypeId, $cache)) {
+            return $cache[$towerTypeId];
+        }
+
+        $cache[$towerTypeId] = null;
+
+        if (!Schema::hasTable('invControlTowerResources')) {
+            return null;
+        }
+
+        $rate = DB::table('invControlTowerResources')
+            ->where('controlTowerTypeID', $towerTypeId)
+            ->where('resourceTypeID', self::STRONTIUM)
+            ->where('purpose', 4)
+            ->value('quantity');
+
+        if ($rate !== null) {
+            $cache[$towerTypeId] = (int) $rate;
+        }
+        return $cache[$towerTypeId];
     }
 
     public static function isPosTower(int $typeId): bool

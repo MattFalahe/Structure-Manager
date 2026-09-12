@@ -16,6 +16,8 @@ use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Send Discord/Slack notifications for POSes with low fuel
@@ -76,9 +78,15 @@ class NotifyPosLowFuel implements ShouldQueue
     {
         \Log::channel('stack')->info('NotifyPosLowFuel: Job started');
 
-        // Early bail if both pos.* categories are disabled — nothing this job can do.
+        // State transitions run first and over EVERY tower, not just the
+        // online ones the fuel pass looks at — a tower going offline is
+        // precisely the case the fuel pass can no longer see.
+        $stateNotifications = $this->notifyStateChanges();
+
+        // Early bail if the remaining pos.* categories are disabled.
         if (!WebhookDispatcher::isCategoryEnabled('pos', 'fuel') && !WebhookDispatcher::isCategoryEnabled('pos', 'strontium')) {
-            \Log::channel('stack')->debug('NotifyPosLowFuel: Both pos.fuel and pos.strontium categories are disabled; skipping.');
+            \Log::channel('stack')->debug('NotifyPosLowFuel: pos.fuel and pos.strontium are disabled; state changes still checked.');
+            \Log::channel('stack')->info("NotifyPosLowFuel: Job completed, sent {$stateNotifications} notifications");
             return;
         }
 
@@ -214,7 +222,9 @@ class NotifyPosLowFuel implements ShouldQueue
             }
         }
 
-        \Log::channel('stack')->info("NotifyPosLowFuel: Job completed, sent {$notificationsSent} notifications");
+        \Log::channel('stack')->info('NotifyPosLowFuel: Job completed, sent '
+            . ($notificationsSent + $stateNotifications) . ' notifications'
+            . ($stateNotifications > 0 ? " ({$stateNotifications} state change)" : ''));
     }
 
     /**
@@ -722,28 +732,11 @@ class NotifyPosLowFuel implements ShouldQueue
             ];
         }
 
-        // Handle mentions properly
-        $content = '';
-        $allowedMentions = [
-            'parse' => [],
-            'users' => [],
-            'roles' => [],
-        ];
-
-        if (($severity === 'critical' || $isFinalAlert) && !empty($roleMention)) {
-            $mention = trim($roleMention);
-            
-            if (preg_match('/^<@&(\d+)>$/', $mention, $m)) {
-                $content = "<@&{$m[1]}> ";
-                $allowedMentions['roles'][] = $m[1];
-            } elseif (preg_match('/^<@!?(\d+)>$/', $mention, $m)) {
-                $content = "<@{$m[1]}> ";
-                $allowedMentions['users'][] = $m[1];
-            } elseif (preg_match('/^\d+$/', $mention)) {
-                $content = "<@&{$mention}> ";
-                $allowedMentions['roles'][] = $mention;
-            }
-        }
+        // Shared with the state-change path so both parse mentions identically.
+        [$content, $allowedMentions] = $this->buildMention(
+            $roleMention,
+            $severity === 'critical' || $isFinalAlert
+        );
 
         $content .= "**{$title}**" . (count($poses) > 0 ? " - " . count($poses) . " POS(es) need attention" : "");
 
@@ -777,18 +770,285 @@ class NotifyPosLowFuel implements ShouldQueue
     }
 
     /**
-     * Format days intelligently
-     * (No changes from original)
+     * POS states worth telling the operator about when a tower moves into
+     * them, and how loudly.
+     *
+     * SeAT stores state as a lowercase string on corporation_starbases, so
+     * these keys are compared directly rather than going through the integer
+     * mapping the history table uses.
+     *
+     * Reinforced is the one that matters most: a tower does not reinforce on
+     * its own, so entering that state means it is being shot and a timer is
+     * running. Only reinforced carries a role mention; the rest are
+     * informational and would be noise as pings.
+     */
+    private const STATE_ALERTS = [
+        'reinforced'  => ['severity' => 'critical', 'icon' => '🔴', 'label' => 'Reinforced',  'mention' => true,
+                          'note' => 'The tower is under attack and its reinforcement timer is running. Strontium is being consumed.'],
+        'offline'     => ['severity' => 'warning',  'icon' => '⚠️', 'label' => 'Offline',     'mention' => false,
+                          'note' => 'The tower is down. It burns no fuel, runs no services, and cannot reinforce if attacked.'],
+        'unanchored'  => ['severity' => 'warning',  'icon' => '⚠️', 'label' => 'Unanchored',  'mention' => false,
+                          'note' => 'The tower is no longer anchored in space.'],
+        'online'      => ['severity' => 'good',     'icon' => '🟢', 'label' => 'Online',      'mention' => false,
+                          'note' => 'The tower is back online and consuming fuel again.'],
+        'onlining'    => ['severity' => 'info',     'icon' => '🔵', 'label' => 'Onlining',    'mention' => false,
+                          'note' => 'The tower is coming online.'],
+        'unanchoring' => ['severity' => 'info',     'icon' => '🔵', 'label' => 'Unanchoring', 'mention' => false,
+                          'note' => 'The tower is being unanchored.'],
+    ];
+
+    /**
+     * How long a tower's last seen state is remembered. Any value longer than
+     * the poll gap works; 30 days simply means a tower that vanishes and comes
+     * back is still recognised rather than re-seeding silently.
+     */
+    private const STATE_CACHE_DAYS = 30;
+
+    /**
+     * Alert on POS state transitions (pos.lifecycle).
+     *
+     * Reads state straight from corporation_starbases for EVERY tower, not
+     * just the online ones the fuel pass looks at, because a tower dropping
+     * offline is exactly the transition the fuel pass can no longer observe.
+     *
+     * The previous state is held in cache rather than derived from history:
+     * history is the tracker's record and is deliberately quiet while a tower
+     * sits in a non-online state, so it cannot be relied on as the "what did
+     * we last see" signal. A tower seen for the first time seeds the cache
+     * silently, so upgrading does not alert on every tower at once.
+     *
+     * @return int notifications sent
+     */
+    private function notifyStateChanges(): int
+    {
+        if (! Schema::hasTable('corporation_starbases')) {
+            return 0;
+        }
+
+        if (! WebhookDispatcher::isCategoryEnabled('pos', 'lifecycle')) {
+            return 0;
+        }
+
+        $towers = DB::table('corporation_starbases as cs')
+            ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
+            ->leftJoin('mapDenormalize as md', 'cs.system_id', '=', 'md.itemID')
+            ->leftJoin('corporation_assets as ca', 'cs.starbase_id', '=', 'ca.item_id')
+            ->where('it.groupID', 365) // Control Tower group
+            ->select(
+                'cs.starbase_id',
+                'cs.corporation_id',
+                'cs.state',
+                'it.typeName as tower_type',
+                'md.itemName as system_name',
+                'md.security as system_security',
+                'ca.name as starbase_name'
+            )
+            ->get();
+
+        $sent = 0;
+
+        foreach ($towers as $tower) {
+            $current = strtolower(trim((string) $tower->state));
+
+            if ($current === '') {
+                continue;
+            }
+
+            $cacheKey = 'sm:pos_state:' . $tower->starbase_id;
+            $previous = Cache::get($cacheKey);
+
+            Cache::put($cacheKey, $current, Carbon::now()->addDays(self::STATE_CACHE_DAYS));
+
+            // First sighting, or nothing moved.
+            if ($previous === null || $previous === $current) {
+                continue;
+            }
+
+            // Logged whether or not a webhook is bound, so the transition is
+            // visible to an operator reading the log even with no routing set up.
+            Log::channel('stack')->info(sprintf(
+                'NotifyPosLowFuel: POS %d (%s) changed state %s -> %s',
+                $tower->starbase_id,
+                $tower->starbase_name ?? $tower->tower_type,
+                $previous,
+                $current
+            ));
+
+            $spec = self::STATE_ALERTS[$current] ?? null;
+
+            if ($spec === null) {
+                continue;
+            }
+
+            $bindings = WebhookDispatcher::resolveBindings('pos', 'lifecycle', (int) $tower->corporation_id);
+
+            if (empty($bindings)) {
+                continue;
+            }
+
+            foreach ($bindings as $binding) {
+                $this->sendStateChangeNotification(
+                    $tower,
+                    $previous,
+                    $spec,
+                    $binding['webhook_url'],
+                    $binding['role_mention'] ?? ''
+                );
+                $sent++;
+            }
+        }
+
+        if ($sent > 0) {
+            Log::channel('stack')->info("NotifyPosLowFuel: sent {$sent} pos.lifecycle notification(s)");
+        }
+
+        return $sent;
+    }
+
+    /**
+     * Build and dispatch a single POS state-change embed.
+     *
+     * @param object $tower   Row from corporation_starbases joined to the SDE
+     * @param string $previous Previous state string
+     * @param array  $spec     Matching entry from STATE_ALERTS
+     */
+    private function sendStateChangeNotification($tower, string $previous, array $spec, string $webhookUrl, string $roleMention = '')
+    {
+        $colors = [
+            'critical' => 15158332, // red
+            'warning'  => 16776960, // yellow
+            'good'     => 3066993,  // green
+            'info'     => 3447003,  // blue
+        ];
+
+        $spaceType = 'Unknown';
+        if ($tower->system_security !== null) {
+            if ($tower->system_security >= \StructureManager\Helpers\PosFuelCalculator::HIGH_SEC_THRESHOLD) {
+                $spaceType = 'High-Sec';
+            } elseif ($tower->system_security > 0) {
+                $spaceType = 'Low-Sec';
+            } else {
+                $spaceType = 'Null-Sec';
+            }
+        }
+
+        $embed = [
+            'title'  => $spec['icon'] . ' ' . ($tower->starbase_name ?? $tower->tower_type),
+            'color'  => $colors[$spec['severity']] ?? $colors['info'],
+            'fields' => [
+                [
+                    'name'   => '📍 Location',
+                    'value'  => ($tower->system_name ?? 'Unknown') . " ({$spaceType})",
+                    'inline' => true,
+                ],
+                [
+                    'name'   => '🏗️ Tower Type',
+                    'value'  => $tower->tower_type,
+                    'inline' => true,
+                ],
+                [
+                    'name'   => '🔄 State Change',
+                    'value'  => ucfirst($previous) . ' → **' . $spec['label'] . '**',
+                    'inline' => true,
+                ],
+                [
+                    'name'   => $spec['icon'] . ' What this means',
+                    'value'  => $spec['note'],
+                    'inline' => false,
+                ],
+            ],
+            'footer' => [
+                'text' => 'SeAT Structure Manager | POS ID: ' . $tower->starbase_id,
+            ],
+            'timestamp' => Carbon::now()->toIso8601String(),
+        ];
+
+        [$content, $allowedMentions] = $this->buildMention($roleMention, (bool) $spec['mention']);
+
+        $content .= sprintf('**POS %s: %s**', $spec['label'], $tower->starbase_name ?? $tower->tower_type);
+
+        $payload = [
+            'content'          => $content,
+            'embeds'           => [$embed],
+            'username'         => 'SeAT Structure Manager',
+            'allowed_mentions' => $allowedMentions,
+        ];
+
+        // Same defense-in-depth revalidation the fuel path does: a DB-level
+        // tamper must not be able to reach an arbitrary host.
+        if (! WebhookConfiguration::isValidWebhookUrl($webhookUrl)) {
+            Log::error('NotifyPosLowFuel: Refusing to POST to an invalid webhook URL (not a Discord/Slack https URL). Edit the webhook in settings to re-save.');
+
+            return;
+        }
+
+        \StructureManager\Services\WebhookDeliveryService::sendByUrl(
+            $webhookUrl,
+            $payload,
+            'pos.lifecycle',
+            sprintf('%s state change — %s to %s', $spec['severity'], $previous, $spec['label'])
+        );
+    }
+
+    /**
+     * Build the Discord content prefix and allowed_mentions for a role ping.
+     *
+     * Extracted unchanged from the fuel path so both alert families parse
+     * mentions identically, and so allowed_mentions stays restrictive: only
+     * the specific role or user id being pinged is ever permitted.
+     *
+     * @return array{0: string, 1: array}
+     */
+    private function buildMention(string $roleMention, bool $shouldMention): array
+    {
+        $content = '';
+        $allowedMentions = [
+            'parse' => [],
+            'users' => [],
+            'roles' => [],
+        ];
+
+        if ($shouldMention && ! empty($roleMention)) {
+            $mention = trim($roleMention);
+
+            if (preg_match('/^<@&(\d+)>$/', $mention, $m)) {
+                $content = "<@&{$m[1]}> ";
+                $allowedMentions['roles'][] = $m[1];
+            } elseif (preg_match('/^<@!?(\d+)>$/', $mention, $m)) {
+                $content = "<@{$m[1]}> ";
+                $allowedMentions['users'][] = $m[1];
+            } elseif (preg_match('/^\d+$/', $mention)) {
+                $content = "<@&{$mention}> ";
+                $allowedMentions['roles'][] = $mention;
+            }
+        }
+
+        return [$content, $allowedMentions];
+    }
+
+    /**
+     * Format a whole-cycle day figure as "Nd Nh".
+     *
+     * Recover total hours with round() rather than flooring the fractional
+     * day. Days are stored to 2 decimal places, so one hour round-trips as
+     * 0.04 and flooring 0.04 * 24 = 0.96 yields 0. That is how an embed came
+     * to read "Current: 24 blocks ... Remaining: 0h" for a tower holding a
+     * full cycle. Every caller passes a whole-hour value (fuel and charter
+     * days both count complete cycles), so the recovery is exact.
+     *
+     * The POS detail page does the same thing for the same reason.
      */
     private function formatDaysHours($days)
     {
-        $wholeDays = floor($days);
-        $hours = floor(($days - $wholeDays) * 24);
-        
+        $totalHours = (int) round($days * 24);
+
+        $wholeDays = intdiv($totalHours, 24);
+        $hours     = $totalHours % 24;
+
         if ($wholeDays == 0) {
             return "{$hours}h";
         }
-        
+
         return "{$wholeDays}d {$hours}h";
     }
 }

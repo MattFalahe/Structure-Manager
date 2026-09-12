@@ -68,7 +68,7 @@ class IdResolver
      * we ever start hammering them (which we won't — cache + 2s
      * timeout keeps load minimal).
      */
-    private const USER_AGENT = 'SeAT-StructureManager/2.0.3 (+https://github.com/MattFalahe/structure-manager)';
+    private const USER_AGENT = 'SeAT-StructureManager/2.0.4 (+https://github.com/MattFalahe/structure-manager)';
 
     /**
      * Resolve a character ID to a name. Returns null if all tiers miss.

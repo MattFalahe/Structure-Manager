@@ -792,6 +792,12 @@ class FuelEconomicsService
             ->join('invTypes as it', 'csb.type_id', '=', 'it.typeID')
             ->leftJoin('corporation_infos as ci', 'csb.corporation_id', '=', 'ci.corporation_id')
             ->leftJoin('mapDenormalize as md', 'csb.system_id', '=', 'md.itemID')
+            // A tower's name lives on its corp-asset row, not on
+            // corporation_starbases, and the moon is the fallback identity for
+            // an unnamed one. Both are needed to tell towers in one system
+            // apart. Same joins TrackPosesFuel uses.
+            ->leftJoin('corporation_assets as ca', 'csb.starbase_id', '=', 'ca.item_id')
+            ->leftJoin('mapDenormalize as mdm', 'csb.moon_id', '=', 'mdm.itemID')
             ->where('it.groupID', 365) // Control Tower group, matches TrackPosesFuel
             ->select(
                 'csb.starbase_id',
@@ -801,7 +807,9 @@ class FuelEconomicsService
                 'it.typeName as tower_type_name',
                 'ci.name as corp_name',
                 'md.itemName as system_name',
-                'md.security as system_security'
+                'md.security as system_security',
+                'ca.name as starbase_name',
+                'mdm.itemName as moon_name'
             );
 
         if ($corpScope !== null) {
@@ -824,12 +832,10 @@ class FuelEconomicsService
             $towerTypeId = (int) $r->type_id;
             $blockType   = $this->racialFuelBlockForTower($towerTypeId);
             $reqs        = PosFuelCalculator::getStaticFuelRequirements($towerTypeId);
-            // PosFuelCalculator::getStaticFuelRequirements returns the rate
-            // under 'fuel_per_hour' (also 'actual_fuel_rate'), NOT 'hourly'.
-            // Previous version read 'hourly' which is always undefined →
-            // defaulted to 0 → if-guard below failed → POS rows silently
-            // dropped from the projection. Confirmed via tinker against
-            // Matt's tower 27609 which returned fuel_per_hour=12.8.
+            // The rate comes back under 'fuel_per_hour' (also
+            // 'actual_fuel_rate'), NOT 'hourly'. Reading 'hourly' returns
+            // undefined, defaults to 0, fails the guard below and silently
+            // drops every POS row from the projection.
             $hourlyFuel  = (float) ($reqs['fuel_per_hour'] ?? $reqs['actual_fuel_rate'] ?? 0);
 
             $base = [
@@ -1200,6 +1206,8 @@ class FuelEconomicsService
             ->leftJoin('corporation_infos as ci', 'csb.corporation_id', '=', 'ci.corporation_id')
             ->leftJoin('invTypes as it', 'csb.type_id', '=', 'it.typeID')
             ->leftJoin('mapDenormalize as md', 'csb.system_id', '=', 'md.itemID')
+            ->leftJoin('corporation_assets as ca', 'csb.starbase_id', '=', 'ca.item_id')
+            ->leftJoin('mapDenormalize as mdm', 'csb.moon_id', '=', 'mdm.itemID')
             ->where('sfc.date', '>=', $startDate->toDateString())
             ->select(
                 'sfc.starbase_id',
@@ -1211,7 +1219,9 @@ class FuelEconomicsService
                 'csb.system_id',
                 'ci.name as corp_name',
                 'it.typeName as tower_type_name',
-                'md.itemName as system_name'
+                'md.itemName as system_name',
+                'ca.name as starbase_name',
+                'mdm.itemName as moon_name'
             );
 
         if ($corpScope !== null) {
@@ -1370,11 +1380,30 @@ class FuelEconomicsService
         return TypeIdRegistry::racialFuelForTower($towerTypeId);
     }
 
+    /**
+     * Label for a POS in the structure column: "[system] - [tower name]",
+     * falling back to the moon and then the hull type.
+     */
     private function posDisplayName($row): string
     {
-        $type = $row->tower_type_name ?: 'Control Tower';
-        $sys  = $row->system_name ?: ('System #' . ($row->system_id ?? '?'));
-        return "{$type} in {$sys}";
+        $sys = $row->system_name ?: ('System #' . ($row->system_id ?? '?'));
+
+        // Lead with the name the operator gave the tower. The type already has
+        // its own column, so leading with it repeated that cell and left three
+        // towers in one system looking identical.
+        $name = trim((string) ($row->starbase_name ?? ''));
+        if ($name !== '') {
+            return "{$sys} - {$name}";
+        }
+
+        // Unnamed tower. Its moon is just as unique, and the moon name already
+        // carries the system ("3AE-CP VII - Moon 3"), so use it as it stands.
+        $moon = trim((string) ($row->moon_name ?? ''));
+        if ($moon !== '') {
+            return $moon;
+        }
+
+        return "{$sys} - " . ($row->tower_type_name ?: 'Control Tower');
     }
 
     /**

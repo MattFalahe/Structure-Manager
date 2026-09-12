@@ -336,6 +336,20 @@
 // Locked thresholds — see StructureManager\Helpers\FuelThresholds.
 window.__SM_THRESHOLDS = @json(\StructureManager\Helpers\FuelThresholds::forViews());
 
+// Hours of fuel left on a tower. The controller sends whole hours in
+// actual_hours_remaining; actual_days_remaining is only kept for installs
+// still serving a cached response, and is a decimal that cannot be turned
+// back into an exact hour.
+function posHoursRemaining(pd) {
+    if (!pd) {
+        return 0;
+    }
+    if (pd.actual_hours_remaining !== undefined && pd.actual_hours_remaining !== null) {
+        return pd.actual_hours_remaining;
+    }
+    return (pd.actual_days_remaining || 0) * 24;
+}
+
 // Wait for jQuery and Moment.js to be fully loaded
 (function checkLibraries() {
     if (typeof $ === 'undefined') {
@@ -427,8 +441,11 @@ function initializeCriticalAlerts() {
                 // Format time display
                 let timeDisplay = '';
                 if (isPOS && alert.pos_data && alert.pos_data.actual_days_remaining !== undefined) {
-                    // For POS: Use the correct calculation from starbase_fuel_history
-                    let totalHours = alert.pos_data.actual_days_remaining * 24;
+                    // For POS: whole hours from starbase_fuel_history. Prefer
+                    // actual_hours_remaining -- actual_days_remaining is
+                    // rounded to one decimal and cannot be turned back into an
+                    // exact hour.
+                    let totalHours = posHoursRemaining(alert.pos_data);
                     let days = Math.floor(totalHours / 24);
                     let hours = Math.floor(totalHours % 24);  // Round DOWN - POS hasn't consumed the next hour yet!
                     timeDisplay = days + 'd ' + hours + 'h';
@@ -442,7 +459,7 @@ function initializeCriticalAlerts() {
                 // Calculate hours remaining (use correct source for POS)
                 let hoursLeft;
                 if (isPOS && alert.pos_data && alert.pos_data.actual_days_remaining !== undefined) {
-                    hoursLeft = alert.pos_data.actual_days_remaining * 24;
+                    hoursLeft = posHoursRemaining(alert.pos_data);
                 } else {
                     hoursLeft = alert.hours_remaining || (alert.days_remaining * 24);
                 }
@@ -561,7 +578,7 @@ function initializeCriticalAlerts() {
 
                 // Add POS badge
                 if (isPOS) {
-                    html += `<span class="badge badge-pos ml-1"><i class="fas fa-tower-broadcast"></i> POS</span>`;
+                    html += `<span class="badge badge-pos ml-1"><i class="fas fa-broadcast-tower"></i> POS</span>`;
                 }
 
                 html += `
@@ -661,8 +678,7 @@ function initializeCriticalAlerts() {
 
                     // Use the CORRECT POS data from starbase_fuel_history (actual_days_remaining)
                     // This matches the POS tab display and is the correct calculation
-                    let totalDaysRemaining = pd.actual_days_remaining || 0;
-                    let totalHours = totalDaysRemaining * 24;
+                    let totalHours = posHoursRemaining(pd);
                     let fuelDays = Math.floor(totalHours / 24);
                     let fuelHours = Math.floor(totalHours % 24);  // Round DOWN - POS hasn't consumed the next hour yet!
 
@@ -691,7 +707,7 @@ function initializeCriticalAlerts() {
                     html += `
                         <div class="pos-dual-fuel">
                             <strong style="color: #e91e63; font-size: 1.05rem;">
-                                <i class="fas fa-tower-broadcast"></i> POS Fuel System Status (${spaceType})
+                                <i class="fas fa-broadcast-tower"></i> POS Fuel System Status (${spaceType})
                             </strong>
                             <hr style="margin: 0.75rem 0; border: 0; border-top: 2px solid #e91e63; opacity: 0.5;">
 

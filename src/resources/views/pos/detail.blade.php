@@ -32,6 +32,11 @@
         font-size: 0.8rem;
         color: #a0a0a0;
     }
+    .stat-hint {
+        font-size: 0.72rem;
+        color: #7a7a7a;
+        line-height: 1.1;
+    }
 
     /* SEMANTIC POS info banner — DO NOT CHANGE */
     .pos-banner {
@@ -380,16 +385,30 @@
                     </div>
 
                     <div class="stat-box text-center">
+                        @php
+                            // The stored figure counts WHOLE fuel cycles only, which is
+                            // what the in-game Processes tab shows. The tower is also
+                            // part way through a cycle it has already paid for, so the
+                            // real time to offline is between this and one hour more.
+                            $fuelTotalHours = (int) round($latestHistory->fuel_days_remaining * 24);
+                            $fuelDays       = intdiv($fuelTotalHours, 24);
+                            $fuelHours      = $fuelTotalHours % 24;
+                            $fuelUpper      = $fuelTotalHours + 1;
+                            $fuelUpperDays  = intdiv($fuelUpper, 24);
+                            $fuelUpperHours = $fuelUpper % 24;
+                            $fuelUpperLabel = $fuelUpperDays === 0
+                                ? $fuelUpperHours . 'h'
+                                : $fuelUpperDays . 'd ' . $fuelUpperHours . 'h';
+                        @endphp
                         <div class="stat-number {{ $latestHistory->fuel_days_remaining < $T::posFuelCritical() ? 'text-danger-bright' : ($latestHistory->fuel_days_remaining < $T::posFuelWarning() ? 'text-warning-bright' : 'text-success-bright') }}">
-                            @php
-                                $fuelDays = floor($latestHistory->fuel_days_remaining);
-                                $fuelHours = floor(($latestHistory->fuel_days_remaining - $fuelDays) * 24);
-                            @endphp
                             @if ($fuelDays == 0)
                                 {{ $fuelHours }}h
                             @else
                                 {{ $fuelDays }}d {{ $fuelHours }}h
                             @endif
+                        </div>
+                        <div class="stat-hint">
+                            up to {{ $fuelUpperLabel }}
                         </div>
                         <div class="stat-label">Days Remaining</div>
                     </div>

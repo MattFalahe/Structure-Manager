@@ -105,7 +105,12 @@ class AnalyzePosConsumption implements ShouldQueue
             
             // Calculate fuel consumption
             $fuelConsumed = $firstRecord->fuel_blocks_quantity - $lastRecord->fuel_blocks_quantity;
-            $hoursPassed = $lastRecord->created_at->diffInHours($firstRecord->created_at, true);
+            // Minute precision. diffInHours floors, so a day spanning 23.8
+            // real hours divided as 23 overstates the daily figure by about
+            // 4%. The tracking jobs moved off the floored version in v2.0.2;
+            // this pass did not, and it is the one the Fuel Economics chart
+            // and its ISK columns are built from.
+            $hoursPassed = $lastRecord->created_at->diffInMinutes($firstRecord->created_at, true) / 60.0;
             
             $fuelDailyConsumption = $hoursPassed > 0 ? ($fuelConsumed / $hoursPassed) * 24 : 0;
             $fuelHourlyRate = $hoursPassed > 0 ? $fuelConsumed / $hoursPassed : 0;

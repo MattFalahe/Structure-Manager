@@ -55,7 +55,7 @@
 
 <style>
     /* === Fuel-alerts widget — scoped to the widget only ===
-       This partial cannot link the canonical CSS (no @push('head')
+       This partial cannot link the canonical CSS (no head stack
        access), so we keep the small set of widget-specific tooltip
        primitives inline. SEMANTIC Metenox/gas colors — DO NOT CHANGE. */
 

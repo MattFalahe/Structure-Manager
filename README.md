@@ -4,11 +4,11 @@
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg?style=flat-square)](LICENSE)
 [![SeAT](https://img.shields.io/badge/SeAT-5.x-blue.svg?style=flat-square)](https://github.com/eveseat/seat)
 
-**v2.0.0 — The Ecosystem Era.** A comprehensive fuel management and structure-events plugin for EVE Online corporations in SeAT. Tracks fuel consumption across Upwell structures and legacy POS towers, fires Discord/Slack notifications for ESI events (attacks, reinforce timers, anchoring, sov, fuel alerts), and integrates with the broader Manager Core plugin family for cross-plugin coordination.
+**v2 — The Ecosystem Era.** A comprehensive fuel management and structure-events plugin for EVE Online corporations in SeAT. Tracks fuel consumption across Upwell structures and legacy POS towers, fires Discord/Slack notifications for ESI events (attacks, reinforce timers, anchoring, sov, fuel alerts), and integrates with the broader Manager Core plugin family for cross-plugin coordination.
 
 > Structure Manager works fully standalone. Installing Manager Core alongside it unlocks faster detection (~2 min vs 15-20 min), cross-plugin event broadcasting, shared director key pool, and the Fuel Economics page. Every ecosystem feature is purely additive — leaving Manager Core out keeps all v1 functionality intact at SeAT's native cadence.
 
-📋 **[v2.0.3 release notes →](CHANGELOG.MD)**
+📋 **[v2.0.4 release notes →](CHANGELOG.MD)**
 
 ## Features
 
@@ -17,7 +17,7 @@
 - **POS Towers**: 10-minute tracking intervals for real-time monitoring
 - **Dual tracking method**: Primary fuel bay monitoring with days-remaining fallback
 - **Automatic refuel detection** when fuel is added to structures
-- **Historical consumption analysis** with anomaly detection (6 months for Upwell, 90 days for POS)
+- **Historical consumption analysis** with anomaly detection (60 days of readings for both structure types, plus a year of daily totals behind the cost projections)
 
 ### 📊 Advanced Analytics
 - **Accurate consumption calculations** based on actual online services
@@ -66,6 +66,8 @@
 - **Smart alerting**: Status-based transitions prevent spam (Good → Warning → Critical → Recovery)
 - **Customizable intervals**: Set reminder frequencies during critical stage or disable completely
 - **Final alerts**: Urgent notification 1 hour before POS goes offline
+- **POS under attack** (`pos.attack`): Driven by EVE's own in-game notification rather than by polling, so it arrives while the attack is still happening. Carries shield, armor and hull at the time of the attack plus the aggressor, with severity following the damage
+- **POS state changes** (`pos.lifecycle`): Reinforced, offline, unanchored and back online. A tower entering reinforced is critical and carries a role mention, since a tower does not reinforce on its own
 - **Attacker name resolution**: ESI-driven combat events show real character/corp/alliance names via the IdResolver service (local cache → ESI fallback with 7-day result cache)
 - **Threshold customization**: Configure when alerts trigger for each resource
 
@@ -99,7 +101,7 @@ Compare every Upwell structure your corp owns against the recommended fit your a
 
 ### 🌐 Manager Core Integration (v2.0.0)
 
-Structure Manager v2.0.0 is built to work with [Manager Core](https://github.com/MattFalahe/Manager-Core), an optional companion plugin that hosts the shared infrastructure of the broader plugin family:
+Structure Manager v2 is built to work with [Manager Core](https://github.com/MattFalahe/Manager-Core), an optional companion plugin that hosts the shared infrastructure of the broader plugin family:
 
 **With Manager Core installed:**
 - ⚡ **~2-minute ESI detection** via the shared director key pool (vs SeAT's native 15-20 min cadence)
@@ -128,7 +130,7 @@ Manager Core can be installed at any time; Structure Manager auto-detects it on 
 
 ### 📚 Help & Documentation
 - **Complete in-app help system** with 18 sections
-- **18 FAQ entries** covering common questions (including v2.0.0 forensics + external reserves + webhook delivery)
+- **21 FAQ entries** covering common questions (including v2.0.0 forensics + external reserves + webhook delivery)
 - **6 troubleshooting guides** with step-by-step solutions
 - **Searchable documentation** for quick answers
 - **Artisan command reference** with examples
@@ -194,7 +196,7 @@ The plugin will automatically:
 - Start tracking fuel levels on the next scheduled run
 - Create default settings
 - Register scheduled tasks
-- Seed notification categories (18 total across upwell / events / pos namespaces) with sensible enabled/disabled defaults
+- Seed notification categories (19 total across upwell / events / pos namespaces) with sensible enabled/disabled defaults
 - Set up navigation menu items
 
 **Companion plugins** (all optional):
@@ -222,7 +224,7 @@ Dedicated page for legacy Player Owned Starbases:
 - 10-minute tracking intervals for real-time data
 - Security space detection (charters tracked in high-sec only)
 - Limiting factor badges show priority resources
-- Individual POS detail pages with 90-day history
+- Individual POS detail pages with 60-day history
 
 ### Fuel Reserves
 Track staged fuel blocks and magmatic gas across your structures:

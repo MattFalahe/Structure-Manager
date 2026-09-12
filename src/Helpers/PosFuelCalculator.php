@@ -154,37 +154,34 @@ class PosFuelCalculator
      */
     public static function getFuelConsumptionRate($towerTypeId, $systemSecurity = null)
     {
-        // Get base fuel consumption from invControlTowerResources. Coalesce to 0
-        // when the SDE lacks a row (e.g. custom/unknown tower) so subsequent math
-        // does not trigger PHP 8+ null-to-float deprecations.
-        $baseFuelRate = DB::table('invControlTowerResources')
-            ->where('controlTowerTypeID', $towerTypeId)
-            ->whereIn('resourceTypeID', array_keys(self::FUEL_BLOCKS))
-            ->where('purpose', 1) // Power (online)
-            ->value('quantity') ?? 0;
+        // Effective consumption per cycle, via the registry (SDE first, its
+        // hardcoded table as fallback).
+        //
+        // This value ALREADY has the faction bonus in it. The SDE ladder is
+        // 40/36/32 for a large tower across T1/faction/officer, and CCP's own
+        // client shows the same figure as "Quantity (per cycle)". Multiplying
+        // it by FACTION_FUEL_MODIFIERS again, as this method used to, applied
+        // the bonus twice: an officer tower read 25.6 instead of 32, which
+        // understated burn and so overstated days remaining, pushing low-fuel
+        // alerts late by up to a day and a half.
+        $actualFuelRate = TypeIdRegistry::posTowerHourlyRate((int) $towerTypeId) ?? 0;
 
-        // Get strontium requirement for reinforced mode (coalesce null to 0 for the
-        // same reason).
-        $strontiumRate = DB::table('invControlTowerResources')
-            ->where('controlTowerTypeID', $towerTypeId)
-            ->where('resourceTypeID', self::STRONTIUM)
-            ->where('purpose', 4) // Reinforced
-            ->value('quantity') ?? 0;
-        
-        // Try to get fuel modifier from database first
-        $fuelModifier = self::getFuelModifierFromDatabase($towerTypeId);
-        
-        // If not found in database, use hardcoded values
-        if ($fuelModifier === null) {
-            $fuelModifier = self::FACTION_FUEL_MODIFIERS[$towerTypeId] ?? 1.0;
-            Log::info("PosFuelCalculator: Using hardcoded fuel modifier for tower type {$towerTypeId}: {$fuelModifier}");
-        } else {
-            Log::info("PosFuelCalculator: Using database fuel modifier for tower type {$towerTypeId}: {$fuelModifier}");
-        }
-        
-        // Calculate actual fuel consumption with bonus applied
-        $actualFuelRate = $baseFuelRate * $fuelModifier;
-        
+        // Strontium per reinforced cycle. Flat by hull size, no faction bonus.
+        $strontiumRate = TypeIdRegistry::posTowerStrontiumRate((int) $towerTypeId) ?? 0;
+
+        // The modifier is still needed for the display fields below, but it is
+        // no longer applied to any rate.
+        $fuelModifier = self::FACTION_FUEL_MODIFIERS[$towerTypeId] ?? 1.0;
+
+        // What the same hull would burn without a faction bonus, used by the
+        // savings comparison. This is the T1 rate for the size, NOT the tower's
+        // own consumption; reading it off the SDE (as this used to) returned
+        // the already-bonused figure and made the saving compute as zero.
+        $size = TypeIdRegistry::POS_TOWERS[$towerTypeId]['size'] ?? null;
+        $baseFuelRate = $size !== null
+            ? (TypeIdRegistry::POS_BASE_FUEL_RATES[$size] ?? $actualFuelRate)
+            : $actualFuelRate;
+
         // Check if charters are required (high-sec only)
         $requiresCharters = $systemSecurity !== null && $systemSecurity >= self::HIGH_SEC_THRESHOLD;
         $chartersPerHour = $requiresCharters ? 1 : 0;
@@ -194,7 +191,9 @@ class PosFuelCalculator
         // Warning threshold: 12 hours (allows time to respond)
         // Good threshold: 24 hours (provides full day coverage)
         // Recommended: 48 hours (weekend coverage)
-        // Optimal: 36 hours (maximum practical amount given 12,500 m³ cargo limit)
+        // Optimal: 36 hours. The ceiling is the strontium bay, not a hauling
+        // limit: SDE attribute 1233 gives 25,000 m3 on a medium hull, and at
+        // 3 m3 a unit that is 8,333 units, roughly 41 hours at 200 per cycle.
         $minStrontium = $strontiumRate * self::STRONTIUM_GOOD_HOURS;  // 24 hours minimum
         $recommendedStrontium = $strontiumRate * 48;  // 48 hours recommended
         $optimalStrontium = $strontiumRate * 36;      // 36 hours optimal
@@ -221,50 +220,14 @@ class PosFuelCalculator
     }
     
     /**
-     * Try to get fuel modifier from dgmTypeAttributes table
-     * Returns null if table doesn't exist or no data found
-     * 
-     * CRITICAL: Attribute ID 676 is "Unanchoring Delay" NOT fuel consumption!
-     * We need to find the correct attribute ID for fuel consumption modifier.
-     * Until then, we use hardcoded values which are 100% accurate.
-     * 
-     * @param int $towerTypeId
-     * @return float|null
+     * NOTE: getFuelModifierFromDatabase() lived here and always returned
+     * null, with a TODO to find the dgmTypeAttributes attribute ID for the
+     * faction fuel modifier. That search is moot: invControlTowerResources
+     * already stores the bonused per-cycle quantity (40/36/32 for a large
+     * hull), so there is no separate modifier to look up and applying one
+     * would double-count the bonus. The modifier survives in
+     * FACTION_FUEL_MODIFIERS purely for the display fields.
      */
-    private static function getFuelModifierFromDatabase($towerTypeId)
-    {
-        try {
-            // TODO: Find correct attribute ID for fuel consumption modifier
-            // Attribute 676 is "Unanchoring Delay" (time in seconds)
-            // Correct attribute ID unknown - need to query dgmAttributeTypes
-            
-            // For now, return null to use hardcoded fallback
-            // The hardcoded values are 100% accurate and don't change
-            Log::info("PosFuelCalculator: Using hardcoded fuel modifiers (database attribute ID not yet identified)");
-            return null;
-            
-            /* DISABLED UNTIL WE FIND CORRECT ATTRIBUTE ID
-            $tableExists = DB::select("SHOW TABLES LIKE 'dgmTypeAttributes'");
-            
-            if (empty($tableExists)) {
-                Log::info("PosFuelCalculator: dgmTypeAttributes table not found in database");
-                return null;
-            }
-            
-            // Try to get modifier - NEED CORRECT ATTRIBUTE ID
-            $modifier = DB::table('dgmTypeAttributes')
-                ->where('typeID', $towerTypeId)
-                ->where('attributeID', ???)  // Unknown - need to find this
-                ->value('valueFloat');
-            
-            return $modifier;
-            */
-            
-        } catch (\Exception $e) {
-            Log::warning("PosFuelCalculator: Could not query dgmTypeAttributes table: " . $e->getMessage());
-            return null;
-        }
-    }
     
     /**
      * Get human-readable bonus type
@@ -311,8 +274,13 @@ class PosFuelCalculator
         // if the UI says 19h remaining, the POS WILL still be up in 19h. The worst
         // case is that it stays online slightly longer than displayed, which is
         // safe. Sub-hour precision is preserved in the decimal.
+        // Whole cycles only. A tower pulls a full cycle's fuel or none at
+        // all, so a remainder too small to buy the next cycle is stranded and
+        // must not be reported as a fraction of an hour. 184 blocks at 16 per
+        // cycle is 11 hours with 8 blocks left over, which is exactly what the
+        // in-game Processes tab shows.
         $fuelHours = $rates['fuel_per_hour'] > 0
-            ? ($currentFuelBlocks / $rates['fuel_per_hour'])
+            ? floor($currentFuelBlocks / $rates['fuel_per_hour'])
             : 0;
         $fuelDays = round($fuelHours / 24, 2);
 
@@ -336,7 +304,8 @@ class PosFuelCalculator
         if ($currentStrontium !== null && $rates['strontium_for_reinforced'] > 0) {
             // Strontium is consumed during reinforced mode only
             // This calculation shows how long reinforced mode could last
-            $strontiumDays = round($currentStrontium / $rates['strontium_for_reinforced'] / 24, 1);
+            // Whole cycles only, same reason as fuel above.
+            $strontiumDays = round(floor($currentStrontium / $rates['strontium_for_reinforced']) / 24, 1);
         }
         
         return [
@@ -529,7 +498,9 @@ class PosFuelCalculator
         }
 
         // Calculate reinforcement timer
-        $hoursAvailable = $currentStrontium / $strontiumPerHour;
+        // Whole reinforced cycles only: a leftover under one cycle buys no
+        // extra reinforcement time.
+        $hoursAvailable = floor($currentStrontium / $strontiumPerHour);
         $days = floor($hoursAvailable / 24);
         $hours = floor($hoursAvailable % 24);
         $minutes = round(($hoursAvailable - floor($hoursAvailable)) * 60);
@@ -655,7 +626,7 @@ class PosFuelCalculator
         }
         
         // Calculate reinforced timer duration
-        $reinforcedHours = $currentStrontium > 0 ? $currentStrontium / $strontiumRate : 0;
+        $reinforcedHours = $currentStrontium > 0 ? floor($currentStrontium / $strontiumRate) : 0;
         $reinforcedMinutes = ($reinforcedHours - floor($reinforcedHours)) * 60;
         
         // Determine warning level
@@ -706,79 +677,53 @@ class PosFuelCalculator
     }
     
     /**
-     * Get static fuel requirements for a tower type
-     * Returns hard-coded calculations based on tower type and faction bonuses
-     * Used for consistent fuel requirement calculations across the plugin
-     * 
+     * Fuel requirements for a tower type across fixed periods.
+     *
+     * Takes its rate from the same place as getFuelConsumptionRate(), which is
+     * the point: these two used to disagree by exactly the faction bonus. This
+     * one read invControlTowerResources.quantity and then multiplied by
+     * FACTION_FUEL_MODIFIERS, but the SDE quantity already has the bonus in
+     * it, so an officer medium hull came out at 12.8 blocks an hour instead of
+     * 16. The Critical Alerts page quoted a weekly requirement a fifth under
+     * what the tower really eats, and the Fuel Economics projection
+     * under-budgeted the ISK to match.
+     *
      * @param int $towerTypeId
      * @return array
      */
     public static function getStaticFuelRequirements($towerTypeId)
     {
-        // Get base fuel consumption from database
-        $baseFuelRate = DB::table('invControlTowerResources')
-            ->where('controlTowerTypeID', $towerTypeId)
-            ->whereIn('resourceTypeID', array_keys(self::FUEL_BLOCKS))
-            ->where('purpose', 1) // Power (online)
-            ->value('quantity');
-        
-        // If not found in database, use fallback based on tower size
-        if (!$baseFuelRate) {
-            // Fallback: Try to determine from hardcoded rates
-            // Small towers: 10/hour, Medium: 20/hour, Large: 40/hour
-            $smallTowers = [20060, 20062, 20064, 20066, 27610, 27592, 27598, 27784, 27604, 27594, 27612, 27600, 27606, 27790];
-            $mediumTowers = [20059, 20061, 20063, 20065, 27607, 27589, 27595, 27782, 27601, 27591, 27609, 27597, 27603, 27788];
-            
-            if (in_array($towerTypeId, $smallTowers)) {
-                $baseFuelRate = 10;
-            } elseif (in_array($towerTypeId, $mediumTowers)) {
-                $baseFuelRate = 20;
-            } else {
-                $baseFuelRate = 40; // Large towers
-            }
-        }
-        
-        // Apply faction/officer modifier
-        $fuelModifier = self::FACTION_FUEL_MODIFIERS[$towerTypeId] ?? 1.0;
-        $actualFuelRate = $baseFuelRate * $fuelModifier;
-        
-        // Calculate static time periods
-        $hourly = $actualFuelRate;
-        $daily = $actualFuelRate * 24;
-        $weekly = $actualFuelRate * 24 * 7;  // 168 hours
-        $monthly = $actualFuelRate * 24 * 30; // 720 hours (30 days)
-        
-        // Determine tower size for display
-        $towerSize = 'Large'; // Default
-        $smallTowers = [20060, 20062, 20064, 20066, 27610, 27592, 27598, 27784, 27604, 27594, 27612, 27600, 27606, 27790];
-        $mediumTowers = [20059, 20061, 20063, 20065, 27607, 27589, 27595, 27782, 27601, 27591, 27609, 27597, 27603, 27788];
-        
-        if (in_array($towerTypeId, $smallTowers)) {
-            $towerSize = 'Small';
-        } elseif (in_array($towerTypeId, $mediumTowers)) {
-            $towerSize = 'Medium';
-        }
-        
-        // Determine faction type
-        $factionType = 'T1'; // Default
-        if ($fuelModifier == 0.9) {
-            $factionType = 'Faction';
-        } elseif ($fuelModifier == 0.8) {
-            $factionType = 'Officer';
-        }
-        
+        $towerTypeId = (int) $towerTypeId;
+
+        // Effective per-cycle consumption, bonus included. Do not apply
+        // FACTION_FUEL_MODIFIERS to this.
+        $actualFuelRate = TypeIdRegistry::posTowerHourlyRate($towerTypeId) ?? 0;
+        $size           = TypeIdRegistry::posTowerSize($towerTypeId);
+        $fuelModifier   = TypeIdRegistry::posTowerModifier($towerTypeId);
+
+        // What the same hull would burn with no faction bonus, for the bonus
+        // badge in the UI. Not the tower's own consumption.
+        $baseFuelRate = $size !== null
+            ? (TypeIdRegistry::POS_BASE_FUEL_RATES[$size] ?? $actualFuelRate)
+            : $actualFuelRate;
+
+        $hourly  = $actualFuelRate;
+        $daily   = $actualFuelRate * 24;
+        $weekly  = $actualFuelRate * 24 * 7;   // 168 hours
+        $monthly = $actualFuelRate * 24 * 30;  // 720 hours
+
         return [
-            'tower_type_id' => $towerTypeId,
-            'tower_size' => $towerSize,
-            'faction_type' => $factionType,
-            'base_fuel_rate' => $baseFuelRate,
-            'fuel_modifier' => $fuelModifier,
+            'tower_type_id'    => $towerTypeId,
+            'tower_size'       => $size !== null ? ucfirst($size) : 'Unknown',
+            'faction_type'     => TypeIdRegistry::posTowerFaction($towerTypeId) ?? 'T1',
+            'base_fuel_rate'   => $baseFuelRate,
+            'fuel_modifier'    => $fuelModifier,
             'actual_fuel_rate' => $actualFuelRate,
-            'fuel_per_hour' => round($hourly, 1),
-            'fuel_per_day' => round($daily, 1),
-            'fuel_per_week' => round($weekly, 0),
-            'fuel_per_month' => round($monthly, 0),
-            'volume_per_week' => round($weekly * 5, 0), // Each fuel block = 5 m³
+            'fuel_per_hour'    => round($hourly, 1),
+            'fuel_per_day'     => round($daily, 1),
+            'fuel_per_week'    => round($weekly, 0),
+            'fuel_per_month'   => round($monthly, 0),
+            'volume_per_week'  => round($weekly * 5, 0),   // 5 m3 per block
             'volume_per_month' => round($monthly * 5, 0),
         ];
     }

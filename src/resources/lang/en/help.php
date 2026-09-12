@@ -44,9 +44,9 @@ return [
     // Manager Core is the optional hub, Mining Manager consumes the
     // tactical events, SeAT Broadcast calendars them, and SM still works fully
     // standalone for installs that don't want the ecosystem layer.
-    'v2_badge' => 'NEW in v2.0.0',
-    'whats_new_v2_title' => 'What\'s New in v2.0.0 — The Ecosystem Era',
-    'whats_new_v2_intro' => 'Structure Manager v2.0.0 is the first public canonical release of the ecosystem-era plugin family. Where the original Structure Manager was a single-purpose fuel tracker, v2.0.0 sits at the centre of a connected plugin suite: Manager Core provides shared infrastructure (fast-poll, pricing, EventBus), Mining Manager consumes Structure Manager\'s combat events, and SeAT Broadcast [<code>seat-discord-pings</code>] (when its calendar feature lands) consumes the tactical-planning events. <strong>Structure Manager still works fully standalone</strong> when none of these are installed — every ecosystem feature is purely additive. Look for the <span class="v2-badge">NEW in v2.0.0</span> badge throughout this documentation to find sections covering ecosystem features in detail.',
+    'v2_badge' => 'NEW in v2',
+    'whats_new_v2_title' => 'What\'s New in v2 — The Ecosystem Era',
+    'whats_new_v2_intro' => 'Structure Manager v2 is the first public canonical release of the ecosystem-era plugin family. Where the original Structure Manager was a single-purpose fuel tracker, v2 sits at the centre of a connected plugin suite: Manager Core provides shared infrastructure (fast-poll, pricing, EventBus), Mining Manager consumes Structure Manager\'s combat events, and SeAT Broadcast [<code>seat-discord-pings</code>] (when its calendar feature lands) consumes the tactical-planning events. <strong>Structure Manager still works fully standalone</strong> when none of these are installed — every ecosystem feature is purely additive. Look for the <span class="v2-badge">NEW in v2</span> badge throughout this documentation to find sections covering ecosystem features in detail.',
     'whats_new_v2_list' => '<p><strong>Headline features:</strong></p>
         <ul>
             <li><strong>Plugin ecosystem integration</strong> — Structure Manager publishes a documented family of <code>structure.alert.*</code> events on Manager Core\'s EventBus. Mining Manager already subscribes (for extraction-at-risk alerts on reinforced structures); SeAT Broadcast will subscribe (calendar view + pre-timer FC reminders). Every ecosystem feature degrades to "harmless no-op" when companion plugins are absent. <a href="#notifications">Tactical events contract →</a></li>
@@ -83,7 +83,7 @@ return [
     'feature_analytics_title' => 'Consumption Analytics',
     'feature_analytics_desc' => 'Track historical fuel usage patterns, consumption rates, and detect anomalies in fuel consumption.',
     'feature_reserves_title' => 'Reserve Management',
-    'feature_reserves_desc' => 'Monitor staged fuel sitting in your Upwell corporation CorpSAG hangars — the fuel waiting to be hauled into a structure\'s fuel bay. Selective tracking lets you exclude hangars used for market trading or logistics so they don\'t inflate your reserve totals. POS towers do not have CorpSAG hangars; their fuel/strontium/charter inventories are tracked separately on the POS detail pages, not on the Reserves page. <strong>v2.0.0</strong> adds tracking for CorpSAG fuel staged outside your own structures — both NPC station Office rentals AND foreign Upwell structures where your corp has CorpSAG access. These appear as "External" badged cards under each system with the resolved location name. Custom in-game hangar names (set per-corp in the EVE client) are resolved and displayed alongside the <code>CorpSAG{N}</code> flag everywhere.',
+    'feature_reserves_desc' => 'Monitor staged fuel sitting in your Upwell corporation CorpSAG hangars — the fuel waiting to be hauled into a structure\'s fuel bay. Selective tracking lets you exclude hangars used for market trading or logistics so they don\'t inflate your reserve totals. POS towers do not have CorpSAG hangars; their fuel/strontium/charter inventories are tracked separately on the POS detail pages, not on the Reserves page. <strong>v2</strong> adds tracking for CorpSAG fuel staged outside your own structures — both NPC station Office rentals AND foreign Upwell structures where your corp has CorpSAG access. These appear as "External" badged cards under each system with the resolved location name. Custom in-game hangar names (set per-corp in the EVE client) are resolved and displayed alongside the <code>CorpSAG{N}</code> flag everywhere.',
     'feature_logistics_title' => 'Logistics Planning',
     'feature_logistics_desc' => 'Generate comprehensive fuel requirements reports by system with hauling calculations and export capabilities.',
     'feature_metenox_title' => 'Metenox Moon Drill Support',
@@ -93,10 +93,10 @@ return [
     'feature_pos_title' => 'Legacy Player Owned Starbases (POS towers) Support',
     'feature_pos_desc' => 'Comprehensive POS monitoring with fuel blocks, strontium clathrates, and starbase charter tracking. Automatically detects security space, identifies the limiting factor (whichever resource runs out first), and calculates reinforcement timers from the strontium bay. Full support for faction and officer tower fuel efficiency bonuses. POS towers do not have CorpSAG hangars — their fuel/stront/charter inventories live on the POS detail pages, not on the Upwell Reserves page.',
 
-    'feature_forensics_title' => 'Fuel Forensics (v2.0.0)',
+    'feature_forensics_title' => 'Fuel Forensics (v2)',
     'feature_forensics_desc' => 'Every fuel-tracking poll is classified into one of eight event types (normal consumption, anomaly, internal/external refuel, bay/reserves withdrawal, unexplained gain, unclassified) and rendered as a color-coded badge in Recent Fuel Records. For withdrawal events, an async forensics job builds a per-event candidate list scoring corp members on collateral signals (online window, asset gain match, has corp title, market sales) into HIGH / MEDIUM / LOW confidence buckets. <strong>Honest limitation</strong>: ESI does not expose actor identity for asset moves — these candidates are probabilistic inferences, not "who did it". False positives are inevitable (logistics alts look like thieves). The system catches lazy thieves; careful market-alt thieves escape detection.',
 
-    'feature_webhook_delivery_title' => 'Webhook Delivery Telemetry (v2.0.0)',
+    'feature_webhook_delivery_title' => 'Webhook Delivery Telemetry (v2)',
     'feature_webhook_delivery_desc' => 'Every Discord/Slack webhook dispatch is recorded with HTTP status code, latency, success flag, error message, and the notification category that triggered it. The Diagnostic page\'s Health Checks tab includes a "Webhook Delivery Health (Last 24h)" section showing per-webhook attempt counts, success rate (color-coded), average response time, and the most recent failure. Catches "the webhook URL silently 404\'d two weeks ago and no one noticed" failure modes. 30-day retention, pruned by the daily cleanup-history command.',
 
     // Quick Links
@@ -151,7 +151,7 @@ return [
         <li><strong>Structure-level reserves:</strong> See which structures have staged fuel ready</li>
         <li><strong>Division tracking:</strong> Identifies which hangar divisions contain fuel</li>
         <li><strong>Custom division names:</strong> Shows your corporation\'s custom hangar division names</li>
-        <li><strong>External reserves (v2.0.0):</strong> CorpSAG fuel staged in NPC station Office rentals and foreign Upwell structures appears as "External" badged cards under each system, with the real location name resolved</li>
+        <li><strong>External reserves (v2):</strong> CorpSAG fuel staged in NPC station Office rentals and foreign Upwell structures appears as "External" badged cards under each system, with the real location name resolved</li>
         <li><strong>Reserve history:</strong> 3 months of reserve movement tracking</li>
         <li><strong>Purple badges:</strong> Special indicators for magmatic gas reserves (Metenox support)</li>
         <li><strong>Selective Tracking:</strong> Configure which hangars to exclude from tracking (see Settings)</li>
@@ -185,6 +185,24 @@ return [
         <li><strong>Correct moon drill rates:</strong> 120 blocks/day for traditional drills, no bonuses</li>
         <li><strong>Metenox dual-fuel:</strong> 120 fuel blocks + 4,800 magmatic gas per day</li>
         <li><strong>Refinery bonuses:</strong> Accurate Athanor (-20%) and Tatara (-25%) fuel reductions</li>
+    </ul>',
+
+
+    // Recent changes. ONE RULE for what belongs here: an operator could notice
+    // it without reading the changelog. Entries live for the current major and
+    // are cleared when the next What's New is written. CHANGELOG.MD stays the
+    // complete record; this is the curated delta.
+    'recent_changes_title' => 'In this update (2.0.4)',
+    'recent_changes_intro' => 'The changes from this release that you will actually see on screen. <a href="https://github.com/MattFalahe/Structure-Manager/blob/main/CHANGELOG.MD" target="_blank" rel="noopener">The changelog</a> has the complete record.',
+    'recent_changes_list' => '<ul>
+        <li><strong>Faction and officer towers now show less fuel time than before, by 11 to 25%.</strong> The faction discount was being applied twice, once by the game data which already has it and again by the plugin, so an officer Large was calculated at 25.6 blocks an hour against a real 32. Understating the burn overstated how long the tower would last. The figure you see now matches the in-game Control Tower Manager. Tech 1 towers were never affected. A tower that alerts right after upgrading was already past your threshold and the old arithmetic was hiding it. The same correction moved the weekly and monthly requirements on Critical Alerts and the POS fuel costs in Fuel Economics, both of which were a fifth under.</li>
+        <li><strong>Fuel and strontium now count whole cycles.</strong> A tower draws a complete cycle or nothing, so a remainder too small to buy the next one is stranded and no longer counts as part of an hour. 184 blocks at 16 per cycle is 11 hours with 8 left over, which is what the client shows. For strontium this also restores an alert: 1300 units at 200 per cycle used to read 6.5 hours and clear a 6 hour critical threshold, when the real figure is 6 and critical.</li>
+        <li><strong>Two POS alert categories need a webhook bound before they will reach you.</strong> <code>pos.lifecycle</code> has existed since v2 but nothing ever published to it, so anything bound to it received silence. It works now, and a tower entering reinforced raises a critical alert with a role mention. <code>pos.attack</code> is new, driven by the in-game notification rather than by polling, and it is the only alert that arrives while the attack is still happening. Neither is auto-bound. Bind them in the Notifications panel.</li>
+        <li><strong>POS history looks different.</strong> A reading is recorded when the fuel, strontium, charters or state have actually moved, plus once a day regardless, so Recent Fuel Records shows about two dozen entries a day per tower instead of one every ten minutes and each one is a real change. Towers that are offline, onlining, unanchoring or unanchored record the state change once and then go quiet, because they consume nothing. Checks still run every ten minutes, so nothing is noticed any later. An offline tower can still be shot, and the Under Attack category covers that: fuel data never could show damage, because ESI does not report shield, armor or hull for a tower at all.</li>
+        <li><strong>POS rows in Fuel Economics are listed by name.</strong> The structure column repeated the tower type already shown beside it, which made three towers in one system indistinguishable. It now reads the system followed by the name you gave the tower in the corp hangar, falling back to its moon for a tower you have not named.</li>
+        <li><strong>Retention changed, in both directions.</strong> Fuel history and reserve records are now kept for 60 days for both Upwell and POS, which is twice what any page looks back. The daily consumption totals behind the cost projections went the other way, to a year, because they are one row per structure per day and they are what the Fuel Economics trend chart is built from. Anything shorter made a tower read as having cost nothing rather than as having no data.</li>
+        <li><strong>Older installs can reclaim a lot of space.</strong> Before this release the POS tracker wrote a row for every fuel stack on every poll whether or not anything had moved. <code>structure-manager:compact-history</code> clears what is left. It reports what it would remove and changes nothing until you add <code>--force</code>. Doing nothing also works, since those rows age out of the retention window on their own.</li>
+        <li><strong>POS coverage in the diagnostics answers a different question.</strong> It counted snapshots against a fixed number per day, which stopped meaning anything once readings are written on change. It now reports how stale the newest row is for each online tower, and warns only when one has written nothing for over a day, which is the point at which tracking really has stopped.</li>
     </ul>',
 
     // v2.0.0 feature-overview entries
@@ -343,7 +361,7 @@ return [
         <li><strong>Limiting Factor Detection:</strong> Identifies which resource (fuel, strontium, or charters) will run out first</li>
         <li><strong>Real-Time Fuel Tracking:</strong> Automated tracking every 10 minutes for fresh data</li>
         <li><strong>Daily Consumption Analysis:</strong> In-depth analysis runs daily at 01:00 AM</li>
-        <li><strong>Historical Data:</strong> 90 days of fuel history retained for analysis</li>
+        <li><strong>Historical Data:</strong> 60 days of fuel history, and a year of daily consumption totals for the cost projections</li>
         <li><strong>Reserve Tracking:</strong> Monitors staged fuel, strontium, and charters in corporation hangars</li>
         <li><strong>Discord/Slack Notifications:</strong> Real-time webhook alerts for critical fuel levels with customizable avatar</li>
     </ul>',
@@ -359,13 +377,47 @@ return [
     'pos_charters_desc' => 'Required in high-security space only (1 charter/hour). Not needed in low-sec, null-sec (both sovereign and NPC), or wormhole space. Critical threshold: 7 days. Warning threshold: 14 days.',
     
     'pos_consumption_rates' => 'POS Fuel Consumption Rates',
-    'pos_consumption_table' => '<ul>
-        <li><strong>Small Tower:</strong> 10 fuel blocks/hour (240/day)</li>
-        <li><strong>Medium Tower:</strong> 20 fuel blocks/hour (480/day)</li>
-        <li><strong>Large Tower:</strong> 40 fuel blocks/hour (960/day)</li>
-        <li><strong>Charters (all sizes):</strong> 1 charter/hour (24/day) - high-security space only</li>
-        <li><strong>Strontium:</strong> Only consumed during reinforcement timer (not tracked for daily consumption)</li>
-    </ul>',
+    'pos_consumption_table' => '<p>Faction and officer towers burn less fuel than their tech 1 equivalents. The reduction is 10% for faction hulls and 20% for officer hulls, and it applies to fuel blocks only:</p>
+    <table class="table table-sm">
+        <thead><tr><th>Tower size</th><th>Tech 1</th><th>Faction (-10%)</th><th>Officer (-20%)</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Small</strong></td><td>10 blocks/hour</td><td>9 blocks/hour</td><td>8 blocks/hour</td></tr>
+            <tr><td><strong>Medium</strong></td><td>20 blocks/hour</td><td>18 blocks/hour</td><td>16 blocks/hour</td></tr>
+            <tr><td><strong>Large</strong></td><td>40 blocks/hour</td><td>36 blocks/hour</td><td>32 blocks/hour</td></tr>
+        </tbody>
+    </table>
+    <ul>
+        <li><strong>Strontium:</strong> 100 / 200 / 400 per hour by tower size. Consumed only while reinforced, and the faction discount does <em>not</em> apply to it.</li>
+        <li><strong>Charters:</strong> 1 per hour for every tower of every size, and only in high-security space (true security 0.45 and above).</li>
+        <li><strong>Fuel block type</strong> is set by the tower hull. Pirate faction towers use the block of their parent empire, so a Domination tower burns Hydrogen like a Minmatar one.</li>
+    </ul>
+    <p>These figures come from the game data directly, and match the "Quantity (per cycle)" column in the in-game Control Tower Manager.</p>',
+
+    'pos_cycles_title' => 'Whole Cycles, and the Hour You Cannot See',
+    'pos_cycles_desc' => '<p>A tower draws a complete cycle of fuel at the start of each hour, or nothing at all. Fuel left over that cannot buy a full cycle is stranded and does no work, so remaining time is always counted in whole cycles.</p>
+    <p>A medium officer tower burning 16 blocks an hour with 184 blocks in the bay therefore has <strong>11 hours</strong>, not 11.5. The spare 8 blocks can never start a twelfth cycle. This is the same number the in-game Processes tab shows, so the two always agree.</p>
+    <p>The tower is also part way through a cycle it has already paid for, which is time you genuinely have but nobody can measure. The POS detail page shows this as a second figure, for example <strong>11h</strong> with <em>up to 12h</em> beneath it. Alerts always use the lower number, so a warning never arrives later than it should.</p>',
+
+    'pos_attack_title' => 'Under Attack Alerts',
+    'pos_attack_desc' => '<p>When a tower is shot, EVE sends the corporation an in-game notification straight away. Structure Manager reads it and raises an alert through the <code>pos.attack</code> category. Bind a webhook to it under Settings to receive these.</p>
+    <p>The alert carries the shield, armor and hull percentages recorded at the moment of the attack, plus the attacking pilot, their corporation and their alliance. Severity follows the damage: shields alone is a warning, armor means the shield layer is gone, and hull means the tower is at real risk.</p>
+    <p><strong>This is the only alert that arrives while an attack is still happening.</strong> Everything else the plugin knows about a tower comes from SeAT refreshing corporation data, which runs roughly once an hour. A reinforcement timer can start and finish inside that gap, so tower state on the POS pages can lag well behind reality during a fight. The alert says so, and the answer during an attack is always to look in game.</p>
+    <p>The same notification reaches every character in the corporation who has the roles for it, so one attack produces many copies. Only one alert is sent per attack.</p>',
+
+    'pos_lifecycle_title' => 'State Change Alerts',
+    'pos_lifecycle_desc' => '<p>The state of every tower is checked on each poll and a change is announced through the <code>pos.lifecycle</code> notification category. Bind a webhook to it under Settings to receive these.</p>
+    <ul>
+        <li><strong>Reinforced</strong> raises a critical alert and is the only state that pings a role. A tower does not reinforce on its own, so this means it is under attack and a timer is running.</li>
+        <li><strong>Offline</strong> and <strong>Unanchored</strong> raise warnings. An offline tower burns no fuel, runs no services, and cannot reinforce if attacked.</li>
+        <li><strong>Online</strong> reports recovery, and the brief <strong>Onlining</strong> and <strong>Unanchoring</strong> states are informational.</li>
+    </ul>
+    <p>Detection is by polling, so a change is reported within one cycle of the tracking job. A tower that is attacked but never reinforced produces no state change, so nothing reaches this category. The Under Attack category covers that case, because it reads the in-game notification rather than tower state.</p>
+    <p>Towers that are not online or reinforced are not polled for fuel, because they consume nothing. The state change itself is recorded once so the history shows when the tower went down, and tracking resumes the moment it comes back.</p>',
+
+    'pos_compaction_title' => 'Reclaiming Space From Older Installs',
+    'pos_compaction_desc' => '<p>Before version 2.0.4 the tracker recorded a reserve row for every fuel stack on every poll, whether or not anything had moved, and polled offline towers as if they were running. Most of what those tables hold is rows the plugin would no longer write.</p>
+    <p>Run <code>structure-manager:compact-history</code> to clear them. It reports what it would remove and changes nothing until you add <code>--force</code>, and the work is chunked so a large install can be drained in stages. Refuel and withdrawal history is never touched, and the most recent reading for every tower and every hangar is always kept.</p>
+    <p>Doing nothing is also fine. The nightly cleanup deletes anything past its retention window, so these rows age out on their own. Running the command just means not waiting for that.</p>',
     
     'pos_limiting_factor' => 'Limiting Factor Detection',
     'pos_limiting_desc' => 'The plugin automatically identifies which resource will run out first, marked with a <strong>[LIMITING FACTOR]</strong> badge. This helps prioritize hauling operations - focus on the limiting resource first to maximize tower uptime.',
@@ -394,7 +446,7 @@ return [
     'pos_detail_features' => '<ul>
         <li><strong>Resource Cards:</strong> Separate cards for fuel blocks, strontium, and charters (when applicable)</li>
         <li><strong>Consumption Graphs:</strong> Visual charts showing fuel usage over time</li>
-        <li><strong>Historical Analysis:</strong> View 90 days of fuel tracking data</li>
+        <li><strong>Historical Analysis:</strong> View 60 days of fuel tracking data</li>
         <li><strong>Refuel Events:</strong> Automatic detection and logging of refuel operations</li>
         <li><strong>Reserve Status:</strong> See staged fuel in corporation hangars</li>
         <li><strong>Projections:</strong> Estimates for 7, 14, 30, 60, and 90-day fuel requirements</li>
@@ -446,7 +498,7 @@ return [
             <li>Picking a role stores the exact mention string from the source — if a source is uninstalled later, previously-picked roles keep working because the string is static</li>
         </ul>',
     'v31_category_list_title' => 'Shipped Categories (seeded on install)',
-    'v31_category_list_desc' => 'v2.0.0 ships with 18 categories across three namespaces (upwell / events / pos). The eight listed below are the core set covering Upwell fuel, structure events, and POS legacy alerts. The remaining ten (cyno_reagents, services_offline, sovereignty, the six pre_timer_* reminders, and attacker_threat_intel) are documented in the dedicated feature sections of this help page. No webhooks are auto-bound on install — operator explicitly binds each category via the Notifications panel.',
+    'v31_category_list_desc' => 'v2 ships with 19 categories across three namespaces (upwell / events / pos). The eight listed below are the core set covering Upwell fuel, structure events, and POS legacy alerts. The remaining ten (cyno_reagents, services_offline, sovereignty, the six pre_timer_* reminders, and attacker_threat_intel) are documented in the dedicated feature sections of this help page. No webhooks are auto-bound on install — operator explicitly binds each category via the Notifications panel.',
     'v31_category_list' => '<table style="width:100%; border-collapse:collapse;">
         <thead><tr><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Namespace</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Category</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">What triggers it</th></tr></thead>
         <tbody>
@@ -465,7 +517,7 @@ return [
     // Manager Core — overview (what it is, why install it, optional)
     // ============================================================
     'mc_overview_title' => 'Manager Core — Recommended Companion',
-    'mc_overview_positioning' => '<strong>Important upgrade, not a hard requirement.</strong> Structure Manager v2.0.0 works perfectly on its own. Installing <a href="https://github.com/MattFalahe/Manager-Core" target="_blank" rel="noopener">Manager Core</a> alongside it unlocks faster detection, cross-plugin event broadcasting, and shared infrastructure that becomes more valuable as you add other Structure Manager-ecosystem plugins.',
+    'mc_overview_positioning' => '<strong>Important upgrade, not a hard requirement.</strong> Structure Manager v2 works perfectly on its own. Installing <a href="https://github.com/MattFalahe/Manager-Core" target="_blank" rel="noopener">Manager Core</a> alongside it unlocks faster detection, cross-plugin event broadcasting, and shared infrastructure that becomes more valuable as you add other Structure Manager-ecosystem plugins.',
 
     'mc_what_it_is_title' => 'What Manager Core Is',
     'mc_what_it_is_desc' => 'Manager Core is a foundational plugin for the Structure Manager ecosystem. Think of it as two things bundled together:',
@@ -833,7 +885,7 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
             </tbody>
         </table>
         <p style="margin-top:8px; font-size:0.9em; color:#9ca3af;">The 5-minute scan cadence means an FC gets <em>between 55 and 60 minutes</em> of warning for the T-1h ping (not exactly 60). Acceptable for fleet ops - and there is no way to be more precise without a per-second scheduler. The same imprecision applies to the 6h and 24h windows but matters less the further out you are.</p>',
-    'pre_timer_v21_badge' => 'v2.0.0',
+    'pre_timer_v21_badge' => 'v2',
 
     // ============================================================
     // Attacker threat intel (added 2026-05-17, dev-4.0 / v2.2)
@@ -922,7 +974,7 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
         </ol>',
     'threat_intel_caching_title' => 'Caching + rate limits',
     'threat_intel_caching_desc' => 'Attacker profiles cache for <strong>7 days</strong> in Laravel\'s cache (Redis on a standard SeAT install). Repeat attackers in coordinated ops resolve from cache without re-querying zKB, so even a sustained assault from one fleet only hits zKB once per attacker per week. zKB rate limit responses (HTTP 429) cache as a 1-hour miss so the system recovers automatically without hammering.',
-    'threat_intel_v22_badge' => 'v2.0.0',
+    'threat_intel_v22_badge' => 'v2',
 
     // ============================================================
     // Final-timer awareness (added 2026-05-17, v2.0.0 release)
@@ -973,7 +1025,7 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
             </tbody>
         </table>',
     'final_timer_design' => 'The classification lives in <code>StructureTimerMechanics::ARMOR_IS_FINAL_TYPE_IDS</code>. CCP doesn\'t expose this design intent as a queryable SDE attribute, so the list is hardcoded and reviewed against CCP patch notes. When CCP introduces a new single-cycle structure (rare), its typeID gets added in the same commit that updates these docs. Manual operator-created ops on the board never carry the FINAL TIMER badge — operators write their own framing in the timer notes field.',
-    'final_timer_v23_badge' => 'v2.0.0',
+    'final_timer_v23_badge' => 'v2',
 
     // Operational security stance on tactical data (added 2026-05-12 after explicit
     // discussion of why ICS calendar export will never ship)
@@ -1670,7 +1722,7 @@ SeAT Structure Manager | Structure ID: 1042938412345</pre>',
         <li><strong>Service tracking:</strong> Lists active services and their fuel impact</li>
         <li><strong>Historical charts:</strong> Visual graphs of fuel consumption over time</li>
         <li><strong>Refuel event log:</strong> Timeline of when fuel was added</li>
-        <li><strong>Recent Fuel Records:</strong> Per-poll event classification badges (v2.0.0 fuel forensics)</li>
+        <li><strong>Recent Fuel Records:</strong> Per-poll event classification badges (v2 fuel forensics)</li>
         <li><strong>Reserve history:</strong> Staged fuel movements for this structure</li>
         <li><strong>Metenox dual-display:</strong> Separate charts and stats for fuel blocks and gas</li>
         <li><strong>Control Tower dual-display:</strong> Separate charts and stats for fuel blocks and charters (if required), separate status for Strontium Clathrates</li>
@@ -1740,22 +1792,26 @@ php artisan structure-manager:analyze-consumption --corporation=98765432</code><
     'cleanup_history_cmd_note' => 'This command runs automatically daily at 3:00 AM. Once deleted, historical data cannot be recovered!',
     'cleanup_history_cmd_options' => '<strong>Options:</strong>
     <ul>
-        <li><code>--days=180</code> - Days to retain Upwell structure history (default: 180)</li>
-        <li><code>--pos-days=90</code> - Days to retain POS history (default: 90)</li>
+        <li><code>--days=60</code> - Days to retain Upwell structure fuel history</li>
+        <li><code>--pos-days=60</code> - Days to retain POS fuel history</li>
+        <li><code>--reserve-days=60</code> - Days to retain Upwell reserve records</li>
+        <li><code>--pos-reserve-days=60</code> - Days to retain POS reserve records</li>
+        <li><code>--consumption-days=365</code> - Days to retain the daily consumption totals</li>
+        <li><code>--chunk=5000</code> - Rows deleted per statement</li>
+        <li><code>--budget=120</code> - Seconds spent per table before the rest is left for the next run</li>
     </ul>
     <strong>What gets cleaned:</strong>
     <ul>
-        <li>Upwell structure fuel history older than specified days</li>
-        <li>POS fuel history older than specified days</li>
-        <li>Structure consumption records older than 6 months</li>
-        <li>POS consumption records older than 3 months</li>
+        <li>Upwell and POS fuel history, and the reserve records for both, older than their retention</li>
+        <li>Daily consumption totals older than a year. These are kept far longer than the rest because they are one row per structure per day and they are what the Fuel Economics projections are built from, while the per-poll tables are the bulky ones and nothing reads them past 30 days</li>
+        <li>Processed ESI notification records and webhook delivery telemetry older than 30 days</li>
     </ul>
     <strong>Examples:</strong>
-    <pre><code># Use defaults (180 days for structures, 90 days for POS)
+    <pre><code># Use defaults (60 days of history and reserves, a year of daily totals)
 php artisan structure-manager:cleanup-history
 
-# Keep 365 days of structure history, 180 days of POS history
-php artisan structure-manager:cleanup-history --days=365 --pos-days=180
+# Keep longer history for both types
+php artisan structure-manager:cleanup-history --days=180 --pos-days=180
 
 # Keep only 30 days of all history
 php artisan structure-manager:cleanup-history --days=30 --pos-days=30</code></pre>',
@@ -1794,7 +1850,7 @@ php artisan structure-manager:cleanup-history --days=30 --pos-days=30</code></pr
         <li><strong>Multi-resource tracking:</strong> Monitors fuel blocks, strontium clathrates, and starbase charters (for High Security space)</li>
         <li><strong>Security space awareness:</strong> Automatically detects charter requirements for High Security systems</li>
         <li><strong>Real-time monitoring:</strong> Fuel tracking every 10 minutes with precise day/hour calculations</li>
-        <li><strong>Consumption analytics:</strong> Historical data tracking (90 days) and daily consumption analysis</li>
+        <li><strong>Consumption analytics:</strong> 60 days of tracking history, and a year of daily consumption totals</li>
         <li><strong>Critical alerts:</strong> Status-based notifications for low fuel, strontium, or charter levels</li>
         <li><strong>Limiting factor detection:</strong> Identifies which resource will run out first</li>
         <li><strong>Discord/Slack integration:</strong> Webhook notifications with separate alerting for fuel and strontium</li>
@@ -2039,7 +2095,7 @@ php artisan structure-manager:cleanup-test-data --force</code></pre>',
     'faq_a3' => 'Yes! Structure Manager automatically tracks all corporations that your SeAT installation manages. The dashboard includes filters to view specific corporations, and all pages support multi-corporation data.',
 
     'faq_q4' => 'Q4: How often does the plugin check fuel levels?',
-    'faq_a4' => 'Upwell structures: fuel bay levels tracked hourly, consumption analysis runs every 30 minutes, CorpSAG hangar reserves tracked hourly as part of the same pass. POS towers: fuel bay, strontium, and charter inventories all tracked every 10 minutes for real-time monitoring; notifications checked every 10 minutes. POSes have no CorpSAG hangars and are not represented on the Reserves page. These schedules are automatic and require no configuration.',
+    'faq_a4' => 'Upwell structures: fuel bay levels tracked hourly, consumption analysis runs every 30 minutes, CorpSAG hangar reserves tracked hourly as part of the same pass. POS towers: fuel bay, strontium, and charter inventories all checked every 10 minutes for real-time monitoring; notifications checked every 10 minutes. A tower draws a whole cycle of fuel once an hour rather than burning steadily, so a reading is recorded when something has actually moved, plus once a day regardless. The history therefore shows about two dozen entries a day per tower rather than one every ten minutes, and each one is a real change. POSes have no CorpSAG hangars and are not represented on the Reserves page. These schedules are automatic and require no configuration.',
 
     'faq_q5' => 'Q5: What happens if I refuel a structure?',
     'faq_a5' => 'The plugin automatically detects refuel events by analyzing fuel bay history. Significant increases in fuel levels are logged as refuel events, which appear in the structure detail page and can help track refueling operations.',
@@ -2048,7 +2104,7 @@ php artisan structure-manager:cleanup-test-data --force</code></pre>',
     'faq_a6' => 'The plugin tracks all structures, but offline structures don\'t consume fuel so they won\'t show fuel consumption data. Once a structure comes online and services activate, fuel tracking begins automatically.',
 
     'faq_q7' => 'Q7: Can I see historical fuel data?',
-    'faq_a7' => 'Yes! The plugin retains 6 months of fuel bay history for Upwell structures and 90 days for POSes (updated more frequently). Reserve history is retained for 3 months. Visit any structure\'s detail page to see consumption charts, refuel events, and historical trends.',
+    'faq_a7' => 'Yes. Fuel bay history and reserve records are kept for 60 days for both Upwell structures and POSes, which is twice what any page looks back. The daily consumption totals behind the cost projections are kept for a year, since they are one row per structure per day. All of these are configurable on the cleanup command. Visit any structure\'s detail page to see consumption charts, refuel events, and historical trends.',
 
     'faq_q8' => 'Q8: How does reserve tracking work?',
     'faq_a8' => 'The plugin scans all structure hangars for fuel blocks (the four block types — Nitrogen 4051, Hydrogen 4246, Helium 4247, Oxygen 4312) and magmatic gas (Type ID: 81143) in CorpSAG divisions. It tracks quantities and locations, identifying which structures have staged fuel ready for use.',
@@ -2078,10 +2134,19 @@ php artisan structure-manager:cleanup-test-data --force</code></pre>',
     'faq_a16' => 'Every fuel-tracking poll is tagged with one of eight event types. Most polls are <code>consumption_normal</code> (bay burned within ±15% of expected). A <code>withdrawal_bay</code> badge means three conditions all held simultaneously: (1) the bay went down by more than 1.5x expected consumption, (2) the corp\'s CorpSAG reserves also dropped (so fuel actually left the stockpile somewhere rather than just being burned hot), AND (3) the unexplained delta is at least 12 hours of expected consumption — meaning the magnitude is theft-scale rather than a brief service spike. Smaller anomalies classify as <code>consumption_anomaly</code> instead, still visible on the panel but with no forensics dispatch. <code>withdrawal_reserves</code> means a CorpSAG hangar dropped ≥500 blocks without the bay gaining, which means fuel left the corp. For each <code>withdrawal_bay</code> or <code>withdrawal_reserves</code> event, click the small magnifying-glass icon to see the forensic candidate list — corp members who collaterally match four signals (online during the window, personal hangar gain, has corp title, sold matching fuel on market). The list is probabilistic inference, NOT proof: ESI does not expose actor identity for asset moves, so candidates are inferred from collateral SeAT data. False positives are inevitable (logistics alts moving fuel between hangars look identical to thieves).',
 
     'faq_q17' => 'Q17: What appears under an "External" card on the Fuel Reserves page?',
-    'faq_a17' => 'v2.0.0 tracks CorpSAG fuel staged in two kinds of locations beyond your own structures: (a) <strong>NPC stations</strong> where your corp rents Offices (e.g. fuel staged in Jita 4-4 for hauling out), and (b) <strong>foreign Upwell structures</strong> where your corp has CorpSAG access — typically via Office rentals in friendly alliance-mates\' Fortizars used as forward staging points. Both appear as "External" badged cards under their real solar system, with the location name resolved from <code>staStations</code> (NPC) or <code>universe_structures</code> (foreign Upwell). If you don\'t see a location you expect, check: SeAT has polled <code>corporation_assets</code> recently (1-hour ESI cache), and SM\'s <code>track-fuel</code> command has run since the asset row updated (runs hourly at <code>:15</code>). Force-trigger with <code>php artisan structure-manager:track-fuel</code> if you don\'t want to wait.',
+    'faq_a17' => 'v2 tracks CorpSAG fuel staged in two kinds of locations beyond your own structures: (a) <strong>NPC stations</strong> where your corp rents Offices (e.g. fuel staged in Jita 4-4 for hauling out), and (b) <strong>foreign Upwell structures</strong> where your corp has CorpSAG access — typically via Office rentals in friendly alliance-mates\' Fortizars used as forward staging points. Both appear as "External" badged cards under their real solar system, with the location name resolved from <code>staStations</code> (NPC) or <code>universe_structures</code> (foreign Upwell). If you don\'t see a location you expect, check: SeAT has polled <code>corporation_assets</code> recently (1-hour ESI cache), and SM\'s <code>track-fuel</code> command has run since the asset row updated (runs hourly at <code>:15</code>). Force-trigger with <code>php artisan structure-manager:track-fuel</code> if you don\'t want to wait.',
+
+    'faq_q19' => 'Q19: My faction tower suddenly shows less fuel time than before the update. Did I lose fuel?',
+    'faq_a19' => 'No fuel was lost. Before v2.0.4 the faction discount was applied twice: once by the game data, which already stores the discounted figure, and again by the plugin. An officer Large was calculated at 25.6 blocks per hour against a real 32, which understated the burn and therefore overstated how long the tower would last. The figure you see now is the correct one, and it matches the in-game Control Tower Manager. Tech 1 towers were never affected. If a tower alerts immediately after upgrading, it was already past your threshold and the old arithmetic was hiding it.',
+
+    'faq_q20' => 'Q20: My tower has just over 11 hours of fuel but the page says 11h. Where did the rest go?',
+    'faq_a20' => 'Nowhere. A tower draws a whole cycle of fuel or nothing, so fuel that cannot buy a complete cycle is stranded and does no work. A medium officer tower burning 16 blocks an hour with 184 in the bay gets 11 cycles, with 8 blocks left that can never start a twelfth. The game shows 11h for the same reason. The tower is also part way through a cycle it has already paid for, which is why the detail page shows a second figure such as "up to 12h" underneath. Alerts always use the lower number so a warning is never late.',
+
+    'faq_q21' => 'Q21: My offline towers stopped recording history. Is tracking broken?',
+    'faq_a21' => 'No. An offline tower consumes nothing, so recording it every ten minutes only produced identical rows and a flat tail on the consumption chart. Since v2.0.4 the state change is recorded once, so the history still shows when the tower went down, and then it stays quiet until it comes back. State is still read on every poll, so a tower coming back online or being reinforced resumes full tracking within one cycle. Reinforced towers are always tracked, because that is when strontium is burning. Bind a webhook to the pos.lifecycle category to be told when any of this happens. An offline tower can still be shot, and no amount of polling would reveal that: ESI does not report shield, armor or hull for a control tower at any point, so fuel data has never been able to show damage on any tower, online or not. The Under Attack category is what covers it, because it reads the in-game notification and fires whatever state the tower is in. An offline tower also has no reinforcement mode, so it takes damage until it dies rather than starting a timer, which is why it burns no strontium either. A tower that does die disappears from the corporation starbase list and is recorded as unanchored.',
 
     'faq_q18' => 'Q18: How do I tell if my Discord webhook is actually working?',
-    'faq_a18' => 'Go to <code>/structure-manager/diagnostic</code> (admin-only) and look at the "Webhook Delivery Health (Last 24h)" section on the Health Checks tab. Per-webhook table shows attempt count, success rate (green ≥95% / yellow ≥50% / red <50%), average response time, last attempt timestamp, and most recent failure with HTTP code + error preview. If a webhook shows 0 attempts for 24h but is enabled, either no notifications fired in that window OR your category bindings need review (Webhook Configuration tab → check what categories the webhook is bound to). Every dispatch since v2.0.0 is logged to <code>structure_manager_webhook_deliveries</code> with 30-day retention.',
+    'faq_a18' => 'Go to <code>/structure-manager/diagnostic</code> (admin-only) and look at the "Webhook Delivery Health (Last 24h)" section on the Health Checks tab. Per-webhook table shows attempt count, success rate (green ≥95% / yellow ≥50% / red <50%), average response time, last attempt timestamp, and most recent failure with HTTP code + error preview. If a webhook shows 0 attempts for 24h but is enabled, either no notifications fired in that window OR your category bindings need review (Webhook Configuration tab → check what categories the webhook is bound to). Every dispatch since v2 is logged to <code>structure_manager_webhook_deliveries</code> with 30-day retention.',
 
     // Troubleshooting
     'troubleshooting_guide' => 'Troubleshooting Guide',
@@ -2166,18 +2231,18 @@ php artisan structure-manager:cleanup-test-data --force</code></pre>',
 
     'admin_diagnostics_what_title' => 'What\'s On The Diagnostics Page',
     'admin_diagnostics_what_list' => '<ul>
-        <li><strong>Health Checks</strong> (default landing tab): environment, required tables, plugin tables, type ID verification (SDE), schedule status, webhook configuration, ESI coverage, notification state, registered Manager Core handler status, <strong>Pricing Integration</strong>, <strong>Webhook Delivery Health (Last 24h)</strong> (v2.0.0 — per-webhook attempt counts, success rate, last failure with HTTP code), and your resolved corp scope. Heavy checks cached 60s.</li>
+        <li><strong>Health Checks</strong> (default landing tab): environment, required tables, plugin tables, type ID verification (SDE), schedule status, webhook configuration, ESI coverage, notification state, registered Manager Core handler status, <strong>Pricing Integration</strong>, <strong>Webhook Delivery Health (Last 24h)</strong> (v2 — per-webhook attempt counts, success rate, last failure with HTTP code), and your resolved corp scope. Heavy checks cached 60s.</li>
         <li><strong>Type IDs (SDE)</strong>: verifies that every type ID the plugin hardcodes (fuel blocks, structure types, charters, magmatic gas) resolves correctly against your installed SDE. Flags name mismatches as informational warnings (not errors, since the plugin keys on type IDs not names).</li>
         <li><strong>Master Test</strong>: aggregates every Health Check into a pass / warn / fail score grouped by category (Runtime / Schema / Constants / Notifications / Other). Single-page health overview.</li>
         <li><strong>System Validation</strong>: verifies hardcoded constants and dependencies are sound. Threshold ordering, plugin classes autoload, plugin Eloquent models autoload, SeAT package classes still exist, Manager Core capability surface present, notification-handler coverage, PHP / Laravel baseline. Lazy-loaded — first visit triggers compute, then cached 30 min.</li>
-        <li><strong>Settings Health</strong>: per-key audit of every plugin setting. Current value vs default, has-it-been-changed flag, is-it-respected flag, per-key validator. Detects orphan keys. Lazy-loaded; 30s cache. <strong>v2.0.0</strong>: deprecated settings at their default values are hidden (small footer at the bottom lists what\'s suppressed) — they\'d only show with a loud WARN if an operator accidentally set a value.</li>
+        <li><strong>Settings Health</strong>: per-key audit of every plugin setting. Current value vs default, has-it-been-changed flag, is-it-respected flag, per-key validator. Detects orphan keys. Lazy-loaded; 30s cache. <strong>v2</strong>: deprecated settings at their default values are hidden (small footer at the bottom lists what\'s suppressed) — they\'d only show with a loud WARN if an operator accidentally set a value.</li>
         <li><strong>Data Integrity</strong>: read-only DB-level consistency checks. Plugin table inventory, FK orphans, stale dedup rows, <strong>snapshot poll coverage (last 24h)</strong> — counts actual vs expected snapshots per structure / POS so rare healthy noise from SeAT corp-assets refresh races stays distinguishable from sustained upstream problems (queue worker lag, ESI scope gaps), settings table integrity, failed_jobs queue health. Lazy-loaded; 5-min cache.</li>
-        <li><strong>Fuel Trace</strong>: pick one structure or POS, walk the full fuel pipeline showing what the plugin sees and would do for that specific row. Input row, universe context, reserves snapshot, fuel history, <strong>v2.0.0 forensics surfaces</strong> (event classification breakdown for the last 30 polls + forensic candidates list for the latest withdrawal event), threshold determination, notification gate, recent ESI dedup entries. Most powerful "why didn\'t I get alerted about X" debugging surface.</li>
+        <li><strong>Fuel Trace</strong>: pick one structure or POS, walk the full fuel pipeline showing what the plugin sees and would do for that specific row. Input row, universe context, reserves snapshot, fuel history, <strong>v2 forensics surfaces</strong> (event classification breakdown for the last 30 polls + forensic candidates list for the latest withdrawal event), threshold determination, notification gate, recent ESI dedup entries. Most powerful "why didn\'t I get alerted about X" debugging surface.</li>
         <li><strong>Notification Testing</strong>: buttons that dispatch the real production notification jobs on demand against real data. "Run Upwell notification check" runs the cron command, "Run POS notification check" same, "Run notification job now" forces the next ESI poll. Real jobs only — no synthetic data on this tab.</li>
-        <li><strong>Notification Lab (DEV)</strong>: all synthetic-data dispatch paths. Inject fake CCP-shaped notifications through the full SM pipeline (Structure Board upsert → EventBus publish → Discord webhook embed) end-to-end. Also hosts the "Send Sample Upwell Alert" embed-preview form. <strong>v2.0.0</strong>: now carries the same red danger-zone warning as Test Data — without a Test webhook URL set, fake injections WILL hit real Discord channels. See the next section for full details.</li>
+        <li><strong>Notification Lab (DEV)</strong>: all synthetic-data dispatch paths. Inject fake CCP-shaped notifications through the full SM pipeline (Structure Board upsert → EventBus publish → Discord webhook embed) end-to-end. Also hosts the "Send Sample Upwell Alert" embed-preview form. <strong>v2</strong>: now carries the same red danger-zone warning as Test Data — without a Test webhook URL set, fake injections WILL hit real Discord channels. See the next section for full details.</li>
         <li><strong>Test Data (DEV)</strong>: generate test corporations, test POSes, test Metenox + Astrahus structures with realistic fuel scenarios. Used for exercising webhook filtering and dual-fuel logic. Includes a one-click cleanup that removes everything in safe ID ranges (test corps 2.1B, test POSes 2.2B, test structures 2.3B, test characters 2.4B, test notifications 8e18).</li>
     </ul>
-    <p style="margin-top:0.8rem;"><strong>Every tab opens with a uniform "What this tab does / When to use / Heads up" intro box (v2.0.0)</strong> because the diagnostic page is intentionally not in this Help & Documentation section — tab intros are where you learn each surface\'s purpose. Health Checks is always the default landing tab on a fresh visit.</p>',
+    <p style="margin-top:0.8rem;"><strong>Every tab opens with a uniform "What this tab does / When to use / Heads up" intro box (v2)</strong> because the diagnostic page is intentionally not in this Help & Documentation section — tab intros are where you learn each surface\'s purpose. Health Checks is always the default landing tab on a fresh visit.</p>',
 
     'test_lab_title' => 'Test Notification Lab',
     'test_lab_intro' => 'The Notification Lab is the most thorough way to verify your webhook setup. It generates fake CCP-shaped notifications, injects them through SM\'s real dispatch pipeline, and routes the resulting Discord embed to a test webhook URL only — production webhooks never see test traffic.',

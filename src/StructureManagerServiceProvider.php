@@ -5,6 +5,7 @@ namespace StructureManager;
 use Seat\Services\AbstractSeatPlugin;
 use StructureManager\Console\Commands\TrackFuelCommand;
 use StructureManager\Console\Commands\CleanupHistoryCommand;
+use StructureManager\Console\Commands\CompactHistoryCommand;
 use StructureManager\Console\Commands\CleanupPhantomWithdrawalsCommand;
 use StructureManager\Console\Commands\AnalyzeConsumptionCommand;
 use StructureManager\Console\Commands\CreateTestMetenoxCommand;
@@ -65,6 +66,7 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
         $smCommands = [
             TrackFuelCommand::class,
             CleanupHistoryCommand::class,
+            CompactHistoryCommand::class,
             AnalyzeConsumptionCommand::class,
             CreateTestMetenoxCommand::class,
             TrackPosesFuelCommand::class,

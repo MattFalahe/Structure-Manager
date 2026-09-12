@@ -47,7 +47,10 @@
         padding: 1rem 1.1rem;
         margin-bottom: 0.8rem;
     }
-    .category-row[data-enabled="0"] {
+    /* Dim only the BODY of a switched-off category. A greyed-out heading
+       reads as "unavailable" rather than "off", and the toggle beside it has
+       to stay legible to be usable. */
+    .category-row[data-enabled="0"] > *:not(.category-title-row) {
         opacity: 0.55;
     }
     .category-title-row {
@@ -216,7 +219,7 @@
     }
 </style>
 
-<div class="notif-wrapper">
+<div class="structure-manager-wrapper notif-wrapper">
 
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>

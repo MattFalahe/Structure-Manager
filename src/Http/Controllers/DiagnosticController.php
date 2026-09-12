@@ -2908,107 +2908,233 @@ class DiagnosticController extends Controller
             }
         }
 
-        // POS coverage — starbase_fuel_history (10-min cron, 144 expected)
+        // POS coverage — starbase_fuel_history.
+        //
+        // This used to expect 144 rows a day per tower, one per 10-minute
+        // poll. Since the tracker writes on change, the row count follows how
+        // often the tower's fuel actually moved, which is roughly hourly and
+        // not something to assert against. What still holds is that a tracked
+        // tower gets a row at least once a day from the heartbeat, so the
+        // useful question became "how stale is the newest row" rather than
+        // "how many rows are there".
         if (Schema::hasTable('starbase_fuel_history') && Schema::hasTable('corporation_starbases')) {
             try {
-                $pollCounts = DB::table('starbase_fuel_history')
-                    ->where('created_at', '>=', $oneDayAgo)
-                    ->select('starbase_id', DB::raw('COUNT(*) as cnt'))
+                $newest = DB::table('starbase_fuel_history')
+                    ->select('starbase_id', DB::raw('MAX(created_at) as newest'))
                     ->groupBy('starbase_id')
-                    ->pluck('cnt', 'starbase_id')
+                    ->pluck('newest', 'starbase_id')
                     ->all();
 
                 $starbases = DB::table('corporation_starbases as csb')
                     ->leftJoin('universe_structures as us', 'csb.starbase_id', '=', 'us.structure_id')
-                    ->where(function ($q) use ($oneDayAgo) {
-                        $q->where('csb.created_at', '<', $oneDayAgo)
-                          ->orWhereNull('csb.created_at');
-                    })
                     ->select('csb.starbase_id', 'us.name as starbase_name', 'csb.state')
                     ->get();
 
-                $totalPos = $starbases->count();
-                $totalMissed = 0;
-                $flagged = [];
+                // One poll of slack past the daily heartbeat. Anything beyond
+                // this means the heartbeat itself was missed, so the tower is
+                // not being tracked at all.
+                $staleHours = 25;
+                // A burning tower draws a cycle an hour, so it normally writes
+                // about hourly. Several hours without a row is worth showing
+                // without calling it a failure: it also happens when SeAT's own
+                // corporation_starbase_fuels refresh is lagging, which the
+                // plugin cannot do anything about.
+                $quietHours = 3;
+
+                $totalPos = 0;
+                $stale = [];
+                $quiet = 0;
 
                 foreach ($starbases as $sb) {
-                    // POSes only get polled while online/reinforced — skip
-                    // offline/unanchoring/anchored states (state codes are
-                    // strings in SeAT v5: 'online'=4, 'reinforced'=3, etc.).
-                    // A POS in 'offline' legitimately has no fuel history rows
-                    // and shouldn't be counted as a miss.
+                    // Only online and reinforced towers are tracked. Anything
+                    // else is recorded once on the state change and then left
+                    // alone because it consumes nothing, so an old newest row
+                    // is correct rather than a gap. (State is a string in
+                    // SeAT v5; the numeric forms are accepted defensively.)
                     $state = (string) ($sb->state ?? '');
-                    if (!in_array($state, ['online', 'reinforced', '4', '3'], true)) {
+                    if (! in_array($state, ['online', 'reinforced', '4', '3'], true)) {
                         continue;
                     }
 
-                    $actual = (int) ($pollCounts[$sb->starbase_id] ?? 0);
-                    $missed = max(0, 144 - min($actual, 144));
-                    $totalMissed += $missed;
-                    if ($missed >= 6) {
-                        // Only flag POSes that missed 6+ polls (~ 1h of polls).
-                        // Random 1-2 misses on the 10-min cron are noise.
-                        $flagged[] = [
-                            'starbase_id' => $sb->starbase_id,
-                            'name'        => $sb->starbase_name ?? ('POS #' . $sb->starbase_id),
-                            'actual'      => $actual,
-                            'missed'      => $missed,
-                        ];
+                    $totalPos++;
+                    $name = $sb->starbase_name ?? ('POS #' . $sb->starbase_id);
+                    $newestAt = $newest[$sb->starbase_id] ?? null;
+
+                    if ($newestAt === null) {
+                        $stale[] = ['name' => $name, 'hours' => null];
+                        continue;
+                    }
+
+                    $hours = \Carbon\Carbon::parse($newestAt)->diffInMinutes(now(), true) / 60.0;
+
+                    if ($hours >= $staleHours) {
+                        $stale[] = ['name' => $name, 'hours' => $hours];
+                    } elseif ($hours >= $quietHours) {
+                        $quiet++;
                     }
                 }
 
-                usort($flagged, fn($a, $b) => $b['missed'] <=> $a['missed']);
-                $totalFlagged = count($flagged);
+                usort($stale, function ($a, $b) {
+                    return ($b['hours'] ?? PHP_INT_MAX) <=> ($a['hours'] ?? PHP_INT_MAX);
+                });
 
-                $summaryStatus = $totalMissed === 0
-                    ? 'ok'
-                    : ($totalFlagged < max(1, (int) ($totalPos * 0.5)) ? 'info' : 'warn');
+                $quietNote = $quiet > 0
+                    ? sprintf(' %d tower(s) have not changed in over %dh, which is normal while the SeAT fuel refresh lags behind.', $quiet, $quietHours)
+                    : '';
 
-                $summaryMessage = $totalPos === 0
-                    ? 'No online or reinforced POSes to check.'
-                    : ($totalMissed === 0
-                        ? sprintf('%d active POS(es) all have full 144/144 coverage in the past 24h.', $totalPos)
-                        : sprintf(
-                            '%d of %d active POS(es) missed 6+ snapshots in the last 24h (%d total misses). Expected: 144 per POS (10-min track-poses-fuel cron). Flagging threshold is 6+ to filter noise. Sustained misses point at cron worker lag or ESI key issues.',
-                            $totalFlagged,
-                            $totalPos,
-                            $totalMissed
-                        ));
-
-                $coverageChecks[] = [
-                    'label'   => 'POS snapshot coverage (last 24h)',
-                    'status'  => $summaryStatus,
-                    'message' => $summaryMessage,
-                ];
-
-                foreach (array_slice($flagged, 0, $MAX_FLAGGED_PER_TABLE) as $row) {
+                if ($totalPos === 0) {
                     $coverageChecks[] = [
-                        'label'   => sprintf('• %s (%d/144)', $row['name'], $row['actual']),
-                        'status'  => $row['missed'] >= 72 ? 'warn' : 'info',
-                        'message' => sprintf('%d missed snapshot(s) in the last 24h.', $row['missed']),
+                        'label'   => 'POS tracking freshness',
+                        'status'  => 'info',
+                        'message' => 'No POS is currently online or reinforced, so none is being tracked.',
+                    ];
+                } else {
+                    $coverageChecks[] = [
+                        'label'   => 'POS tracking freshness',
+                        'status'  => $stale ? 'warn' : 'ok',
+                        'message' => $stale
+                            ? sprintf(
+                                '%d of %d online POS(es) have written nothing in over %dh. A tracked tower gets a row at least daily even when nothing changes, so this means track-poses-fuel is not running for them.%s',
+                                count($stale), $totalPos, $staleHours, $quietNote
+                            )
+                            : sprintf(
+                                'All %d online POS(es) have written within the last %dh.%s',
+                                $totalPos, $staleHours, $quietNote
+                            ),
                     ];
                 }
-                if ($totalFlagged > $MAX_FLAGGED_PER_TABLE) {
+
+                foreach (array_slice($stale, 0, $MAX_FLAGGED_PER_TABLE) as $row) {
                     $coverageChecks[] = [
-                        'label'   => sprintf('… and %d more flagged POS(es)', $totalFlagged - $MAX_FLAGGED_PER_TABLE),
+                        'label'   => '• ' . $row['name'],
+                        'status'  => 'warn',
+                        'message' => $row['hours'] === null
+                            ? 'No fuel history at all for this tower.'
+                            : sprintf(
+                                'Newest row is %s old.',
+                                $row['hours'] >= 48
+                                    ? round($row['hours'] / 24, 1) . ' days'
+                                    : round($row['hours'], 1) . 'h'
+                            ),
+                    ];
+                }
+                if (count($stale) > $MAX_FLAGGED_PER_TABLE) {
+                    $coverageChecks[] = [
+                        'label'   => sprintf('… and %d more', count($stale) - $MAX_FLAGGED_PER_TABLE),
                         'status'  => 'info',
-                        'message' => 'Top 10 shown by miss count.',
+                        'message' => sprintf('Top %d shown, stalest first.', $MAX_FLAGGED_PER_TABLE),
                     ];
                 }
             } catch (\Throwable $e) {
                 $coverageChecks[] = [
-                    'label'   => 'POS snapshot coverage (last 24h)',
+                    'label'   => 'POS tracking freshness',
                     'status'  => 'warn',
-                    'message' => 'Coverage check failed: ' . $e->getMessage(),
+                    'message' => 'Freshness check failed: ' . $e->getMessage(),
                 ];
             }
         }
 
         if (!empty($coverageChecks)) {
             $groups[] = [
-                'title' => 'Snapshot poll coverage (last 24h)',
-                'description' => 'Counts actual fuel-history snapshots per structure vs the expected hourly (Upwell) or 10-minute (POS) cadence. Missed snapshots arise from SeAT corp-assets refresh races (the v2.0.2 race guards intentionally skip writing rows during the SeAT DELETE-INSERT window rather than recording wrong values), worker queue lag, or sustained ESI scope issues. Rare misses are healthy gap-tolerance; sustained or clustered misses are a signal to investigate upstream.',
+                'title' => 'Tracking coverage (last 24h)',
+                'description' => 'Upwell structures are counted against an hourly snapshot, which is written whether or not anything changed, so 24 a day is the target. POS towers are measured differently: readings are written on change plus a daily heartbeat, so the row count follows how often the fuel moved and the useful question is how stale the newest row is. Gaps on either side come from worker queue lag, sustained ESI scope problems, or the guards that deliberately skip a reading rather than record a value taken while SeAT was mid-refresh of corporation_assets. Occasional gaps are the tolerance working; sustained or clustered ones are worth chasing upstream.',
                 'items' => $coverageChecks,
+            ];
+        }
+
+        // ---- POS state tracking --------------------------------------------
+        // Surfaces what the lifecycle alerting is actually seeing, and the one
+        // silent failure worth catching: towers present, category enabled, but
+        // no webhook bound, so state changes are detected and go nowhere.
+        $stateChecks = [];
+
+        if (Schema::hasTable('corporation_starbases') && Schema::hasTable('starbase_fuel_history')) {
+            try {
+                $towers = DB::table('corporation_starbases as cs')
+                    ->join('invTypes as it', 'cs.type_id', '=', 'it.typeID')
+                    ->leftJoin('corporation_assets as ca', 'cs.starbase_id', '=', 'ca.item_id')
+                    ->where('it.groupID', 365)
+                    ->select('cs.starbase_id', 'cs.corporation_id', 'cs.state', 'it.typeName as tower_type', 'ca.name as starbase_name')
+                    ->get();
+
+                if ($towers->isNotEmpty()) {
+                    $byState = [];
+                    foreach ($towers as $t) {
+                        $st = strtolower(trim((string) ($t->state ?? 'unknown')));
+                        $byState[$st] = ($byState[$st] ?? 0) + 1;
+                    }
+                    arsort($byState);
+                    $parts = [];
+                    foreach ($byState as $st => $n) {
+                        $parts[] = "{$n} {$st}";
+                    }
+
+                    $online = ($byState['online'] ?? 0) + ($byState['reinforced'] ?? 0);
+
+                    $stateChecks[] = [
+                        'label'   => 'Tower states',
+                        'status'  => ($byState['reinforced'] ?? 0) > 0 ? 'warn' : 'ok',
+                        'message' => sprintf(
+                            '%d tower(s): %s. Only online and reinforced towers are polled for fuel; the rest are recorded once on the state change and then left alone because they consume nothing.',
+                            $towers->count(),
+                            implode(', ', $parts)
+                        ),
+                    ];
+
+                    // Most recent transitions, straight from the rows the
+                    // tracker writes when a tower leaves online/reinforced.
+                    $transitions = DB::table('starbase_fuel_history')
+                        ->where('created_at', '>=', $oneDayAgo)
+                        ->whereNotIn('state', [3, 4])
+                        ->orderByDesc('id')
+                        ->limit(5)
+                        ->get(['starbase_id', 'state', 'created_at']);
+
+                    foreach ($transitions as $tr) {
+                        $name = optional($towers->firstWhere('starbase_id', $tr->starbase_id));
+                        $stateChecks[] = [
+                            'label'   => sprintf('• %s', $name->starbase_name ?? ($name->tower_type ?? ('POS #' . $tr->starbase_id))),
+                            'status'  => 'info',
+                            'message' => sprintf('Left the online/reinforced pair at %s (recorded state %d).', $tr->created_at, $tr->state),
+                        ];
+                    }
+
+                    // The silent failure: detected, but routed nowhere.
+                    $corpIds = $towers->pluck('corporation_id')->unique();
+                    $unbound = [];
+                    foreach ($corpIds as $corpId) {
+                        if (empty(\StructureManager\Services\WebhookDispatcher::resolveBindings('pos', 'lifecycle', (int) $corpId))) {
+                            $unbound[] = $corpId;
+                        }
+                    }
+
+                    $stateChecks[] = [
+                        'label'   => 'pos.lifecycle routing',
+                        'status'  => empty($unbound) ? 'ok' : 'warn',
+                        'message' => empty($unbound)
+                            ? sprintf('Every corporation holding a tower (%d) has a webhook bound, so state changes will be delivered.', $corpIds->count())
+                            : sprintf(
+                                '%d of %d corporation(s) holding towers have no webhook bound to pos.lifecycle: %s. State changes are still detected and logged, but nothing is sent. Bind one under Settings to receive reinforcement alerts.',
+                                count($unbound),
+                                $corpIds->count(),
+                                implode(', ', $unbound)
+                            ),
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $stateChecks[] = [
+                    'label'   => 'POS state tracking',
+                    'status'  => 'warn',
+                    'message' => 'State check failed: ' . $e->getMessage(),
+                ];
+            }
+        }
+
+        if (!empty($stateChecks)) {
+            $groups[] = [
+                'title' => 'POS state tracking',
+                'description' => 'What the pos.lifecycle alerting is seeing. A tower entering the reinforced state is under attack with a timer running, and is the only transition that pings a role. Towers that are not online or reinforced are deliberately not polled for fuel, so a low snapshot count for one of those is correct rather than a fault.',
+                'items' => $stateChecks,
             ];
         }
 

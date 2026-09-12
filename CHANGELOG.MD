@@ -5,6 +5,116 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
+## 🛠️ Version 2.0.4 — *September 2026*
+
+Fixes **POS fuel tracking timing out** on installs with a lot of towers, stops the POS tables growing without bound, and **corrects the fuel figures for faction and officer control towers**, which were overstating how long those towers would last.
+
+- **Backwards compatible.** Two forward-only migrations run on container restart: one adds missing indexes, one seeds the new `pos.attack` notification category. Both are additive and guarded on whether they have already been applied, so a part-migrated install upgrades cleanly. No table is renamed, dropped or changed in type.
+- **Nothing to configure**, with two exceptions worth knowing about: the two POS alert categories below need a webhook bound before they will reach you, and retention defaults have changed.
+- **Read the fuel-figures section before upgrading if you run faction or officer towers.** Their days-remaining drops by 11 to 25% the moment this lands.
+
+> The POS tracker was writing a database row for every fuel stack, for every tower, every 10 minutes, whether or not anything had moved. On a 28-POS install that is roughly 36,000 rows a day and a 3-million-row table, and the job then spent its whole run searching that table for the row it wrote 10 minutes earlier. Past a certain size it stopped finishing inside its 10-minute window, and because nothing prevented a second copy starting, the copies stacked up until they timed out. The Upwell structure tracker has written on change only since v2.0.0; this brings POS tracking in line with it.
+
+### 🐛 Fixes
+
+- **POS reserves are written only when they change.** A row is now created when a tuple is new, when the quantity has actually moved, or once every 24 hours as a heartbeat, matching what `TrackFuelConsumption` already does for Upwell structures. Steady-state write volume on a 28-POS install drops from about 36,000 rows a day to under 300, a 99% reduction, with no change to what the data means.
+- **Reserve stacks are aggregated per location.** A hangar holding the same fuel type in several stacks previously wrote one row per stack, so the "latest row" for that location reported whichever stack was written last instead of the total held there. Stacks are now summed per (location, resource), with the per-division breakdown kept in metadata.
+- **Depleted POS reserves are now recorded.** When stock was moved out of a hangar completely the asset row simply disappeared, so no row was written and the last known positive quantity was reported forever. A zero row is now written instead, which is the same reconciliation the Upwell path has had since v2.0.0. The reserves must be missing on two consecutive polls before the zero is committed: SeAT refreshes `corporation_assets` by upserting on `item_id` and then sweeping any row it did not restamp, outside a transaction, and EVE changes an item's ID whenever a stack is moved, split or merged. A single poll seeing reserves missing is therefore not evidence that anything moved. This is the same absence guard `TrackFuelConsumption` has carried since v2.0.2.
+
+  POS fuel bay readings are not affected by any of this, because they come from `corporation_starbase_fuels`, which SeAT upserts on the stable `(corporation, starbase, type)` key and only prunes for towers that no longer exist.
+- **A fuel reading that cannot be consumption is confirmed before it counts.** A tower's blocks per hour comes from the plugin's own rate registry. EVE deducts a whole hour's fuel in one tick rather than burning smoothly, so the budget for any poll window is the elapsed hours plus one more tick, and a drop more than three times that is not consumption. The "5000 blocks to zero in ten minutes" shape is either a real withdrawal or a bad read, and one poll cannot tell those apart. The reading is now held back one poll and the next one decides: still gone means it was real and it is recorded, back to normal means it was a bad read and it never reaches the consumption chart or the alert. Nothing is suppressed, a genuine withdrawal simply alerts 10 minutes later than it used to. Towers the registry has no rate for are exempt, since there is nothing to compare against.
+- **Tower readings are written only when something moved.** A tower draws a whole cycle at the top of the hour rather than burning smoothly, and SeAT refreshes its fuel figures on a comparable cadence, so a 10-minute poll was re-reading the same three quantities several times for every time one of them actually changed. Measured across a week on a live tower: 515 rows carrying 66 distinct fuel readings. A row is now written when the fuel, strontium, charter count or state differs from the last one, or once a day regardless so a tower that sits untouched still proves it was being watched. That takes an online tower from 144 rows a day to about 24.
+
+  **Nothing is detected any later.** The poll still runs every 10 minutes and every reading still goes through the same checks, including the withdrawal guard. Only the duplicate row is skipped. The one measurable difference is that the guard's tolerance scales with the gap since the last reading, so it now takes a drop of roughly 96 blocks rather than 56 on a medium hull to be questioned, which is still a fraction of any real theft.
+- **Offline towers are no longer polled every 10 minutes.** A tower that is offline, onlining, unanchoring or unanchored burns nothing, so re-recording its fuel 144 times a day added a flat tail to the consumption chart that was not real data. The state change itself is recorded once, so the history still shows when the tower went down, and then it goes quiet until it comes back. **Reinforced towers are still tracked**, because that is exactly when strontium is burning and the reinforcement timer matters most. Fuel quantities on the transition row are carried over from the last good reading rather than zeroed, so going offline does not read as a withdrawal.
+
+  **An offline tower can still be shot, and this does not hide that.** ESI does not report a tower's shield, armor or hull at all, so polling never could see damage, on an online tower either. The only thing that tells you a tower is being attacked is the `pos.attack` notification, and that fires whatever state the tower is in. An offline tower has no reinforcement mode, so it takes damage until it dies rather than starting a timer, which is also why no strontium is consumed. If it does die, it disappears from the corporation starbase list and gets recorded as unanchored.
+- **Tracking jobs can no longer overlap.** `allow_overlap = false` on a schedule only guards the console command, which dispatches the job and returns in milliseconds, so a slow run just accumulated concurrent jobs on the same tables. Both `TrackPosesFuel` and `TrackFuelConsumption` now carry a `WithoutOverlapping` guard that drops the duplicate; the next scheduled run is the retry.
+- **One reserve scan per corporation instead of one per tower.** POSes have no hangars, so the reserve query is identical for every tower in a corp. It ran once per tower regardless.
+
+### 🔥 Fuel figures for faction and officer towers were wrong
+
+> **Read this before upgrading if you run faction or officer control towers.** Their days-remaining figures drop by 11 to 25% the moment this lands, because they were overstated. A tower that was already past its alert threshold but reading above it will alert on the first run after upgrade. That is the correct alert finally arriving, not a new problem. T1 towers are completely unaffected.
+
+- **The faction fuel bonus was applied twice.** `invControlTowerResources` already stores the bonused per-cycle amount: 40 / 36 / 32 blocks for a large T1 / faction / officer hull, which is exactly what the in-game Processes tab shows as "Quantity (per cycle)". The rate was being read from there and then multiplied by the bonus again, so an officer Large burned 25.6 in the plugin's arithmetic instead of 32. Understating the burn overstates days remaining, which pushed low-fuel alerts late by up to a day and a half. Verified three ways: against the SDE ladder across all 42 towers, against 10 hours of observed consumption on a live tower (16.03 blocks/hour where the plugin claimed 12.8), and against the game client itself.
+- **Fuel and strontium now count whole cycles.** A tower draws a complete cycle's worth or nothing, so a remainder too small to buy the next cycle is stranded and no longer counts as a fraction of an hour. 184 blocks at 16 per cycle is 11 hours with 8 blocks left over, matching the client exactly. For strontium this also restores an alert: 1300 units at 200 per cycle used to read 6.5 hours and clear a 6-hour critical threshold, when the real figure is 6 hours and critical.
+- **Discord alerts no longer report "0h" for a tower that still has an hour.** Remaining time was formatted by flooring the fractional part of a day, and since days are stored to two decimal places one hour round-trips as 0.04, which floors to zero. A final alert for a tower holding a full cycle read `Current: 24 blocks ... Remaining: 0h`. The embed now recovers whole hours the same way the detail page does.
+- **The POS detail page now shows the upper bound too.** A tower is always part way through a cycle it has already paid for, so the real time to offline is between the displayed figure and one hour more. The headline number matches the game and drives alerts; `up to 12h` sits beneath it so that extra hour stops being invisible.
+- **Every tower's rates are now written down explicitly.** `TypeIdRegistry::POS_TOWERS` carries `fuel_per_cycle` and `strontium_per_cycle` for all 42 variants, verified against the SDE. The SDE stays authoritative at runtime, but strontium previously had **no fallback at all**, so a missing or partial SDE import left the reinforcement timer blank with nothing to fall back on.
+- **The Critical Alerts page and Fuel Economics kept a second copy of the rate.** Both read their POS figures through a different method to the one the detail page uses, and that one still applied the bonus twice. So the two pages disagreed: a Domination Medium's detail page read 16 blocks an hour while Critical Alerts quoted 2,150 blocks a week and 9,216 for 30 days, which are the right numbers for 12.8. The correct figures are 2,688 and 11,520. Fuel Economics was costing POS fuel off the same low rate, so every tower's weekly and monthly ISK, and the totals built from them, were a fifth under. Both now take the rate from the same place as the detail page, and all three agree for every tower in the registry.
+- **The Critical Alerts countdown was up to an hour out.** Remaining time reached the page as days rounded to one decimal place, which the browser then turned back into days and hours. 143 hours is 5.96 days, rounds to 6.0 and displayed as `6d 0h` next to a detail page correctly reading `5d 23h`. It erred in the unsafe direction too: a tower with one hour left read `0d 0h`, and 23 hours read `1d 0h`. Whole hours are now sent as hours.
+
+### ⚡ Performance
+
+- **New indexes** on the reserve and history tables. The tracking jobs look up the newest row for a (tower or structure, location, resource) tuple, and no index covered that shape, so MySQL scanned every row the tower had ever written and sorted the result. Retention deletes filter on a bare `created_at`, which no index led on either.
+- **Retention pruning moved out of the tracking jobs.** Both jobs ran two unindexed full-table deletes on every poll, duplicating work `structure-manager:cleanup-history` already does nightly. Pruning now happens only in that command, in bounded chunks with a per-table time budget so a large backlog drains across runs instead of holding one long transaction.
+- `structure-manager:cleanup-history` gains `--reserve-days`, `--pos-reserve-days` and `--consumption-days`, plus `--chunk` and `--budget`.
+- **Retention now matches what each table is for.** The per-poll tables (fuel history and reserves) settle on 60 days for both Upwell and POS. Nothing reads them further back than 30: the detail charts and refuel history look back 30 days, withdrawal forensics 7. Upwell and POS being on the same span also fixes the Fuel Economics "offline days" column, which walks both tables and used to cover 180 days of Upwell history against 90 of POS on the same row.
+
+  **Daily consumption totals go the other way, up to a year.** They are one row per structure per day, and they are what the Fuel Economics trend chart and its ISK columns are built from. That page offers a 365-day window and fills any day it has no row for with zero, so a tower with pruned history read as having cost nothing rather than as having no data. The default 180-day view was doing this to every POS beyond day 90. A year of these rows is a few thousand.
+- **Daily consumption is pruned on the day it describes.** Both tables index `date` and were being pruned on `created_at`, which is neither indexed nor the right measure: a row written late for an earlier day was kept on its write time. Old processed ESI notifications likewise now range on the indexed `timestamp` instead of an unindexed `created_at`.
+- **New index for the "newest row per tower" lookup.** Two jobs run `MAX(id) ... GROUP BY starbase_id` every 10 minutes, and the existing index put `created_at` between the grouped column and the aggregated one, which blocks MariaDB's loose index scan. On a real install that meant reading 190,000 rows per call instead of one seek per tower.
+
+### ⚔️ POS under-attack alerts (`pos.attack`)
+
+A new notification category, driven by EVE's own `TowerAlertMsg` rather than by polling tower state.
+
+- **The alert arrives while the attack is still happening.** It carries the shield, armor and hull percentages at the moment of the attack and the attacking pilot, corporation and alliance. Severity follows the damage: shields alone warns, armor means the shield layer is gone, hull means the tower is at real risk.
+- **This matters because nothing else is timely.** Measured during a deliberate attack on a live tower: the notification landed immediately, while every SeAT corporation table was around an hour behind. A two-hour reinforcement timer can start and finish inside that window, so tower state on the POS pages can lag well behind a fight in progress. The alert says so on its face.
+- The tower is resolved from the moon it is anchored on and its type, since the notification carries no starbase id. One attack reaches every character in the corporation with the roles for it, so the alert is de-duplicated to one per attack.
+- EVE's hourly `TowerResourceAlertMsg` fuel spam is **deliberately not consumed**. The plugin's own fuel ladder exists to replace it.
+
+### 🔔 POS state alerts (`pos.lifecycle`)
+
+The `pos.lifecycle` category has existed since v2.0.0, described as "POS state changes (online, offline, reinforced)", and nothing ever published to it. A webhook bound to it received silence. It works now.
+
+- **A tower entering reinforced raises a critical alert with a role mention.** A tower does not reinforce on its own, so that transition means it is being shot and a timer is running. It is the only state that pings; the rest would be noise as mentions.
+- Going **offline**, **unanchored**, back **online**, and the transient **onlining** / **unanchoring** states all notify at their own severity, so routing stays the operator's choice.
+- State is read from `corporation_starbases` for **every** tower on each 10-minute poll, not just the online ones the fuel pass looks at, because a tower dropping offline is exactly the transition the fuel pass can no longer see.
+- The previous state is remembered in cache rather than inferred from history, since history is deliberately quiet while a tower sits offline. A tower seen for the first time is recorded silently, so upgrading does not alert on every tower at once.
+- **Transitions are logged whether or not a webhook is bound**, so an operator with no routing configured can still see them.
+
+This is polling, so detection lands within one 10-minute cycle and it only sees a state the tower actually reached. An attack that never reinforces the tower produces no state change, and so nothing in this category. That gap is exactly what `pos.attack` above covers: it reads EVE's own notification instead of tower state, and it fires whatever state the tower is in.
+
+### 🩺 Diagnostics and documentation
+
+- **A POS state tracking group** on the Data Integrity tab: a breakdown of what state every tower is in, the most recent towers to leave the online/reinforced pair, and a check for the one silent failure worth catching — towers present and the category enabled, but no webhook bound to `pos.lifecycle`, so state changes are detected and go nowhere.
+- **POS coverage now asks whether tracking is alive, not how many rows it wrote.** The check expected 144 snapshots a day per tower, which stopped being a meaningful target once readings are written on change: the count follows how often the tower's fuel actually moved. It now reports how stale each online tower's newest row is, and warns only when one has written nothing for over a day, which is the point at which the daily heartbeat has been missed and tracking really has stopped. Towers that are simply quiet because the SeAT fuel refresh is lagging are noted separately rather than flagged.
+- **Help documents the fuel rates properly.** The consumption table listed only tech 1 figures, so an operator with a Domination Medium read "20 blocks/hour" and then saw the plugin report 16. It now carries all three tiers across all three hulls, with the strontium and charter figures and the note that the faction discount is fuel-only. New sections cover whole-cycle accounting, the `pos.lifecycle` alerts, and `compact-history`.
+- **Three new FAQ entries** for the questions this release will generate: why a faction tower suddenly shows less time, why 11.5 hours displays as 11h, and why offline towers stopped recording history.
+
+### 🗼 Telling towers apart
+
+- **POSes are now listed by name in Fuel Economics.** The structure column read `Domination Control Tower Medium in 3AE-CP`, which is the same text as the Type column beside it, so three towers in one system were indistinguishable. It now reads `3AE-CP - Cote d Or`, using the name you gave the tower in the corp hangar. A tower you have not named falls back to its moon, which is just as unique.
+
+### 🧹 Clearing out what the old tracking left behind
+
+Between the write-on-change fix and the offline-tower gate, most of what these tables hold is rows the plugin would no longer write. Measured on two real installs:
+
+| | Reserves | History | Total |
+|---|---|---|---|
+| Test install | 252,852 → 12,792 | 16,736 → 5,194 | **269,588 → 17,986** |
+| Production install | 1,499,054 → 43,209 | 197,932 → 27,410 | **1,696,986 → 70,619** |
+
+- **`structure-manager:compact-history`** removes them. It is a **dry run by default**, printing what it would delete so you can look before committing, and only acts with `--force`. Work is chunked with a per-table time budget and is resumable, so a large install can drain in stages rather than in one long transaction.
+- **Nothing is guessed at.** The old code labelled its own redundant rows: an unchanged poll stored `quantity_change = 0`, a real movement stored non-zero, a first sighting stored NULL. Refuel and withdrawal history is excluded, the newest row for every tuple is protected by a 7-day floor, and for towers the newest row is always kept whatever its state, so the record of when a tower went offline survives.
+- **This is deliberately not a migration.** Migrations run unattended on every container restart, and a million-row delete during boot turns an upgrade into an outage.
+- **Doing nothing also works.** Retention pruning is plain "older than N days, delete", and with the new `created_at` indexes it finally keeps up. Everything the old tracking wrote ages out of the retention window on its own, so the backlog clears whether or not anyone runs the command. Running it just means not waiting for the clock.
+
+### 🚀 Upgrade
+
+Two forward-only migrations run on container restart. The first adds the missing indexes, each one created only if absent, so operators who already added the reserve lookup index by hand are unaffected. The second seeds the `pos.attack` notification category, enabled but bound to nothing.
+
+**Bind the two POS alert categories** in the Notifications panel if you want them: `pos.attack` is new, and `pos.lifecycle` has existed since v2 but never published until now. Neither is auto-bound, so both are silent until you bind a webhook.
+
+**Retention defaults changed.** Fuel history and reserves drop to 60 days for both structure types, and the daily consumption totals behind the cost projections rise to a year. Override any of them on `cleanup-history` if your install needs different windows.
+
+Installs carrying a large POS reserve backlog should expect that restart to take longer than usual while the index is built, and the first few nightly `cleanup-history` runs to spend their full time budget clearing rows that are already past retention. Everything still inside the retention window is left alone and ages out normally, or goes immediately with `compact-history --force`.
+
+ESI User-Agent bumps to `SeAT-StructureManager/2.0.4` per CCP's third-party developer guidelines.
+
+---
+
 ## ✅ Version 2.0.3 — *June 2026*
 
 Adds **Structure Compliance** — a new page that checks every Upwell structure your corp owns against the recommended fit (rigs + service modules) your alliance defines per structure type and security band. Structure Manager also becomes the OWNER of structure-compliance data for the plugin family: it exposes the report to other plugins (HR Manager) through a Manager Core PluginBridge capability and publishes a change event on the EventBus.

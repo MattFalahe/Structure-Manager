@@ -62,7 +62,7 @@
                             <a href="#" class="nav-link" data-section="compliance">
                                 <i class="fas fa-clipboard-check"></i>
                                 Structure Compliance
-                                <span class="v2-badge v2-badge-nav">v2.0.3</span>
+                                <span class="v2-badge v2-badge-nav">{{ trans('structure-manager::help.v2_badge') }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -289,6 +289,15 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
                         <i class="fas fa-info-circle"></i>
                         {!! trans('structure-manager::help.whats_new_v2_upgrade_note') !!}
                     </p>
+                </div>
+
+                {{-- Recent changes. Sits under What's New on purpose: that block is
+                     the v2 mental model and never mentions a point release, this one
+                     is the delta an operator can see on screen right now. --}}
+                <div class="recent-changes-box">
+                    <h4><i class="fas fa-history"></i> {{ trans('structure-manager::help.recent_changes_title') }}</h4>
+                    <p>{!! trans('structure-manager::help.recent_changes_intro') !!}</p>
+                    {!! trans('structure-manager::help.recent_changes_list') !!}
                 </div>
 
                 {{-- What is Structure Manager? --}}
@@ -572,6 +581,18 @@ php artisan structure-manager:track-poses-fuel</code></pre>
                     <h4>{{ trans('structure-manager::help.pos_consumption_rates') }}</h4>
                     {!! trans('structure-manager::help.pos_consumption_table') !!}
 
+                    <h4>{{ trans('structure-manager::help.pos_cycles_title') }}</h4>
+                    {!! trans('structure-manager::help.pos_cycles_desc') !!}
+
+                    <h4>{{ trans('structure-manager::help.pos_attack_title') }}</h4>
+                    {!! trans('structure-manager::help.pos_attack_desc') !!}
+
+                    <h4>{{ trans('structure-manager::help.pos_lifecycle_title') }}</h4>
+                    {!! trans('structure-manager::help.pos_lifecycle_desc') !!}
+
+                    <h4>{{ trans('structure-manager::help.pos_compaction_title') }}</h4>
+                    {!! trans('structure-manager::help.pos_compaction_desc') !!}
+
                     <h4>{{ trans('structure-manager::help.pos_limiting_factor') }}</h4>
                     <p>{!! trans('structure-manager::help.pos_limiting_desc') !!}</p>
 
@@ -602,7 +623,7 @@ php artisan structure-manager:track-poses-fuel</code></pre>
             {{-- Structure Compliance Section (v2.0.3) --}}
             <div id="compliance" class="help-section">
                 <div class="help-card">
-                    <h3><i class="fas fa-clipboard-check"></i> Structure Compliance <span class="v2-badge">v2.0.3</span></h3>
+                    <h3><i class="fas fa-clipboard-check"></i> Structure Compliance <span class="v2-badge">{{ trans('structure-manager::help.v2_badge') }}</span></h3>
                     <p>The <strong>Structure Compliance</strong> page checks every Upwell structure your corp owns against the recommended fit your alliance defines, per structure type and security band. It reads SeAT core only (corp structures + assets), needs no extra ESI scopes, and changes nothing in-game.</p>
                     <p>Reach it from the sidebar (<i class="fas fa-clipboard-check"></i> <strong>Structure Compliance</strong>, view-tier). Recommended fits are managed from the <strong>Manage doctrines</strong> button (admin-tier).</p>
                 </div>
@@ -1444,7 +1465,7 @@ php artisan structure-manager:track-poses-fuel</code></pre>
                         {{ trans('structure-manager::help.frequently_asked') }}
                     </h3>
 
-                    @for ($i = 1; $i <= 18; $i++)
+                    @for ($i = 1; $i <= 21; $i++)
                     <div class="faq-item">
                         <div class="faq-question">
                             <strong>{{ trans("structure-manager::help.faq_q{$i}") }}</strong>
