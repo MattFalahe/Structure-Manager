@@ -54,6 +54,7 @@ class FakeNotificationBuilder
 
         // Lifecycle
         'StructureAnchoring'      => ['label' => 'Anchoring Started',           'family' => 'lifecycle'],
+        'StructureOnline'         => ['label' => 'Awaiting Quantum Core',       'family' => 'lifecycle'],
         'AllAnchoringMsg'         => ['label' => 'Anchoring Detected (system)', 'family' => 'lifecycle'],
         'StructureUnanchoring'    => ['label' => 'Unanchoring Started',         'family' => 'lifecycle'],
         'OwnershipTransferred'    => ['label' => 'Ownership Transferred',       'family' => 'lifecycle'],
@@ -385,10 +386,20 @@ class FakeNotificationBuilder
 
         switch ($type) {
             case 'StructureAnchoring':
-                $data['timeLeft']          = $this->seconds($params['time_left_seconds'] ?? 24 * 3600);
+                // timeLeft on a real StructureAnchoring is the deployment
+                // phase that opens the first vulnerable window, not the
+                // anchoring timer.
+                $data['timeLeft']          = $this->seconds($params['time_left_seconds'] ?? 15 * 60);
                 $data['vulnerableTime']    = $this->seconds(15 * 60);
                 $data['ownerCorpName']     = 'Test Owner Corp';
                 $data['ownerCorpLinkData'] = [2, 0, (int) $structure['corporation_id']]; // 3-element form
+                break;
+
+            case 'StructureOnline':
+                // Despite the name, this is anchoring finishing and the wait
+                // for the Quantum Core beginning. A real payload carries the
+                // core's type as a float; 56202 is the Athanor core.
+                $data['requiresDeedTypeID'] = (float) ($params['deed_type_id'] ?? 56202);
                 break;
 
             case 'StructureUnanchoring':

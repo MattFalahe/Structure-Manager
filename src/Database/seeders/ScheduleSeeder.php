@@ -133,6 +133,18 @@ class ScheduleSeeder extends AbstractScheduleSeeder
                 'ping_after' => null,
             ],
 
+            // Deployment stages on the Structure Board, and Quantum Core
+            // reminders. The reminder fires a set number of minutes after
+            // anchoring ends, so this cadence is how late it can be.
+            [
+                'command' => 'structure-manager:track-deployments',
+                'expression' => '*/5 * * * *', // Every 5 minutes
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+
             // Cleanup
             [
                 'command' => 'structure-manager:cleanup-history',

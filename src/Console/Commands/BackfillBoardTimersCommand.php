@@ -58,6 +58,7 @@ class BackfillBoardTimersCommand extends Command
         'StructureDestroyed', 'SkyhookDestroyed',
         // Lifecycle
         'StructureAnchoring', 'AllAnchoringMsg', 'SkyhookDeployed',
+        'StructureOnline',
         'StructureUnanchoring',
         'OwnershipTransferred',
         // Sovereignty (added 2026-05-13 — the motivating gap for this command)

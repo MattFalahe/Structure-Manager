@@ -1302,6 +1302,45 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
                                 </div>
                             </div>
 
+                            {{-- Quantum Core reminders. Driven by
+                                 structure-manager:track-deployments, which reads
+                                 SeAT's own structure data, so it works without
+                                 Manager Core. There is deliberately no "off":
+                                 leaving the category unbound already does that. --}}
+                            @php($coreReminderInterval = (int) \StructureManager\Models\StructureManagerSettings::get('core_reminder_interval_minutes', \StructureManager\Services\StructureDeploymentTracker::DEFAULT_REMINDER_INTERVAL_MINUTES))
+
+                            <div class="settings-block">
+                                <h4><i class="fas fa-atom"></i> Quantum Core Reminders</h4>
+
+                                <div class="info-banner mb-3" style="border-left:4px solid #f97316;">
+                                    <i class="fas fa-bell"></i>
+                                    When anchoring finishes, a structure waits for its Quantum Core and stays vulnerable until it goes in.
+                                    While it waits, a reminder goes out at this interval until the structure reports full power or SeAT sees it online.
+                                </div>
+
+                                <div class="form-group" style="max-width:560px;">
+                                    <label for="core_reminder_interval_minutes"><strong>Remind every (minutes)</strong></label>
+                                    <input type="number" class="form-control"
+                                           id="core_reminder_interval_minutes"
+                                           name="core_reminder_interval_minutes"
+                                           min="5" max="240" step="1"
+                                           value="{{ $coreReminderInterval }}">
+                                    <small class="form-text text-muted">
+                                        The first reminder goes out this long after the wait begins, then again at every interval.
+                                        Default 20, which clears the 15 minute onlining window with room for the notification to arrive.
+                                        EVE sends nothing when the core goes in, so a structure whose core is in but has no service online
+                                        can be reminded until SeAT next refreshes its structures, usually within the hour.
+                                    </small>
+                                </div>
+
+                                <div class="info-banner" style="border-left:4px solid #3498db;">
+                                    <i class="fas fa-route"></i>
+                                    The reminders, and the alert when the wait begins, go to the <strong>Quantum Core</strong> category.
+                                    Bind a webhook to it on the
+                                    <a href="#" class="nav-section-link" data-section="notifications"><strong>Notifications</strong></a> section.
+                                </div>
+                            </div>
+
                             {{-- =========================================================
                                  Attacker Threat Intel (v2.2)
                                  Opt-in async zKillboard enrichment. When ON, each

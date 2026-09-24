@@ -2266,10 +2266,10 @@ php artisan structure-manager:cleanup-test-data --force</code></pre>',
     <p>In production both paths fire at different points in the depletion timeline: SM\'s analysis warns first based on consumption math (predictive); CCP\'s last-mile alert fires closer to actual depletion (reactive). Together they give defense-in-depth.</p>',
 
     'test_lab_supported_types_title' => 'Notification Types Supported by the Lab',
-    'test_lab_supported_types_desc' => 'All 24 CCP notification types Structure Manager handles can be injected, grouped by family:',
+    'test_lab_supported_types_desc' => 'All 24 notification types Structure Manager handles for Upwell structures, skyhooks and sovereignty can be injected, grouped by family:',
     'test_lab_supported_types_list' => '<ul>
         <li><strong>Attack family (7):</strong> StructureUnderAttack, StructureLostShields, StructureLostArmor, StructureDestroyed, SkyhookUnderAttack, SkyhookLostShields, SkyhookDestroyed</li>
-        <li><strong>Lifecycle (5):</strong> StructureAnchoring, AllAnchoringMsg, StructureUnanchoring, OwnershipTransferred, SkyhookDeployed</li>
+        <li><strong>Lifecycle (6):</strong> StructureAnchoring, StructureOnline, AllAnchoringMsg, StructureUnanchoring, OwnershipTransferred, SkyhookDeployed</li>
         <li><strong>Fuel + power (6):</strong> StructureWentLowPower, StructureWentHighPower, StructureFuelAlert, StructureLowReagentsAlert, StructureNoReagentsAlert, SkyhookOnline</li>
         <li><strong>Services (1):</strong> StructureServicesOffline</li>
         <li><strong>Sovereignty (4):</strong> EntosisCaptureStarted, SovStructureReinforced, SovStructureDestroyed, SovCommandNodeEventStarted</li>

@@ -408,7 +408,10 @@
             <div class="cb-legend-col">
                 <h6><i class="fas fa-cog"></i> Lifecycle</h6>
                 <ul>
-                    <li><span class="cb-legend-badge warning">Anchoring Started</span> Upwell anchoring detected (24h)</li>
+                    <li><span class="cb-legend-badge warning">Anchoring Started</span> Deployed, counting down to its first vulnerable window</li>
+                    <li><span class="cb-legend-badge info">Anchoring</span> Counting down to the Quantum Core stage</li>
+                    <li><span class="cb-legend-badge critical">Awaiting Quantum Core</span> Vulnerable until the core goes in; counts up</li>
+                    <li><span class="cb-legend-badge warning">Onlining</span> Core installed, vulnerable until it comes online</li>
                     <li><span class="cb-legend-badge info">Anchoring Complete</span> Finished anchoring</li>
                     <li><span class="cb-legend-badge warning">Unanchoring Started</span> Operator-initiated removal</li>
                     <li><span class="cb-legend-badge info">Unanchoring Complete</span> Structure removed</li>
@@ -557,11 +560,13 @@
                 </div>
 
                 @foreach($dayTimers as $timer)
-                    <div class="cb-timer js-timer-row"
+                    {{-- An open-ended row's eve_time is always past, but the
+                         state it describes is live, so it never fades. --}}
+                    @php($fadeRow = $timer->is_elapsed && ! $timer->is_open_ended)
+                    <div class="cb-timer js-timer-row {{ $fadeRow ? 'elapsed' : '' }}"
                          data-timer-id="{{ $timer->id }}"
                          data-group="{{ $timer->category_group }}"
-                         data-severity="{{ $timer->severity }}"
-                         @if($timer->is_elapsed) class="cb-timer elapsed" @endif>
+                         data-severity="{{ $timer->severity }}">
 
                         <label class="cb-timer-select" title="Select for bulk action" style="display:flex; align-items:center; padding:0 8px 0 0; cursor:pointer; user-select:none;">
                             <input type="checkbox" class="js-timer-checkbox" value="{{ $timer->id }}" style="cursor:pointer;">
@@ -631,7 +636,7 @@
 
                         <div class="cb-timer-when">
                             {{-- EVE time (UTC, what CCP gave us) --}}
-                            <div class="cb-abs">{{ $timer->eve_time->format('Y-m-d H:i') }} EVE</div>
+                            <div class="cb-abs">{{ $timer->is_open_ended ? 'Since ' : '' }}{{ $timer->eve_time->format('Y-m-d H:i') }} EVE</div>
                             {{-- Local time (browser timezone). JS fills the text
                                  on page load using the ISO timestamp emitted
                                  server-side, so this works regardless of where
@@ -644,7 +649,7 @@
                                  for timers within 7 days, refreshing each
                                  second. Past timers show 'elapsed X ago'
                                  (static, no ongoing tick). --}}
-                            <div class="cb-rel" data-countdown="{{ $timer->eve_time->toIso8601String() }}">{{ $timer->eve_time->diffForHumans() }}</div>
+                            <div class="cb-rel" data-countdown="{{ $timer->eve_time->toIso8601String() }}" data-open-ended="{{ $timer->is_open_ended ? '1' : '0' }}">{{ $timer->eve_time->diffForHumans() }}</div>
                         </div>
 
                         <div class="cb-timer-actions">
@@ -988,6 +993,19 @@
         return pad2(hours) + 'h ' + pad2(mins) + 'm ' + pad2(secs) + 's';
     }
 
+    // Open-ended rows count up from when the state began, because there is
+    // no deadline to count down to.
+    function formatWaiting(since) {
+        const sec = Math.max(0, Math.floor((Date.now() - since.getTime()) / 1000));
+        const days = Math.floor(sec / 86400);
+        const hours = Math.floor((sec % 86400) / 3600);
+        const mins = Math.floor((sec % 3600) / 60);
+
+        if (days >= 1)  return 'waiting ' + days + 'd ' + pad2(hours) + 'h';
+        if (hours >= 1) return 'waiting ' + hours + 'h ' + pad2(mins) + 'm';
+        return 'waiting ' + mins + 'm ' + pad2(sec % 60) + 's';
+    }
+
     function renderLocalTimes() {
         // Local time is static per event (doesn't tick — the moment in user-
         // local time is the same whether viewed now or in an hour). Render
@@ -1008,6 +1026,10 @@
             const iso = el.getAttribute('data-countdown');
             const d = new Date(iso);
             if (isNaN(d.getTime())) return;
+            if (el.dataset.openEnded === '1') {
+                el.textContent = formatWaiting(d);
+                return;
+            }
             const elapsed = d.getTime() <= Date.now();
             el.textContent = formatCountdown(d);
             el.classList.toggle('cb-elapsed', elapsed);

@@ -143,6 +143,7 @@ class SettingsController extends Controller
                 'pos_fuel_notification_interval'      => 'nullable|integer|min:0|max:24',
                 'pos_strontium_notification_interval' => 'nullable|integer|min:0|max:12',
                 'upwell_fuel_notification_interval'   => 'nullable|integer|min:0|max:24',
+                'core_reminder_interval_minutes'      => 'nullable|integer|min:5|max:240',
             ]);
 
             // POS threshold ordering checks (only run when the form actually
@@ -229,6 +230,9 @@ class SettingsController extends Controller
                 // here — operators flip the manual-op category on/off in the
                 // Notifications UI.
                 'pre_timer_reminders_enabled',
+                // Minutes between reminders while a structure waits for its
+                // Quantum Core. Routing lives on the events.quantum_core category.
+                'core_reminder_interval_minutes',
                 // Attacker threat intel (opt-in zKillboard enrichment). When
                 // enabled, each under-attack alert fires a follow-up async job
                 // that queries zKB for the attacker's threat profile and posts

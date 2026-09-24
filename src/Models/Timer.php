@@ -14,7 +14,8 @@ use Carbon\Carbon;
  * Category groups (derived from event_type, used by client-side filter):
  *   - 'fuel'      — fuel_warning, fuel_critical, fuel_final
  *   - 'tactical'  — reinforce_*, hostile_op, defense_op
- *   - 'lifecycle' — anchor_*, unanchor_*, ownership_transferred
+ *   - 'lifecycle' — anchor_*, anchoring, core_awaiting, onlining,
+ *                   unanchor_*, ownership_transferred
  *   - 'sov'       — sov_reinforced (node decloak countdown),
  *                   command_node_spawned (campaign event begins),
  *                   entosis_in_progress (live entosis attack now)
@@ -80,6 +81,9 @@ class Timer extends Model
         'defense_op'           => 'tactical',
         // lifecycle (anchoring / ownership changes)
         'anchor_start'         => 'lifecycle',
+        'anchoring'            => 'lifecycle',
+        'core_awaiting'        => 'lifecycle',
+        'onlining'             => 'lifecycle',
         'anchor_complete'      => 'lifecycle',
         'unanchor_start'       => 'lifecycle',
         'unanchor_complete'    => 'lifecycle',
@@ -91,6 +95,14 @@ class Timer extends Model
     ];
 
     public const ALL_GROUPS = ['fuel', 'tactical', 'lifecycle', 'sov'];
+
+    /**
+     * Event types that describe a state the structure is sitting in rather
+     * than a deadline. eve_time is when the state began and nothing in EVE
+     * ends it on a clock, so these rows stay on the board until the state
+     * resolves instead of ageing out like an elapsed timer.
+     */
+    public const OPEN_ENDED_TYPES = ['core_awaiting'];
 
     /**
      * Human-readable badge labels per event_type. The board blade reads this
@@ -125,6 +137,9 @@ class Timer extends Model
         'defense_op'            => 'Defense Op',
         // lifecycle (anchoring + ownership changes)
         'anchor_start'          => 'Anchoring Started',
+        'anchoring'             => 'Anchoring',
+        'core_awaiting'         => 'Awaiting Quantum Core',
+        'onlining'              => 'Onlining',
         'anchor_complete'       => 'Anchoring Complete',
         'unanchor_start'        => 'Unanchoring Started',
         'unanchor_complete'     => 'Unanchoring Complete',
@@ -270,12 +285,18 @@ class Timer extends Model
      * Timers within a given look-ahead window. Also includes recently-elapsed
      * timers (within 2 hours of now) so they remain on the board briefly for
      * post-event reference (matches raikia's "Current" cutoff).
+     *
+     * Open-ended rows are kept regardless of eve_time: a structure that has
+     * been waiting for its core for three hours still needs someone to act.
      */
     public function scopeWithinWindow($query, int $daysAhead = 7)
     {
         $start = Carbon::now()->subHours(2);
         $end   = Carbon::now()->addDays($daysAhead);
-        return $query->whereBetween('eve_time', [$start, $end]);
+        return $query->where(function ($q) use ($start, $end) {
+            $q->whereBetween('eve_time', [$start, $end])
+              ->orWhereIn('event_type', self::OPEN_ENDED_TYPES);
+        });
     }
 
     /**
@@ -347,6 +368,14 @@ class Timer extends Model
     public function getIsElapsedAttribute(): bool
     {
         return $this->eve_time !== null && $this->eve_time->isPast();
+    }
+
+    /**
+     * Does this row describe an ongoing state rather than a deadline?
+     */
+    public function getIsOpenEndedAttribute(): bool
+    {
+        return in_array($this->event_type, self::OPEN_ENDED_TYPES, true);
     }
 
     /**

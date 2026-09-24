@@ -11,6 +11,7 @@ use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\Timer;
 use StructureManager\Models\WebhookConfiguration;
 use StructureManager\Services\IdResolver;
+use StructureManager\Services\StructureDeploymentTracker;
 use StructureManager\Services\TestDataGenerator;
 use StructureManager\Services\WebhookDispatcher;
 use Carbon\Carbon;
@@ -85,6 +86,22 @@ class StructureEventHandler
         'SovCommandNodeEventStarted',
     ];
 
+    // Sent the moment anchoring finishes. Despite the name the structure is
+    // not online: it is waiting for the Quantum Core named in
+    // requiresDeedTypeID, vulnerable until it goes in, and in-game this reads
+    // "now awaiting its Quantum Core to be installed". Drives the core stage
+    // of the deployment tracker.
+    const CORE_STAGE_TYPES = [
+        'StructureOnline',
+    ];
+
+    /**
+     * Set while handling a StructureWentHighPower that ends a deployment, so
+     * the embed can say the structure reached full power rather than got it
+     * back.
+     */
+    private bool $firstFullPower = false;
+
     /**
      * Entry point called by MC's registry OR SM's fallback job.
      */
@@ -138,6 +155,7 @@ class StructureEventHandler
             self::FUEL_EVENT_TYPES,
             self::SERVICES_OFFLINE_TYPES,
             self::SOVEREIGNTY_TYPES,
+            self::CORE_STAGE_TYPES,
             // POS types are handled by PosEventHandler but ride the same
             // ingestion pipeline, so they have to appear here for the sweep
             // and the Manager Core registration to pick them up.
@@ -297,8 +315,10 @@ class StructureEventHandler
      *   StructureUnderAttack  → reinforce_shield (timer = notification.timestamp, i.e. now)
      *   StructureLostShields  → reinforce_armor  (timer = state_timer_end from corporation_structures)
      *   StructureLostArmor    → reinforce_hull   (timer = state_timer_end)
-     *   StructureDestroyed    → reinforce_hull   (timer = now, severity=critical)
-     *   StructureAnchoring    → anchor_start     (timer = now + 24h approx)
+     *   StructureDestroyed    → destroyed        (timer = now, severity=critical)
+     *   StructureAnchoring    → anchor_start     (deployment stage, handed to
+     *                                             StructureDeploymentTracker;
+     *                                             timer = end of deployment)
      *   StructureUnanchoring  → unanchor_start   (timer = now + 7d approx)
      *   OwnershipTransferred  → ownership_transferred (timer = now)
      *
@@ -307,6 +327,31 @@ class StructureEventHandler
      */
     private function upsertBoardTimer($notification, string $internalCategory): void
     {
+        // Our own structure's deployment is followed stage by stage rather
+        // than as one row per notification, so it can carry on through
+        // anchoring and the Quantum Core stage.
+        if ($notification->type === 'StructureAnchoring' && $this->recordDeploymentStage($notification)) {
+            return;
+        }
+        if (in_array($notification->type, self::CORE_STAGE_TYPES, true)) {
+            $this->recordCoreStage($notification);
+
+            return;
+        }
+
+        // Nothing marks the core going in. Full power, once the structure has
+        // onlined and a service is running, is the first notice EVE gives
+        // that a deployment is over. High power never gets a board row.
+        if ($notification->type === 'StructureWentHighPower') {
+            $entityId = $this->readEntityId($notification->parsed_data ?? []);
+            if ($entityId !== null && StructureDeploymentTracker::isRecentDeployment($entityId)) {
+                $this->firstFullPower = true;
+                StructureDeploymentTracker::finish($entityId);
+            }
+
+            return;
+        }
+
         $eventType = $this->notificationTypeToBoardEvent($notification->type);
         if ($eventType === null) {
             return;
@@ -353,6 +398,12 @@ class StructureEventHandler
                 } catch (\Throwable $e) {
                     Log::warning("StructureEventHandler: escalation cleanup for structure {$entityId} failed: " . $e->getMessage());
                     // Non-fatal — proceed with creating the new reinforce row
+                }
+
+                // A structure killed before it came online takes its
+                // deployment stages with it.
+                if ($eventType === 'destroyed') {
+                    StructureDeploymentTracker::finish($entityId, false);
                 }
             }
         }
@@ -533,6 +584,97 @@ class StructureEventHandler
                 => 'auto_sov',
             default => 'auto_reinforce',
         };
+    }
+
+    /**
+     * Hand a StructureAnchoring notification to the deployment tracker as the
+     * deployment stage: the board counts down to the end of deployment, when
+     * the first vulnerable window opens.
+     *
+     * Returns false only when the payload is missing what the stage needs,
+     * so the caller can fall back to the plain one-row-per-notification path.
+     */
+    private function recordDeploymentStage($notification): bool
+    {
+        $data = $notification->parsed_data ?? [];
+        $structureId = $this->readEntityId($data);
+
+        if ($structureId === null || empty($data['timeLeft']) || !is_numeric($data['timeLeft'])) {
+            return false;
+        }
+
+        $deploymentEnds = Carbon::parse($notification->timestamp)
+            ->addSeconds((int) max(0, ((int) $data['timeLeft']) / 10_000_000));
+
+        $notes = null;
+        if (!empty($data['vulnerableTime']) && is_numeric($data['vulnerableTime']) && (int) $data['vulnerableTime'] > 0) {
+            $closes = $deploymentEnds->copy()->addSeconds((int) (((int) $data['vulnerableTime']) / 10_000_000));
+            $notes = 'Vulnerable ' . $deploymentEnds->format('H:i') . ' to ' . $closes->format('H:i') . ' UTC';
+        }
+
+        StructureDeploymentTracker::reachStage(
+            $structureId,
+            StructureDeploymentTracker::STAGE_DEPLOYMENT,
+            $deploymentEnds,
+            $this->deploymentContext($notification, $data),
+            $notes
+        );
+
+        return true;
+    }
+
+    /**
+     * Anchoring has finished and the structure is waiting for its core. The
+     * notification's timestamp is when the wait began.
+     */
+    private function recordCoreStage($notification): void
+    {
+        $data = $notification->parsed_data ?? [];
+        $structureId = $this->readEntityId($data);
+
+        if ($structureId === null) {
+            Log::warning("StructureEventHandler: {$notification->type} #{$notification->notification_id} carried no structure ID; core stage not recorded");
+
+            return;
+        }
+
+        // A structure that names no core to install has nothing to wait
+        // for, so finishing anchoring is the end of its deployment.
+        if (empty($data['requiresDeedTypeID'])) {
+            StructureDeploymentTracker::finish($structureId);
+
+            return;
+        }
+
+        StructureDeploymentTracker::reachStage(
+            $structureId,
+            StructureDeploymentTracker::STAGE_CORE,
+            Carbon::parse($notification->timestamp),
+            $this->deploymentContext($notification, $data)
+        );
+    }
+
+    /**
+     * Board context for a deployment stage row, from the notification. A
+     * freshly dropped structure is not in universe_structures yet, so the
+     * name is often missing here; the state poll fills it in later.
+     */
+    private function deploymentContext($notification, array $data): array
+    {
+        $meta = $this->resolveStructureMeta($data);
+
+        return [
+            'structure_name'         => $meta['name'],
+            'structure_type'         => $meta['type'],
+            'structure_type_id'      => $this->readStructureTypeId($data),
+            'system_id'              => $this->readSystemId($data),
+            'system_name'            => $meta['system_name'],
+            'system_security'        => $meta['system_security'],
+            'corporation_id'         => (int) $notification->corporation_id,
+            'owner_corporation_name' => DB::table('corporation_infos')
+                ->where('corporation_id', $notification->corporation_id)
+                ->value('name'),
+        ];
     }
 
     /**
@@ -1029,6 +1171,7 @@ class StructureEventHandler
             'fuel'             => 'structure_fuel_events',
             'services_offline' => 'services_offline',
             'sovereignty'      => 'sovereignty',
+            'core'             => 'quantum_core',
             default            => null,
         };
     }
@@ -1052,9 +1195,82 @@ class StructureEventHandler
                 return $this->buildServicesOfflinePayload($notification, $data, $meta);
             case 'sovereignty':
                 return $this->buildSovereigntyPayload($notification, $data, $meta);
+            case 'core':
+                return $this->buildCoreStagePayload($notification, $data, $meta);
             default:
                 return null;
         }
+    }
+
+    /**
+     * Anchoring is over and the structure is waiting for its Quantum Core.
+     * The reminder that follows if nobody acts comes from
+     * StructureDeploymentTracker; this is the first word of it.
+     */
+    private function buildCoreStagePayload($notification, array $data, array $meta): array
+    {
+        $since = Carbon::parse($notification->timestamp);
+        $name  = $meta['name'] ?? $meta['type'] ?? 'Structure';
+
+        // YAML carries the core's type ID as a float (56202.0).
+        $coreTypeId = !empty($data['requiresDeedTypeID']) && is_numeric($data['requiresDeedTypeID'])
+            ? (int) $data['requiresDeedTypeID']
+            : null;
+
+        $fields = [];
+        $fields[] = ['name' => "\u{1F4CD} Location", 'value' => $meta['system'] ?? 'Unknown', 'inline' => true];
+        $fields[] = ['name' => 'Structure Type', 'value' => $meta['type'] ?? 'Unknown', 'inline' => true];
+
+        if ($coreTypeId === null) {
+            // Nothing to install, so there is no wait to report.
+            $title       = "{$name} has finished anchoring";
+            $description = 'No Quantum Core is required, so the structure comes online without one.';
+            $content     = '**Anchoring Complete**';
+            $color       = 3066993;
+        } else {
+            $title       = "{$name} is waiting for its Quantum Core";
+            $description = 'Anchoring has finished. The structure stays vulnerable and cannot come online until its Quantum Core is installed.';
+            $content     = '**Awaiting Quantum Core**';
+            $color       = 0xf97316;
+
+            $fields[] = [
+                'name'   => "\u{23F3} Waiting Since",
+                'value'  => $since->format('Y-m-d H:i') . " UTC\n*(" . $since->diffForHumans() . ')*',
+                'inline' => true,
+            ];
+            $fields[] = ['name' => "\u{1F48E} Core Needed", 'value' => $this->resolveTypeName($coreTypeId), 'inline' => true];
+        }
+
+        $corpName = $this->resolveCorporationName((int) $notification->corporation_id);
+        if (!empty($corpName)) {
+            $fields[] = [
+                'name'   => 'Owning Corporation',
+                'value'  => "[{$corpName}](https://zkillboard.com/corporation/{$notification->corporation_id}/)",
+                'inline' => true,
+            ];
+        }
+
+        if (!empty($meta['dotlan_url'])) {
+            $fields[] = [
+                'name'   => "\u{1F5FA} Map",
+                'value'  => "[{$meta['system_name']} ({$meta['region_name']})]({$meta['dotlan_url']})",
+                'inline' => true,
+            ];
+        }
+
+        return [
+            'content' => $content,
+            'embeds'  => [[
+                'title'       => $title,
+                'description' => $description,
+                'color'       => $color,
+                'fields'      => $fields,
+                'footer'      => ['text' => $this->buildFooterText($notification)],
+                'timestamp'   => $since->toIso8601String(),
+            ]],
+            'username'         => 'SeAT Structure Manager',
+            'allowed_mentions' => ['parse' => [], 'users' => [], 'roles' => []],
+        ];
     }
 
     private function buildAttackPayload($notification, array $data, array $meta): array
@@ -1314,6 +1530,7 @@ class StructureEventHandler
         // Anchoring / Unanchoring: humanize CCP's nanosecond timeLeft into a
         // proper completion timestamp + remaining countdown. Operators care
         // exactly when these complete (anchoring deadline, unanchor abort window).
+        $deploymentEnds = null;
         if (in_array($type, ['StructureAnchoring', 'StructureUnanchoring', 'AllAnchoringMsg', 'SkyhookDeployed'], true)
             && !empty($data['timeLeft'])
             && is_numeric($data['timeLeft'])
@@ -1322,10 +1539,20 @@ class StructureEventHandler
             $base = Carbon::parse($notification->timestamp);
             $fmt  = $this->formatCcpDuration((int) $data['timeLeft'], $base);
 
+            // On our own StructureAnchoring, timeLeft is the deployment phase,
+            // not the anchoring timer. The in-game text reads "being deployed
+            // for the next 14 minutes, at the end of which it will become
+            // vulnerable for 15 minutes". Anchoring and the Quantum Core stage
+            // come after it, and the Structure Board follows those.
+            if ($type === 'StructureAnchoring') {
+                $deploymentEnds = $fmt['absolute'];
+            }
+
             $completionLabel = match ($type) {
-                'StructureAnchoring', 'AllAnchoringMsg', 'SkyhookDeployed' => 'Anchoring Completes',
-                'StructureUnanchoring'                                    => 'Unanchoring Completes',
-                default                                                    => 'Completes',
+                'StructureAnchoring'                  => 'Deployment Ends',
+                'AllAnchoringMsg', 'SkyhookDeployed'  => 'Anchoring Completes',
+                'StructureUnanchoring'                => 'Unanchoring Completes',
+                default                               => 'Completes',
             };
 
             $fields[] = [
@@ -1344,12 +1571,18 @@ class StructureEventHandler
             && is_numeric($data['vulnerableTime'])
             && (int) $data['vulnerableTime'] > 0
         ) {
-            // Vulnerable time is a duration, not an absolute time — the human
-            // representation alone is what the operator needs.
-            $vfmt = $this->formatCcpDuration((int) $data['vulnerableTime'], Carbon::now());
+            // Vulnerable time is a duration. When deployment is what it
+            // follows, the window opens as deployment ends, so it can be
+            // pinned to the clock; otherwise the length is all we have.
+            $vfmt  = $this->formatCcpDuration((int) $data['vulnerableTime'], Carbon::now());
+            $value = $vfmt['human'];
+            if ($deploymentEnds !== null) {
+                $closes = $deploymentEnds->copy()->addSeconds($vfmt['seconds']);
+                $value  = $deploymentEnds->format('H:i') . ' to ' . $closes->format('H:i') . " UTC\n*({$vfmt['human']})*";
+            }
             $fields[] = [
                 'name'   => "\u{1F6E1}\u{FE0F} Vulnerability Window",
-                'value'  => $vfmt['human'],
+                'value'  => $value,
                 'inline' => true,
             ];
         }
@@ -1498,6 +1731,14 @@ class StructureEventHandler
             'SkyhookOnline' => 'Skyhook Online',
         ];
 
+        // "Restored" only fits a structure that lost power. One that has
+        // just finished deploying is reaching full power for the first time.
+        $description = null;
+        if ($type === 'StructureWentHighPower' && $this->firstFullPower) {
+            $titleMap[$type] = 'Went into High Power';
+            $description = 'Full power for the first time since it was deployed: the Quantum Core is in and a service module is online.';
+        }
+
         $fields = [];
         $fields[] = ['name' => "\u{1F4CD} Location", 'value' => $meta['system'] ?? 'Unknown', 'inline' => true];
         $fields[] = ['name' => 'Structure Type', 'value' => $meta['type'] ?? 'Unknown', 'inline' => true];
@@ -1567,6 +1808,9 @@ class StructureEventHandler
             'footer' => ['text' => $this->buildFooterText($notification)],
             'timestamp' => Carbon::parse($notification->timestamp)->toIso8601String(),
         ];
+        if ($description !== null) {
+            $embed['description'] = $description;
+        }
 
         return [
             'content' => '**' . ($titleMap[$type] ?? $type) . '**',
@@ -2170,12 +2414,13 @@ class StructureEventHandler
     private function resolveStructureMeta(array $data): array
     {
         $meta = [
-            'name'          => null,
-            'type'          => null,
-            'system'        => null, // "Name (sec)" — kept for backward-compat with existing fields
-            'system_name'   => null, // raw system name (no security suffix)
-            'region_name'   => null, // for dotlan URL
-            'dotlan_url'    => null, // built dotlan map link
+            'name'            => null,
+            'type'            => null,
+            'system'          => null, // "Name (sec)" — kept for backward-compat with existing fields
+            'system_name'     => null, // raw system name (no security suffix)
+            'system_security' => null,
+            'region_name'     => null, // for dotlan URL
+            'dotlan_url'      => null, // built dotlan map link
         ];
 
         $sysId = $this->readSystemId($data);
@@ -2185,8 +2430,9 @@ class StructureEventHandler
                 ->select('itemName', 'security', 'regionID')
                 ->first();
             if ($system) {
-                $meta['system_name'] = $system->itemName;
-                $meta['system']      = $system->itemName . ' (' . number_format($system->security, 2) . ')';
+                $meta['system_name']     = $system->itemName;
+                $meta['system_security'] = $system->security;
+                $meta['system']          = $system->itemName . ' (' . number_format($system->security, 2) . ')';
 
                 if ($system->regionID) {
                     $regionName = DB::table('mapDenormalize')
@@ -2326,9 +2572,12 @@ class StructureEventHandler
         if ($mins > 0 || empty($parts)) { $parts[] = "{$mins}m"; }
         $human = implode(' ', $parts);
 
-        // "Xd Yh remaining" — relative to NOW, not to the base timestamp
+        // "Xd Yh remaining" — relative to NOW, not to the base timestamp.
+        // A signed diff is measured from the receiver to the argument, so it
+        // has to run from now to the deadline; the other way round is
+        // negative for every future time and clamps to "0m remaining".
         $now            = Carbon::now();
-        $remainingSecs  = max(0, $absolute->diffInSeconds($now, false));
+        $remainingSecs  = (int) max(0, $now->diffInSeconds($absolute, false));
         $remD = intdiv($remainingSecs, 86400);
         $remH = intdiv($remainingSecs % 86400, 3600);
         $remM = intdiv($remainingSecs % 3600, 60);
@@ -2377,6 +2626,9 @@ class StructureEventHandler
         if (in_array($type, self::SOVEREIGNTY_TYPES)) {
             return 'sovereignty';
         }
+        if (in_array($type, self::CORE_STAGE_TYPES)) {
+            return 'core';
+        }
         return 'unknown';
     }
 
@@ -2386,7 +2638,9 @@ class StructureEventHandler
             return $payload;
         }
 
-        if ($category !== 'attack' && $category !== 'fuel') {
+        // A structure waiting for its core is vulnerable until somebody acts,
+        // so it pings like an attack rather than logging like a state change.
+        if ($category !== 'attack' && $category !== 'fuel' && $category !== 'core') {
             return $payload;
         }
 

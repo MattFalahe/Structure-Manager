@@ -138,9 +138,15 @@ class PruneStructureBoardTimers implements ShouldQueue
             // entosis_in_progress) — stage 1 above handles those on a
             // tighter (no-grace) cadence. Without this exclusion they'd
             // re-iterate here uselessly.
+            //
+            // Open-ended rows are excluded too. Their eve_time is when the
+            // state began, so it is always in the past, and ageing them out
+            // would clear a structure off the board while it is still
+            // waiting. The deployment tracker dismisses them when the state
+            // actually resolves.
             Timer::query()
                 ->whereNull('dismissed_at')
-                ->whereNotIn('event_type', ['under_attack', 'entosis_in_progress'])
+                ->whereNotIn('event_type', array_merge(['under_attack', 'entosis_in_progress'], Timer::OPEN_ENDED_TYPES))
                 ->where('eve_time', '<', $autodismissCutoff)
                 ->chunkById(200, function ($timers) use ($now, &$autodismissed) {
                     foreach ($timers as $timer) {

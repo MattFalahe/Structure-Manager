@@ -147,9 +147,14 @@ class PublishTimerScheduleEvents implements ShouldQueue
         // ...actually we DO scope to active only, because subscribers care
         // about the live calendar. Dismissed timers fired their .dismissed
         // event already; an elapsed event for a dismissed row is noise.
+        // Open-ended rows are skipped: their eve_time marks when a state
+        // began, so it is past from the moment the row exists, and calling
+        // that "elapsed" would tell subscribers the wait is over when it has
+        // just started. They leave the calendar through timer.dismissed.
         $elapsed = Timer::query()
             ->whereNull('dismissed_at')
             ->whereNull('emitted_elapsed_at')
+            ->whereNotIn('event_type', Timer::OPEN_ENDED_TYPES)
             ->where('eve_time', '<=', $now)
             ->get();
 
