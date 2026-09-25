@@ -105,7 +105,7 @@ class StructureDeploymentTracker
      * deployment that took 23 minutes, so an interval shorter than that can
      * send one reminder about a structure whose core is already in.
      */
-    public const DEFAULT_REMINDER_INTERVAL_MINUTES = 20;
+    public const DEFAULT_REMINDER_INTERVAL_MINUTES = 30;
 
     /** events.* category the reminder is routed through. */
     private const REMINDER_CATEGORY = 'quantum_core';

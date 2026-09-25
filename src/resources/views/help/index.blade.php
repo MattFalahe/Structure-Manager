@@ -701,6 +701,9 @@ php artisan structure-manager:track-poses-fuel</code></pre>
 
                     <h4>{{ trans('structure-manager::help.upwell_embed_example_title') }}</h4>
                     {!! trans('structure-manager::help.upwell_embed_example') !!}
+
+                    <h4><i class="fas fa-atom"></i> {{ trans('structure-manager::help.upwell_deployment_title') }}</h4>
+                    {!! trans('structure-manager::help.upwell_deployment_desc') !!}
                 </div>
             </div>
 
@@ -1363,6 +1366,11 @@ php artisan structure-manager:track-poses-fuel</code></pre>
                     <p>{!! trans('structure-manager::help.track_structure_presence_desc') !!}</p>
                     <pre><code>php artisan structure-manager:track-structure-presence</code></pre>
                     <p class="text-muted" style="font-size:0.9em;">{!! trans('structure-manager::help.track_structure_presence_cron') !!}</p>
+
+                    <h5>{{ trans('structure-manager::help.track_deployments_title') }}</h5>
+                    <p>{!! trans('structure-manager::help.track_deployments_desc') !!}</p>
+                    <pre><code>php artisan structure-manager:track-deployments</code></pre>
+                    <p class="text-muted" style="font-size:0.9em;">{!! trans('structure-manager::help.track_deployments_cron') !!}</p>
 
                     <h5>{{ trans('structure-manager::help.publish_timer_schedule_events_title') }}</h5>
                     <p>{!! trans('structure-manager::help.publish_timer_schedule_events_desc') !!}</p>

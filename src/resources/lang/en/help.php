@@ -192,9 +192,15 @@ return [
     // it without reading the changelog. Entries live for the current major and
     // are cleared when the next What's New is written. CHANGELOG.MD stays the
     // complete record; this is the curated delta.
-    'recent_changes_title' => 'In this update (2.0.4)',
-    'recent_changes_intro' => 'The changes from this release that you will actually see on screen. <a href="https://github.com/MattFalahe/Structure-Manager/blob/main/CHANGELOG.MD" target="_blank" rel="noopener">The changelog</a> has the complete record.',
-    'recent_changes_list' => '<ul>
+    'recent_changes_title' => 'Recent updates',
+    'recent_changes_intro' => 'The changes from recent releases that you will actually see on screen, newest first. <a href="https://github.com/MattFalahe/Structure-Manager/blob/main/CHANGELOG.MD" target="_blank" rel="noopener">The changelog</a> has the complete record.',
+    'recent_changes_list' => '<p><strong>2.0.5</strong> (in preparation)</p>
+    <ul>
+        <li><strong>New structures are followed until they come online.</strong> The Structure Board shows each stage of a deployment as it happens: the first vulnerable window, the anchoring timer, the wait for the Quantum Core, and onlining. The wait counts up and stays on the board until the core is in. A new <code>events.quantum_core</code> category alerts when the wait begins, naming the core the structure needs, and reminds every 30 minutes while it lasts. It is not bound to a webhook, so bind it in the Notifications panel to receive these. The interval is under Settings, Structure Events.</li>
+        <li><strong>Anchoring and full power alerts read correctly.</strong> Anchoring Started showed "0m remaining" whatever the real time left, and called the deployment phase "Anchoring Completes". It now shows the time left and labels it Deployment Ends. The first full power after a deployment reads Went into High Power instead of High Power Restored, and elapsed timers on the board now fade as they were meant to.</li>
+    </ul>
+    <p><strong>2.0.4</strong></p>
+    <ul>
         <li><strong>Faction and officer towers now show less fuel time than before, by 11 to 25%.</strong> The faction discount was being applied twice, once by the game data which already has it and again by the plugin, so an officer Large was calculated at 25.6 blocks an hour against a real 32. Understating the burn overstated how long the tower would last. The figure you see now matches the in-game Control Tower Manager. Tech 1 towers were never affected. A tower that alerts right after upgrading was already past your threshold and the old arithmetic was hiding it. The same correction moved the weekly and monthly requirements on Critical Alerts and the POS fuel costs in Fuel Economics, both of which were a fifth under.</li>
         <li><strong>Fuel and strontium now count whole cycles.</strong> A tower draws a complete cycle or nothing, so a remainder too small to buy the next one is stranded and no longer counts as part of an hour. 184 blocks at 16 per cycle is 11 hours with 8 left over, which is what the client shows. For strontium this also restores an alert: 1300 units at 200 per cycle used to read 6.5 hours and clear a 6 hour critical threshold, when the real figure is 6 and critical.</li>
         <li><strong>Two POS alert categories need a webhook bound before they will reach you.</strong> <code>pos.lifecycle</code> has existed since v2 but nothing ever published to it, so anything bound to it received silence. It works now, and a tower entering reinforced raises a critical alert with a role mention. <code>pos.attack</code> is new, driven by the in-game notification rather than by polling, and it is the only alert that arrives while the attack is still happening. Neither is auto-bound. Bind them in the Notifications panel.</li>
@@ -1636,6 +1642,18 @@ Weekly Requirement: 6,720 blocks
 
 SeAT Structure Manager | Structure ID: 1042938412345</pre>',
 
+    'upwell_deployment_title' => 'New Structures and the Quantum Core',
+    'upwell_deployment_desc' => '<p>A newly deployed structure goes through several stages before it is online, and the Structure Board shows each one as it happens:</p>
+    <ul>
+        <li><strong>Anchoring Started:</strong> the deployment phase, about 15 minutes, counting down to the first vulnerable window. The window itself is noted on the row.</li>
+        <li><strong>Anchoring:</strong> counting down to the Quantum Core stage on EVE\'s own anchoring timer.</li>
+        <li><strong>Awaiting Quantum Core:</strong> anchoring is over and the structure needs its core. It stays vulnerable until the core goes in, so this row counts up, never ages off the board, and comes back if dismissed while the structure is still waiting.</li>
+        <li><strong>Onlining:</strong> the core is in and the last 15 minute vulnerable window is running.</li>
+    </ul>
+    <p>When anchoring ends, EVE sends a notification called <code>StructureOnline</code>, even though the structure is not online yet. Structure Manager turns it into an <strong>Awaiting Quantum Core</strong> alert naming the exact core the structure needs, and sends a <strong>reminder</strong> every 30 minutes while it waits. Both go to the <code>events.quantum_core</code> category, which is not bound to a webhook by default. Bind it in the Notifications panel, with a role if you want the ping. The reminder interval is under Settings, Structure Events.</p>
+    <p>EVE sends nothing when a core is installed. The first sign is the structure reaching full power, once onlining has finished and a service module is online, or SeAT showing it onlining. A core installed straight away takes around 25 minutes to be confirmed that way, which is why the default interval is 30. A shorter one can send a reminder after the core is already in.</p>
+    <p>The first full power after a deployment is reported as <strong>Went into High Power</strong>. <strong>High Power Restored</strong> is kept for a structure that lost power and got it back.</p>',
+
     // Pages Guide
     'pages_intro' => 'Structure Manager consists of several pages, each designed for a specific aspect of structure and fuel management. They are listed below in the same order they appear in the sidebar.',
 
@@ -1733,6 +1751,7 @@ SeAT Structure Manager | Structure ID: 1042938412345</pre>',
     'command_board_page_desc' => '<ul>
         <li><strong>Timer board:</strong> Central view of every active structure timer — reinforcement timers, anchoring timers, and admin-created manual ops</li>
         <li><strong>Auto-population:</strong> ESI structure events (shield / armor reinforced, anchoring) create board entries automatically</li>
+        <li><strong>New structures, start to finish:</strong> A structure you deploy is followed through deployment, the anchoring timer and the wait for its Quantum Core until it is online. The wait counts up and stays on the board until the core is in</li>
         <li><strong>Live countdowns:</strong> Countdown to each timer\'s exit, grouped and sorted by urgency</li>
         <li><strong>Manual ops:</strong> Admins can add hostile / defensive operation timers directly to the board, with a target structure type and notes</li>
         <li><strong>Auto-cleanup:</strong> Elapsed and resolved timers are pruned automatically so the board stays current</li>
@@ -2002,13 +2021,17 @@ php artisan structure-manager:create-test-poses --cleanup</code></pre>',
     'track_structure_presence_desc' => 'Destruction-detection medium-confidence path. Tracks corporation_structures membership over time so structures that vanish for 3+ polls (~30 min absent) can be classified as destroyed / likely_transferred / bulk_vanished. The high-confidence path (CCP StructureDestroyed notification) fires from StructureEventHandler regardless of whether MC is installed; this medium-confidence path is the safety net for cases where the notification was missed.',
     'track_structure_presence_cron' => 'Cron: <code>*/10 * * * *</code> (every 10 minutes). Three consecutive absences = classified as gone.',
 
+    'track_deployments_title' => 'track-deployments',
+    'track_deployments_desc' => 'Follows newly deployed Upwell structures through anchoring and the Quantum Core stage on the Structure Board, from SeAT\'s own structure data, and sends the Quantum Core reminders. Works with or without Manager Core. With it, the <code>StructureOnline</code> notification makes the core stage show within minutes of anchoring ending.',
+    'track_deployments_cron' => 'Cron: <code>*/5 * * * *</code> (every 5 minutes). A reminder can go out up to one run after it falls due.',
+
     'publish_timer_schedule_events_title' => 'publish-timer-schedule-events',
     'publish_timer_schedule_events_desc' => 'Cross-plugin timer-lifecycle event publisher. Fires <code>structure_manager.timer.upcoming_24h</code>, <code>.upcoming_1h</code>, and <code>.elapsed</code> events on Manager Core\'s EventBus for each tracked timer that crosses a threshold. Consumed by SeAT Broadcast (when its calendar feature lands) and any future fleet-planning subscriber.',
     'publish_timer_schedule_events_cron' => 'Cron: <code>*/5 * * * *</code> (every 5 minutes). Without this command running, the Family B timer.* events never fire even though the Family A alert.* events still do.',
 
     'prune_structure_board_timers_title' => 'prune-structure-board-timers',
-    'prune_structure_board_timers_desc' => 'Daily housekeeping. Deletes old dismissed Structure Board timer rows so the table does not grow unbounded. Without this scheduled, dismissed rows accumulate forever.',
-    'prune_structure_board_timers_cron' => 'Cron: <code>0 4 * * *</code> (daily at 04:00 UTC).',
+    'prune_structure_board_timers_desc' => 'Structure Board housekeeping. Dismisses under-attack and entosis rows as soon as their short window has passed, dismisses other timers 4 hours after they elapse, and deletes rows that have been dismissed for 30 days so the table does not grow unbounded. A wait for a Quantum Core is never aged out; it clears when the structure comes online.',
+    'prune_structure_board_timers_cron' => 'Cron: <code>*/5 * * * *</code> (every 5 minutes).',
 
     'commands_test_title' => 'Test-Data Commands',
     'commands_test_intro' => 'For end-to-end verification of webhook delivery, EventBus publishing, and the dispatch chain. All test data lives in declared safe ID ranges (corporations 2.1B / structures 2.3B / characters 2.4B / POSes 2.2B / notifications 8e18+) so production data cannot be accidentally affected.',

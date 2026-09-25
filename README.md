@@ -90,7 +90,8 @@ Compare every Upwell structure your corp owns against the recommended fit your a
 
 ### 🛰️ ESI Notification Events (v2.0.0)
 - **Attack alerts** — StructureUnderAttack, LostShields, LostArmor, Destroyed (plus Skyhook variants)
-- **Lifecycle alerts** — Anchoring (with 24h timer), Unanchoring, Ownership Transferred, Skyhook Deployed
+- **Lifecycle alerts** — Anchoring (deployment end and first vulnerable window), Unanchoring, Ownership Transferred, Skyhook Deployed
+- **Quantum Core alerts (2.0.5)**: an alert when anchoring ends and the structure waits for its core, naming the core it needs, then a reminder every 30 minutes until it is in. The Structure Board follows every new structure from deployment to online
 - **Sov alerts** — SovStructureReinforced (with decloak time), SovCommandNodeEventStarted, EntosisCaptureStarted
 - **Services-offline alerts** — StructureServicesOffline routed to a separate category for industry-ops channels
 - **Three detection paths**, identifiable from the embed footer:
@@ -351,6 +352,7 @@ php artisan structure-manager:simulate-consumption       # rapid fuel consumptio
 # ESI notification detection (v2.0.0)
 php artisan structure-manager:process-notifications      # SeAT-native fallback for ESI events
 php artisan structure-manager:track-structure-presence   # destruction-detection medium-confidence path
+php artisan structure-manager:track-deployments          # new structures through to online, Quantum Core reminders (2.0.5)
 
 # Cross-plugin EventBus publishing (v2.0.0)
 php artisan structure-manager:publish-timer-schedule-events  # timer.upcoming_24h / .upcoming_1h / .elapsed events
@@ -359,7 +361,7 @@ php artisan structure-manager:publish-timer-schedule-events  # timer.upcoming_24
 php artisan structure-manager:create-test-upwell-structures
 php artisan structure-manager:create-test-poses
 php artisan structure-manager:create-test-metenox
-php artisan structure-manager:inject-test-notification --list   # see all 23 supported notification types
+php artisan structure-manager:inject-test-notification --list   # see all 24 supported notification types
 php artisan structure-manager:cleanup-test-data --dry-run       # preview what would be deleted
 
 # Maintenance

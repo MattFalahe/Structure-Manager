@@ -5,6 +5,42 @@ Each version entry lists key changes for easier reference and upgrade planning.
 
 ---
 
+## 🛠️ Version 2.0.5 *(in preparation)*
+
+Follows a **newly deployed Upwell structure all the way to online** on the Structure Board, alerts when it starts waiting for its Quantum Core, and **reminds you until the core is in**.
+
+- **Backwards compatible.** One forward-only migration seeds the new `events.quantum_core` notification category. It is additive and guarded, and no existing table changes.
+- **One thing to configure:** the Quantum Core category is not bound to a webhook, so nothing new reaches Discord until you bind it in the Notifications panel.
+
+> When a structure went down, the Structure Board showed its 15 minute deployment timer and nothing after it. The structure then spends 24 hours anchoring and waits for its Quantum Core, vulnerable for as long as the core is missing, and nothing tracked either stage. EVE says when the wait begins but never when the core goes in, so each stage is now followed from both the notifications and SeAT's structure data.
+
+### 🏗️ Deployment stages on the Structure Board
+
+- A new structure moves through **Anchoring Started** (the deployment phase, counting down to its first vulnerable window), **Anchoring** (counting down to the core stage on EVE's own timer), **Awaiting Quantum Core** and **Onlining**, one row at a time, and leaves the board once it is online.
+- **Awaiting Quantum Core** counts up rather than down, is never aged off the board, and comes back if it is dismissed while the structure is still waiting. Dismissing it never silences the reminder either.
+- The stages come from SeAT's structure data through a new `structure-manager:track-deployments` job every five minutes, so they work without Manager Core. With Manager Core, the notifications make them land within minutes.
+- Stage rows are ordinary board timers, so with Manager Core they reach SeAT Broadcast's calendar and its pre-timer pings like any other.
+
+### 💎 Quantum Core alerts and reminders (`events.quantum_core`)
+
+- When anchoring ends, EVE sends `StructureOnline`, even though the structure is not online yet. It now raises an **Awaiting Quantum Core** alert that names the exact core the structure needs and pings the role set on the category.
+- While the structure waits, a **reminder** goes out every 30 minutes. The interval is under Settings, Structure Events, from 5 to 240 minutes.
+- EVE sends nothing when a core is installed. The first sign is the structure reaching full power, once onlining has finished and a service is online, or SeAT showing it onlining. When I tested it, a core installed straight away took 23 minutes to be confirmed that way, which is why the default is 30. A shorter interval can send one reminder after the core is already in, and the reminder says so.
+
+### 🐛 Fixes
+
+- **Anchoring Started always read "0m remaining".** The time left was worked out backwards, so anything still in the future came out negative and was clamped to zero. Unanchoring Started had the same fault.
+- **Anchoring Started called the deployment phase "Anchoring Completes".** The 15 minutes it carries is deployment, after which the structure is vulnerable for 15 minutes while anchoring runs. It now reads **Deployment Ends**, and the vulnerability window is shown as clock times.
+- **The first full power after a deployment read "High Power Restored".** It now reads **Went into High Power**. Restored is kept for a structure that lost power and got it back.
+- **Elapsed timers on the Structure Board never faded.** The row carried two `class` attributes, and browsers ignore the second one.
+- The Test Notification Lab can inject `StructureOnline`, and its `StructureAnchoring` now carries the real 15 minute deployment phase instead of 24 hours.
+
+### 🚀 Upgrade
+
+Pull and restart the stack as usual. The migration and the new schedule entry apply themselves on restart. Then bind a webhook to **Quantum Core** in the Notifications panel if you want the alerts and reminders.
+
+---
+
 ## 🛠️ Version 2.0.4 — *September 2026*
 
 Fixes **POS fuel tracking timing out** on installs with a lot of towers, stops the POS tables growing without bound, and **corrects the fuel figures for faction and officer control towers**, which were overstating how long those towers would last.
