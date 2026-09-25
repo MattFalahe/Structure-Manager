@@ -1326,10 +1326,10 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
                                            min="5" max="240" step="1"
                                            value="{{ $coreReminderInterval }}">
                                     <small class="form-text text-muted">
-                                        The first reminder goes out this long after the wait begins, then again at every interval.
-                                        Default 20, which clears the 15 minute onlining window with room for the notification to arrive.
-                                        EVE sends nothing when the core goes in, so a structure whose core is in but has no service online
-                                        can be reminded until SeAT next refreshes its structures, usually within the hour.
+                                        The first reminder goes out this long after the wait begins, then again at every interval. Default 20.
+                                        EVE sends nothing when a core goes in, so a core is only confirmed once the 15 minute onlining window
+                                        has run, a service is online and the full power notification has arrived. That takes around 25 minutes
+                                        for a core installed straight away, so a shorter interval can send one reminder after the core is in.
                                     </small>
                                 </div>
 

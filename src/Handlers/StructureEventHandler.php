@@ -640,7 +640,7 @@ class StructureEventHandler
 
         // A structure that names no core to install has nothing to wait
         // for, so finishing anchoring is the end of its deployment.
-        if (empty($data['requiresDeedTypeID'])) {
+        if (empty($data['requiresDeedTypeID']) || !is_numeric($data['requiresDeedTypeID'])) {
             StructureDeploymentTracker::finish($structureId);
 
             return;
@@ -649,9 +649,33 @@ class StructureEventHandler
         StructureDeploymentTracker::reachStage(
             $structureId,
             StructureDeploymentTracker::STAGE_CORE,
-            Carbon::parse($notification->timestamp),
-            $this->deploymentContext($notification, $data)
+            $this->coreWaitStartedAt($structureId, Carbon::parse($notification->timestamp)),
+            $this->deploymentContext($notification, $data),
+            StructureDeploymentTracker::coreNote($this->resolveTypeName((int) $data['requiresDeedTypeID']))
         );
+    }
+
+    /**
+     * When the core wait began. EVE stamps the notification to the nearest
+     * minute, while SeAT holds the anchoring timer to the second, and the
+     * state poll reads that timer. Using it here as well keeps the board, the
+     * alert and the reminders on the same time.
+     */
+    private function coreWaitStartedAt(int $structureId, Carbon $notified): Carbon
+    {
+        $anchoringEnded = DB::table('corporation_structures')
+            ->where('structure_id', $structureId)
+            ->where('state', 'anchoring')
+            ->value('state_timer_end');
+
+        if ($anchoringEnded) {
+            $exact = Carbon::parse($anchoringEnded);
+            if (abs($exact->getTimestamp() - $notified->getTimestamp()) <= 120) {
+                return $exact;
+            }
+        }
+
+        return $notified;
     }
 
     /**
@@ -1210,6 +1234,10 @@ class StructureEventHandler
     private function buildCoreStagePayload($notification, array $data, array $meta): array
     {
         $since = Carbon::parse($notification->timestamp);
+        $structureId = $this->readEntityId($data);
+        if ($structureId !== null) {
+            $since = $this->coreWaitStartedAt($structureId, $since);
+        }
         $name  = $meta['name'] ?? $meta['type'] ?? 'Structure';
 
         // YAML carries the core's type ID as a float (56202.0).

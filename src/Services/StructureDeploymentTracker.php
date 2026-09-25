@@ -79,17 +79,6 @@ class StructureDeploymentTracker
     ];
 
     /**
-     * States a structure can show while it waits for its core. SeAT keeps
-     * reporting "anchoring" after the timer runs out until it next refreshes,
-     * and EVE's own wording for the wait is that the core is needed "to
-     * complete its onlining process".
-     */
-    private const CORE_WAIT_STATES = [
-        'anchoring',
-        'onlining_vulnerable',
-    ];
-
-    /**
      * A structure left without its core this long is abandoned rather than
      * forgotten, so reminders stop. The board row stays until it resolves.
      */
@@ -110,9 +99,11 @@ class StructureDeploymentTracker
 
     /**
      * The first reminder goes out this long after the wait begins, and again
-     * at every multiple. The 15 minute onlining window after the core goes in
-     * plus a few minutes for the notification to arrive means a structure
-     * whose core went straight in has usually reported full power by then.
+     * at every multiple. A core that goes straight in is only confirmed once
+     * the 15 minute onlining window has run, a service is online and EVE's
+     * full power notification has been fetched. Measured on a live
+     * deployment that took 23 minutes, so an interval shorter than that can
+     * send one reminder about a structure whose core is already in.
      */
     public const DEFAULT_REMINDER_INTERVAL_MINUTES = 20;
 
@@ -328,6 +319,13 @@ class StructureDeploymentTracker
             }
 
             [$stageName, $eveTime] = $stage;
+
+            if ($stageName === self::STAGE_COMPLETE) {
+                self::finish($structureId);
+                $stats['finished']++;
+
+                continue;
+            }
             if (self::reachStage($structureId, $stageName, $eveTime, self::contextFromStateRow($row))) {
                 $stats['deploying']++;
             }
@@ -338,6 +336,11 @@ class StructureDeploymentTracker
 
     /**
      * Map a corporation_structures row to the stage it describes.
+     *
+     * Onlining carries no timer at all while the structure waits for its
+     * core, and a 15 minute one from the moment the core goes in. SeAT can go
+     * on reporting that window for half an hour or more after it has run out,
+     * so an expired one means onlining is over, not that it is waiting.
      *
      * @return array{0:string,1:?Carbon}|null
      */
@@ -352,12 +355,11 @@ class StructureDeploymentTracker
             'anchoring' => ($end !== null && $end->isFuture())
                 ? [self::STAGE_ANCHORING, $end]
                 : [self::STAGE_CORE, $end ?? $start],
-            // Onlining with time left means the core is in and the last
-            // vulnerable window is running. Without any, the structure is
-            // stuck in onlining because it has no core to finish it.
-            'onlining_vulnerable' => ($end !== null && $end->isFuture())
-                ? [self::STAGE_ONLINING, $end]
-                : [self::STAGE_CORE, $start],
+            'onlining_vulnerable' => match (true) {
+                $end === null     => [self::STAGE_CORE, null],
+                $end->isFuture()  => [self::STAGE_ONLINING, $end],
+                default           => [self::STAGE_COMPLETE, null],
+            },
             default => null,
         };
     }
@@ -440,11 +442,22 @@ class StructureDeploymentTracker
 
         // A structure that has gone from corporation_structures was
         // destroyed or unanchored, or SeAT can no longer see it.
-        $state = DB::table('corporation_structures')
+        $row = DB::table('corporation_structures')
             ->where('structure_id', $structureId)
-            ->value('state');
+            ->select('state', 'state_timer_end')
+            ->first();
 
-        return in_array($state, self::CORE_WAIT_STATES, true);
+        if ($row === null) {
+            return false;
+        }
+
+        // Onlining without a timer is the wait itself. "anchoring" is SeAT
+        // not having refreshed since the anchoring timer ran out, and the
+        // core may already be in, but nothing says so: EVE does not report
+        // a core going in, so until something does, the structure counts as
+        // waiting.
+        return $row->state === 'anchoring'
+            || ($row->state === 'onlining_vulnerable' && $row->state_timer_end === null);
     }
 
     private static function dispatchReminder(Timer $timer, int $waitedMinutes, int $number): bool
@@ -517,9 +530,35 @@ class StructureDeploymentTracker
             ],
         ];
 
-        if (! empty($timer->owner_corporation_name)) {
-            $fields[] = ['name' => 'Owning Corporation', 'value' => $timer->owner_corporation_name, 'inline' => true];
+        $core = self::coreFromNote($timer->notes);
+        if ($core !== null) {
+            $fields[] = ['name' => "\u{1F48E} Core Needed", 'value' => $core, 'inline' => true];
         }
+
+        if (! empty($timer->owner_corporation_name)) {
+            $fields[] = [
+                'name'   => 'Owning Corporation',
+                'value'  => $timer->corporation_id
+                    ? "[{$timer->owner_corporation_name}](https://zkillboard.com/corporation/{$timer->corporation_id}/)"
+                    : $timer->owner_corporation_name,
+                'inline' => true,
+            ];
+        }
+
+        $map = self::dotlanLink($timer);
+        if ($map !== null) {
+            $fields[] = ['name' => "\u{1F5FA} Map", 'value' => $map, 'inline' => true];
+        }
+
+        // Every reminder can only say nothing has confirmed the core yet.
+        // Saying why keeps one that crosses an install from reading as a
+        // fault.
+        $fields[] = [
+            'name'   => "\u{2139}\u{FE0F} Already installed?",
+            'value'  => 'EVE does not report a core going in. This stops once the structure reaches full power, '
+                . 'or once SeAT shows it onlining.',
+            'inline' => false,
+        ];
 
         return [
             'content'  => '**Quantum Core Reminder**',
@@ -534,6 +573,42 @@ class StructureDeploymentTracker
                 'timestamp'   => Carbon::now()->toIso8601String(),
             ]],
         ];
+    }
+
+    /**
+     * Board note on a core wait, naming the core it needs. The reminder reads
+     * the name back out of it, since the timer row has no column for it.
+     */
+    public static function coreNote(string $coreName): string
+    {
+        return "Needs {$coreName}";
+    }
+
+    private static function coreFromNote(?string $notes): ?string
+    {
+        return ($notes !== null && preg_match('/^Needs (.+)$/', $notes, $m)) ? $m[1] : null;
+    }
+
+    private static function dotlanLink(Timer $timer): ?string
+    {
+        if (empty($timer->system_id) || empty($timer->system_name)) {
+            return null;
+        }
+
+        $regionName = DB::table('mapDenormalize as sys')
+            ->join('mapDenormalize as reg', 'reg.itemID', '=', 'sys.regionID')
+            ->where('sys.itemID', $timer->system_id)
+            ->value('reg.itemName');
+
+        if (empty($regionName)) {
+            return null;
+        }
+
+        $url = 'https://evemaps.dotlan.net/map/'
+            . str_replace(' ', '_', $regionName) . '/'
+            . str_replace(' ', '_', $timer->system_name);
+
+        return "[{$timer->system_name} ({$regionName})]({$url})";
     }
 
     private static function humanMinutes(int $minutes): string
