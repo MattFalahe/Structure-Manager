@@ -4,6 +4,7 @@ namespace StructureManager\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
@@ -72,11 +73,36 @@ class NotifyPosLowFuel implements ShouldQueue
     public $backoff = [60, 300, 900];
 
     /**
+     * allow_overlap on the schedule only guards the console command, which
+     * dispatches and returns. A retry backing off into the next tick would
+     * otherwise run two passes over the same towers and the same board rows.
+     */
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('structure-manager:notify-pos-fuel'))
+                ->dontRelease()
+                ->expireAfter($this->timeout + 60),
+        ];
+    }
+
+    /**
      * Execute the job.
      */
     public function handle()
     {
         \Log::channel('stack')->info('NotifyPosLowFuel: Job started');
+
+        // Strontium no longer gets a board row. Close any that an older
+        // version left open; once per run is plenty, and after the first
+        // run there is normally nothing to find.
+        Timer::where('source_reference', 'like', 'pos-strontium:%')
+            ->whereNull('dismissed_at')
+            ->get()
+            ->each(function (Timer $timer) {
+                $timer->dismissed_at = Carbon::now();
+                $timer->save();
+            });
 
         // State transitions run first and over EVERY tower, not just the
         // online ones the fuel pass looks at — a tower going offline is
@@ -199,8 +225,14 @@ class NotifyPosLowFuel implements ShouldQueue
 
                 // Always upsert POS Structure Board timers regardless of
                 // webhook binding state — the board shows pending events
-                // even if no webhook is configured to ping them.
-                $this->upsertPosBoardTimers($latest, $fuelCriticalDays, $fuelWarningDays, $strontiumCriticalHours, $strontiumWarningHours, $charterCriticalDays);
+                // even if no webhook is configured to ping them. The board
+                // is a view of the alerts, so failing to write it must not
+                // stop the alerts for this tower or the ones after it.
+                try {
+                    $this->upsertPosBoardTimers($latest, $fuelCriticalDays, $fuelWarningDays, $strontiumCriticalHours, $strontiumWarningHours, $charterCriticalDays);
+                } catch (\Throwable $e) {
+                    \Log::channel('stack')->warning("NotifyPosLowFuel: board timer for POS {$latest->starbase_id} not updated: " . $e->getMessage());
+                }
 
                 // Process fuel/charter notifications (pos.fuel category)
                 if (!empty($fuelBindings) && $this->shouldSendFuelNotification($latest, $fuelCriticalDays, $fuelWarningDays, $fuelCriticalInterval, $charterCriticalDays)) {
@@ -263,12 +295,16 @@ class NotifyPosLowFuel implements ShouldQueue
         if ($history->requires_charters && $history->charter_days_remaining !== null) {
             $actualDays = min($actualDays, $history->charter_days_remaining);
         }
-        $fuelExpires = Carbon::now()->addHours(max(0, $actualDays * 24));
+
+        // Count from when the reading was taken, not from now. The reading
+        // only changes when fuel does, so anchoring on it gives the same
+        // expiry on every poll: the row stops creeping later by one poll
+        // interval each run, and an unchanged tower causes no write at all.
+        $readAt = $history->created_at ? Carbon::parse($history->created_at) : Carbon::now();
+        $fuelExpires = $readAt->copy()->addHours(max(0, $actualDays * 24));
 
         if ($fuelEventType === null) {
-            Timer::where('source_reference', "pos-fuel:{$history->starbase_id}")
-                ->whereNull('dismissed_at')
-                ->update(['dismissed_at' => Carbon::now()]);
+            Timer::dismissActive("pos-fuel:{$history->starbase_id}");
         } else {
             Timer::upsertAuto([
                 'source'                 => 'auto_fuel',
@@ -309,10 +345,8 @@ class NotifyPosLowFuel implements ShouldQueue
         // misleading "fuel warning" entries on the board.
         //
         // Existing pos-strontium:* board rows from previous SM versions are
-        // cleaned up by the migration shipped alongside this change.
-        Timer::where('source_reference', 'like', 'pos-strontium:%')
-            ->whereNull('dismissed_at')
-            ->update(['dismissed_at' => Carbon::now()]);
+        // cleaned up by the migration shipped alongside this change, and
+        // handle() closes any stragglers once per run.
     }
 
     /**

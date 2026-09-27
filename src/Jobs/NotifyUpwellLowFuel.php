@@ -4,6 +4,7 @@ namespace StructureManager\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +53,20 @@ class NotifyUpwellLowFuel implements ShouldQueue
     public $timeout = 600;
     public $tries = 3;
     public $backoff = [60, 300, 900];
+
+    /**
+     * allow_overlap on the schedule only guards the console command, which
+     * dispatches and returns. A retry backing off into the next tick would
+     * otherwise run two passes over the same structures and board rows.
+     */
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('structure-manager:notify-upwell-fuel'))
+                ->dontRelease()
+                ->expireAfter($this->timeout + 60),
+        ];
+    }
 
     /**
      * Fuel block type IDs.
@@ -311,9 +326,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
             if ($status === 'good') {
                 // Recovery — soft-dismiss any existing timer row for this reagent
-                Timer::where('source_reference', "cyno_reagent:{$row->structure_id}:" . ($isJammer ? 'strontium' : 'liquid_ozone'))
-                    ->whereNull('dismissed_at')
-                    ->update(['dismissed_at' => Carbon::now()]);
+                Timer::dismissActive("cyno_reagent:{$row->structure_id}:" . ($isJammer ? 'strontium' : 'liquid_ozone'));
                 continue;
             }
 
@@ -330,8 +343,13 @@ class NotifyUpwellLowFuel implements ShouldQueue
             $bindings = $this->resolveBindingsForStructure($row, $corpBindings);
 
             // Upsert Timer board row regardless of webhook bindings (board still
-            // shows it even if no webhook is bound)
-            $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer, $meta);
+            // shows it even if no webhook is bound). A failed board write must
+            // not stop the alert.
+            try {
+                $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer, $meta);
+            } catch (\Throwable $e) {
+                Log::warning("NotifyUpwellLowFuel: cyno board timer for structure {$row->structure_id} not updated: " . $e->getMessage());
+            }
 
             if (empty($bindings)) {
                 continue;
@@ -586,8 +604,13 @@ class NotifyUpwellLowFuel implements ShouldQueue
         // Upsert a Structure Board timer row so the board reflects this
         // structure's pending fuel expiry. Always called — on recovery to
         // 'good' the row is soft-dismissed (board hides it) but kept for
-        // audit; fresh drop re-creates.
-        $this->upsertBoardTimer($structure, $fuelData, $currentStatus);
+        // audit; fresh drop re-creates. A failed board write must not stop
+        // the fuel alert that follows.
+        try {
+            $this->upsertBoardTimer($structure, $fuelData, $currentStatus);
+        } catch (\Throwable $e) {
+            Log::warning("NotifyUpwellLowFuel: board timer for structure {$structure->structure_id} not updated: " . $e->getMessage());
+        }
 
         // Check if notification should fire
         if (!$this->shouldSendNotification($status, $currentStatus, $fuelData, $criticalInterval)) {
@@ -1038,9 +1061,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         if ($currentStatus === 'good' && $eventType === null) {
             // Recovered — soft-dismiss any existing row for this structure
-            Timer::where('source_reference', "fuel:{$structure->structure_id}")
-                ->whereNull('dismissed_at')
-                ->update(['dismissed_at' => Carbon::now()]);
+            Timer::dismissActive("fuel:{$structure->structure_id}");
             return;
         }
 

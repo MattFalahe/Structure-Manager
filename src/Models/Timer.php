@@ -4,6 +4,7 @@ namespace StructureManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 /**
@@ -505,6 +506,40 @@ class Timer extends Model
      * @return self
      */
     public static function upsertAuto(array $attrs): self
+    {
+        // Several jobs write the board in the same minute. When two of them
+        // deadlock, MariaDB rolls one back and asks for a retry; this retries
+        // instead of failing whichever job happened to lose.
+        return DB::transaction(fn () => self::upsertAutoOnce($attrs), 3);
+    }
+
+    /**
+     * Dismiss whatever active rows carry this source_reference.
+     *
+     * Reads first and saves each row rather than issuing a bulk UPDATE.
+     * source_reference is not indexed, so a bulk UPDATE has to lock every
+     * active row it scans, and the fuel jobs ran one for each healthy
+     * structure on every poll, which deadlocked against other jobs writing
+     * the board. Saving each model also lets TimerObserver tell subscribers
+     * the timer has gone, which a bulk UPDATE skips.
+     *
+     * @return int Rows dismissed
+     */
+    public static function dismissActive(string $sourceReference): int
+    {
+        $rows = self::where('source_reference', $sourceReference)
+            ->whereNull('dismissed_at')
+            ->get();
+
+        foreach ($rows as $row) {
+            $row->dismissed_at = Carbon::now();
+            $row->save();
+        }
+
+        return $rows->count();
+    }
+
+    private static function upsertAutoOnce(array $attrs): self
     {
         // 1. Try to match an existing row by source_reference (preferred path)
         if (!empty($attrs['source_reference'])) {
