@@ -197,6 +197,7 @@ return [
     'recent_changes_list' => '<p><strong>2.0.5</strong> (in preparation)</p>
     <ul>
         <li><strong>New structures are followed until they come online.</strong> The Structure Board shows each stage of a deployment as it happens: the first vulnerable window, the anchoring timer, the wait for the Quantum Core, and onlining. The wait counts up and stays on the board until the core is in. A new <code>events.quantum_core</code> category alerts when the wait begins, naming the core the structure needs, and reminds every 30 minutes while it lasts. It is not bound to a webhook, so bind it in the Notifications panel to receive these. The interval is under Settings, Structure Events.</li>
+        <li><strong>Roles on Sovereignty and Services Offline now ping.</strong> A role set on either was silently ignored before. If one reaches them, including a webhook\'s legacy role, expect a ping for every sov event, entosis captures included. The Routing Map shows the role each binding resolves to, and now also says when each category actually pings. Cyno reagent alerts go out when the status changes instead of every ten minutes.</li>
         <li><strong>Anchoring and full power alerts read correctly.</strong> Anchoring Started showed "0m remaining" whatever the real time left, and called the deployment phase "Anchoring Completes". It now shows the time left and labels it Deployment Ends. The first full power after a deployment reads Went into High Power instead of High Power Restored, and elapsed timers on the board now fade as they were meant to.</li>
     </ul>
     <p><strong>2.0.4</strong></p>
@@ -504,7 +505,7 @@ return [
             <li>Picking a role stores the exact mention string from the source — if a source is uninstalled later, previously-picked roles keep working because the string is static</li>
         </ul>',
     'v31_category_list_title' => 'Shipped Categories (seeded on install)',
-    'v31_category_list_desc' => 'v2 ships with 19 categories across three namespaces (upwell / events / pos). The eight listed below are the core set covering Upwell fuel, structure events, and POS legacy alerts. The remaining ten (cyno_reagents, services_offline, sovereignty, the six pre_timer_* reminders, and attacker_threat_intel) are documented in the dedicated feature sections of this help page. No webhooks are auto-bound on install — operator explicitly binds each category via the Notifications panel.',
+    'v31_category_list_desc' => 'v2 has 20 categories across three namespaces (upwell / events / pos). The eight listed below are the core set covering Upwell fuel, structure events, and POS legacy alerts. The remaining twelve (cyno_reagents, services_offline, sovereignty, quantum_core, the six pre_timer_* reminders, attacker_threat_intel and pos.attack) are documented in the dedicated feature sections of this help page. No webhooks are auto-bound on install; the operator binds each category in the Notifications panel.',
     'v31_category_list' => '<table style="width:100%; border-collapse:collapse;">
         <thead><tr><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Namespace</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Category</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">What triggers it</th></tr></thead>
         <tbody>
@@ -1128,9 +1129,9 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
                 <tr>
                     <td style="padding:6px 10px;"><code>structure.alert.anchoring_started</code></td>
                     <td style="padding:6px 10px;">StructureAnchoring, AllAnchoringMsg</td>
-                    <td style="padding:6px 10px;">Anchor completion (~24h)</td>
+                    <td style="padding:6px 10px;">Your own drop: the end of deployment, about 15 minutes in, when its first vulnerable window opens (the end of anchoring instead if SeAT already lists the structure). Another corporation anchoring: whatever time EVE\'s message carries.</td>
                     <td style="padding:6px 10px;"><span class="badge badge-warning">warning</span></td>
-                    <td style="padding:6px 10px;">Contest anchor before completion</td>
+                    <td style="padding:6px 10px;">Cover your own drop\'s vulnerable window; contest a hostile anchor before it completes</td>
                 </tr>
                 <tr>
                     <td style="padding:6px 10px;"><code>structure.alert.sov_reinforced</code></td>

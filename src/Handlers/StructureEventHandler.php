@@ -2666,9 +2666,12 @@ class StructureEventHandler
             return $payload;
         }
 
-        // A structure waiting for its core is vulnerable until somebody acts,
-        // so it pings like an attack rather than logging like a state change.
-        if ($category !== 'attack' && $category !== 'fuel' && $category !== 'core') {
+        // Lifecycle alerts (anchoring, unanchoring, ownership) are informational
+        // and never ping. Every other category does, including sovereignty and
+        // services offline, which were split out of the attack and fuel
+        // categories without being added here, so their roles went silent.
+        // NotificationCategory::MENTION_RULES has to agree with this.
+        if ($category === 'lifecycle') {
             return $payload;
         }
 

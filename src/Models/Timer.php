@@ -13,7 +13,7 @@ use Carbon\Carbon;
  * See migration 000023 for schema details + visibility model explanation.
  *
  * Category groups (derived from event_type, used by client-side filter):
- *   - 'fuel'      — fuel_warning, fuel_critical, fuel_final
+ *   - 'fuel'      — fuel_warning, fuel_critical, fuel_final, reagents_low
  *   - 'tactical'  — reinforce_*, hostile_op, defense_op
  *   - 'lifecycle' — anchor_*, anchoring, core_awaiting, onlining,
  *                   unanchor_*, ownership_transferred
@@ -72,6 +72,7 @@ class Timer extends Model
         'fuel_warning'         => 'fuel',
         'fuel_critical'        => 'fuel',
         'fuel_final'           => 'fuel',
+        'reagents_low'         => 'fuel',
         // tactical (attacks + manual ops)
         'under_attack'         => 'tactical',
         'reinforce_shield'     => 'tactical',
@@ -103,7 +104,13 @@ class Timer extends Model
      * ends it on a clock, so these rows stay on the board until the state
      * resolves instead of ageing out like an elapsed timer.
      */
-    public const OPEN_ENDED_TYPES = ['core_awaiting'];
+    public const OPEN_ENDED_TYPES = ['core_awaiting', 'reagents_low'];
+
+    /** How the board words the time each open-ended state has lasted. */
+    private const OPEN_ENDED_VERBS = [
+        'core_awaiting' => 'waiting',
+        'reagents_low'  => 'low for',
+    ];
 
     /**
      * Human-readable badge labels per event_type. The board blade reads this
@@ -120,6 +127,7 @@ class Timer extends Model
         'fuel_warning'          => 'Fuel Warning',
         'fuel_critical'         => 'Fuel Critical',
         'fuel_final'            => 'Fuel Final',
+        'reagents_low'          => 'Cyno Reagents Low',
         // tactical (attack progression + destruction + manual ops)
         //
         // under_attack: CCP's StructureUnderAttack notification — a structure
@@ -377,6 +385,15 @@ class Timer extends Model
     public function getIsOpenEndedAttribute(): bool
     {
         return in_array($this->event_type, self::OPEN_ENDED_TYPES, true);
+    }
+
+    /**
+     * How the board words the time an open-ended row has lasted, or null for
+     * a row with a deadline.
+     */
+    public function getOpenEndedVerbAttribute(): ?string
+    {
+        return self::OPEN_ENDED_VERBS[$this->event_type] ?? null;
     }
 
     /**

@@ -38,6 +38,26 @@ class NotificationCategory extends Model
     ];
 
     /**
+     * Categories whose alerts mention the role only some of the time, or
+     * never. Every other category pings it on every alert. Each entry
+     * mirrors the sender noted beside it: change when a sender pings and this
+     * has to change with it, or the Routing Map will promise the wrong thing.
+     */
+    private const MENTION_RULES = [
+        // StructureEventHandler::injectMention
+        'events.structure_lifecycle' => 'Never pings: lifecycle alerts are informational',
+        // NotifyUpwellLowFuel::buildDiscordPayload
+        'upwell.fuel'                => 'Pings on critical and final alerts only',
+        // NotifyUpwellLowFuel::injectCynoReagentMention
+        'upwell.cyno_reagents'       => 'Pings on critical alerts only',
+        // NotifyPosLowFuel::sendDiscordNotification
+        'pos.fuel'                   => 'Pings on critical and final alerts only',
+        'pos.strontium'              => 'Pings on critical and final alerts only',
+        // NotifyPosLowFuel::STATE_ALERTS
+        'pos.lifecycle'              => 'Pings only when a tower is reinforced',
+    ];
+
+    /**
      * The webhooks this category fans out to.
      * Pivot carries enabled + role_mention override.
      */
@@ -84,5 +104,14 @@ class NotificationCategory extends Model
     public function getFullKeyAttribute(): string
     {
         return $this->namespace . '.' . $this->category_key;
+    }
+
+    /**
+     * When this category actually mentions its role, or null when every
+     * alert does.
+     */
+    public function getMentionRuleAttribute(): ?string
+    {
+        return self::MENTION_RULES[$this->full_key] ?? null;
     }
 }

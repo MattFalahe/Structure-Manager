@@ -99,7 +99,7 @@ class AnalyzeFuelConsumption implements ShouldQueue
     
     /**
      * Analyze a single structure's consumption
-     * Focuses on EVENT DETECTION (refuels, anomalies, alerts)
+     * Focuses on EVENT DETECTION (refuels, anomalies, low-fuel log lines)
      * Display consumption comes from FuelCalculator service-based rates
      */
     private function analyzeStructure($structureId)
@@ -162,7 +162,8 @@ class AnalyzeFuelConsumption implements ShouldQueue
     }
     
     /**
-     * Check for critical fuel levels and trigger alerts
+     * Log fuel levels worth a look. Fuel alerts are NotifyUpwellLowFuel's
+     * job, so this only writes to the log.
      */
     private function checkCriticalLevels($structureId, $analysis)
     {
@@ -192,10 +193,7 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 'expected_daily_consumption' => $expectedDaily,
                 'tracked_daily_consumption' => $analysis['consumption']['average_daily'] ?? 0,
             ]);
-            
-            // TODO: Dispatch notification jobs or alerts
-            // dispatch(new SendFuelAlert($structureId, $fuelStatus['bay_days_supply'], 'critical'));
-        } 
+        }
         // Warning: Less than 14 days in fuel bay
         elseif ($fuelStatus && isset($fuelStatus['bay_days_supply']) && $fuelStatus['bay_days_supply'] < 14) {
             Log::info('Structure Manager: Warning fuel bay level', [
@@ -204,9 +202,6 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 'fuel_bay_blocks' => $fuelStatus['fuel_bay_blocks'] ?? 0,
                 'expected_daily_consumption' => $expectedDaily,
             ]);
-            
-            // TODO: Dispatch notification jobs or alerts
-            // dispatch(new SendFuelAlert($structureId, $fuelStatus['bay_days_supply'], 'warning'));
         }
         
         // Check for overall fuel status (bay + reserves)
@@ -292,11 +287,6 @@ class AnalyzeFuelConsumption implements ShouldQueue
                 'variance_percent' => round($variance, 1),
                 'possible_cause' => $anomaly['possible_cause'] ?? 'unknown',
             ]);
-            
-            // TODO: If variance is significant, dispatch alert
-            // if (abs($variance) > 20) {
-            //     dispatch(new SendAnomalyAlert($structureId, $anomaly, $variance));
-            // }
         }
         
         // Log significant variance even if no anomalies detected

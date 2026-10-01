@@ -4,7 +4,9 @@
     Rendered as its own Settings tab (#routing-map-section). For every
     notification category it shows each bound webhook and the Discord role
     that will actually be mentioned, resolved through the same three-tier
-    precedence WebhookDispatcher::resolveBindings() applies at delivery time.
+    precedence WebhookDispatcher::resolveBindings() applies at delivery time,
+    plus the category's own rule for when it pings at all
+    (NotificationCategory::mention_rule).
 
     Required variables (from SettingsController::index, inherited via the
     settings view scope):
@@ -289,6 +291,12 @@
                                             <span class="routing-via via-category" title="L2 Category default role mention">L2 category</span>
                                         @elseif($rd['via'] === 'webhook')
                                             <span class="routing-via via-webhook" title="L3 Webhook legacy role (set in Webhook Configuration)">L3 webhook</span>
+                                        @endif
+                                        {{-- A resolved role is only half the answer: some
+                                             categories ping it on critical alerts only, and
+                                             lifecycle never does. --}}
+                                        @if($rd['via'] !== 'none' && $rcat->mention_rule)
+                                            <div class="routing-status">{{ $rcat->mention_rule }}</div>
                                         @endif
                                     </td>
                                 </tr>

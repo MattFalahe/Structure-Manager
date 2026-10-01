@@ -35,11 +35,18 @@ Follows a **newly deployed Upwell structure all the way to online** on the Struc
 - **Elapsed timers on the Structure Board never faded.** The row carried two `class` attributes, and browsers ignore the second one.
 - **The fuel jobs could deadlock on the Structure Board.** Several jobs write the board in the same minute, and two habits made it far busier than it needs to be. The POS job rewrote every tower's row on every poll, because the expiry was counted from now, which also made the time on the board creep later between readings. And recovered rows were dismissed with bulk updates that locked every active row on the board, once per healthy structure on every run. The expiry now counts from when the reading was taken, dismissals touch only the rows they change, a deadlock is retried instead of failing the job, and a failed board write no longer holds up the fuel alerts after it. Both fuel jobs also gain the overlap guard the trackers got in 2.0.4.
 - **Fuel recovery now tells subscribers.** Those bulk updates also skipped the `structure_manager.timer.dismissed` event, so a SeAT Broadcast calendar kept showing a fuel timer after the structure was refuelled. It now fires.
+- **Sovereignty and Services Offline never pinged their role.** Both were split out of the attack and fuel categories without being added to the list of categories allowed to mention, so a role set on either was silently ignored. They ping like any other alert now. Lifecycle still never pings, since its alerts are informational.
+- **The Routing Map promised pings that never came.** It showed the role every binding resolves to, whether or not that category ever mentions it. It now says when a category actually pings: critical and final alerts only for fuel, only on reinforcement for POS state changes, never for lifecycle.
+- **Cyno reagent alerts repeated every ten minutes.** The reagent's board row was meant to be the latch, so that an alert goes out only when the status changes, but nothing ever read it. A structure short of Liquid Ozone or Strontium posted on every poll, critical ones with a ping. It now alerts on a change of status only. On the board the row becomes **Cyno Reagents Low**, which counts up from when the reagent was first seen low and stays until it is refilled, instead of being rewritten every poll to keep it from ageing off.
+- **Metenox expiries no longer creep.** A Metenox's board time, and the expiry it publishes to other plugins, were counted from now on every poll. They now count from when SeAT's fuel and gas figures last changed.
+- **Help's cross-plugin event table** said `structure.alert.anchoring_started` carries the anchoring completion, about 24 hours out. For your own drop it is the end of the 15 minute deployment, and the table now says so. Nothing in the event itself changed.
 - The Test Notification Lab can inject `StructureOnline`, and its `StructureAnchoring` now carries the real 15 minute deployment phase instead of 24 hours.
 
 ### 🚀 Upgrade
 
 Pull and restart the stack as usual. The migration and the new schedule entry apply themselves on restart. Then bind a webhook to **Quantum Core** in the Notifications panel if you want the alerts and reminders.
+
+**Check Sovereignty and Services Offline in the Routing Map before you upgrade.** Any role that reaches them starts pinging, including a webhook's legacy role that a binding falls back to. Sovereignty covers every entosis capture start, which can run to dozens a day during a campaign.
 
 ---
 

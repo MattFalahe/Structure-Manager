@@ -390,6 +390,7 @@
                     <li><span class="cb-legend-badge warning">Fuel Warning</span> Below early-warning threshold</li>
                     <li><span class="cb-legend-badge critical">Fuel Critical</span> Below critical threshold, restock now</li>
                     <li><span class="cb-legend-badge critical">Fuel Final</span> Runs out at this time (24h or less)</li>
+                    <li><span class="cb-legend-badge warning">Cyno Reagents Low</span> A cyno module is short of Liquid Ozone or Strontium; counts up until refilled</li>
                 </ul>
             </div>
 
@@ -412,7 +413,6 @@
                     <li><span class="cb-legend-badge info">Anchoring</span> Counting down to the Quantum Core stage</li>
                     <li><span class="cb-legend-badge critical">Awaiting Quantum Core</span> Vulnerable until the core goes in; counts up</li>
                     <li><span class="cb-legend-badge warning">Onlining</span> Core installed, vulnerable until it comes online</li>
-                    <li><span class="cb-legend-badge info">Anchoring Complete</span> Finished anchoring</li>
                     <li><span class="cb-legend-badge warning">Unanchoring Started</span> Operator-initiated removal</li>
                     <li><span class="cb-legend-badge info">Unanchoring Complete</span> Structure removed</li>
                     <li><span class="cb-legend-badge info">Ownership Transferred</span> Changed hands (shows recipient)</li>
@@ -649,7 +649,7 @@
                                  for timers within 7 days, refreshing each
                                  second. Past timers show 'elapsed X ago'
                                  (static, no ongoing tick). --}}
-                            <div class="cb-rel" data-countdown="{{ $timer->eve_time->toIso8601String() }}" data-open-ended="{{ $timer->is_open_ended ? '1' : '0' }}">{{ $timer->eve_time->diffForHumans() }}</div>
+                            <div class="cb-rel" data-countdown="{{ $timer->eve_time->toIso8601String() }}" data-open-ended="{{ $timer->open_ended_verb ?? '' }}">{{ $timer->eve_time->diffForHumans() }}</div>
                         </div>
 
                         <div class="cb-timer-actions">
@@ -994,16 +994,17 @@
     }
 
     // Open-ended rows count up from when the state began, because there is
-    // no deadline to count down to.
-    function formatWaiting(since) {
+    // no deadline to count down to. The verb comes from the row: "waiting"
+    // for a Quantum Core, "low for" for cyno reagents.
+    function formatOpenEnded(since, verb) {
         const sec = Math.max(0, Math.floor((Date.now() - since.getTime()) / 1000));
         const days = Math.floor(sec / 86400);
         const hours = Math.floor((sec % 86400) / 3600);
         const mins = Math.floor((sec % 3600) / 60);
 
-        if (days >= 1)  return 'waiting ' + days + 'd ' + pad2(hours) + 'h';
-        if (hours >= 1) return 'waiting ' + hours + 'h ' + pad2(mins) + 'm';
-        return 'waiting ' + mins + 'm ' + pad2(sec % 60) + 's';
+        if (days >= 1)  return verb + ' ' + days + 'd ' + pad2(hours) + 'h';
+        if (hours >= 1) return verb + ' ' + hours + 'h ' + pad2(mins) + 'm';
+        return verb + ' ' + mins + 'm ' + pad2(sec % 60) + 's';
     }
 
     function renderLocalTimes() {
@@ -1026,8 +1027,8 @@
             const iso = el.getAttribute('data-countdown');
             const d = new Date(iso);
             if (isNaN(d.getTime())) return;
-            if (el.dataset.openEnded === '1') {
-                el.textContent = formatWaiting(d);
+            if (el.dataset.openEnded) {
+                el.textContent = formatOpenEnded(d, el.dataset.openEnded);
                 return;
             }
             const elapsed = d.getTime() <= Date.now();

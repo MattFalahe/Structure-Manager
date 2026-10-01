@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use StructureManager\Models\StructureNotificationStatus;
 use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\Timer;
@@ -205,8 +206,9 @@ class NotifyUpwellLowFuel implements ShouldQueue
      *
      * Same notification triggers as fuel: status transitions only (good →
      * warning → critical), no spam if quantity stays in the same bracket.
-     * Status latch lives on the Timer board via source_reference dedup —
-     * source_reference = 'cyno_reagent:{structure_id}:{reagent}'.
+     * The latch is the reagent's Structure Board row, keyed
+     * 'cyno_reagent:{structure_id}:{reagent}': its severity is the status
+     * last alerted, and upsertCynoBoardTimer() hands it back to compare.
      *
      * @return int Number of webhook dispatches fired across all structures
      */
@@ -214,6 +216,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
     {
         if (!WebhookDispatcher::isCategoryEnabled('upwell', 'cyno_reagents')) {
             Log::debug('NotifyUpwellLowFuel: upwell.cyno_reagents category disabled; skipping cyno pass.');
+            $this->closeUnseenReagentRows([]);
             return 0;
         }
 
@@ -244,6 +247,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         if ($rows->isEmpty()) {
             Log::debug('NotifyUpwellLowFuel: no cyno modules detected; cyno pass complete.');
+            $this->closeUnseenReagentRows([]);
             return 0;
         }
 
@@ -281,6 +285,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
             ->all();
 
         $sent = 0;
+        $seenReferences = [];
         foreach ($rows as $row) {
             // Determine which reagent + threshold pair applies based on service name
             $isJammer = stripos($row->service_name, 'Jammer') !== false;
@@ -288,6 +293,10 @@ class NotifyUpwellLowFuel implements ShouldQueue
             $reagentName   = $isJammer ? 'Strontium Clathrate' : 'Liquid Ozone';
             $warnThreshold = $isJammer ? $srWarn : $loWarn;
             $critThreshold = $isJammer ? $srCrit : $loCrit;
+
+            // Recorded before the race guard below can skip the row: a
+            // module that is still online keeps its row even on a bad read.
+            $seenReferences[] = $this->cynoReagentReference($row->structure_id, $isJammer);
 
             // Sum reagent quantity in the structure's fuel bay
             $qty = (int) DB::table('corporation_assets')
@@ -326,7 +335,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
             if ($status === 'good') {
                 // Recovery — soft-dismiss any existing timer row for this reagent
-                Timer::dismissActive("cyno_reagent:{$row->structure_id}:" . ($isJammer ? 'strontium' : 'liquid_ozone'));
+                Timer::dismissActive($this->cynoReagentReference($row->structure_id, $isJammer));
                 continue;
             }
 
@@ -343,12 +352,18 @@ class NotifyUpwellLowFuel implements ShouldQueue
             $bindings = $this->resolveBindingsForStructure($row, $corpBindings);
 
             // Upsert Timer board row regardless of webhook bindings (board still
-            // shows it even if no webhook is bound). A failed board write must
-            // not stop the alert.
+            // shows it even if no webhook is bound). It also says what was
+            // last alerted, so a status that has not changed sends nothing.
+            // If the row cannot be read or written, alert anyway.
+            $previousStatus = null;
             try {
-                $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer, $meta);
+                $previousStatus = $this->upsertCynoBoardTimer($row, $reagentName, $reagentTypeId, $qty, $status, $isJammer, $meta);
             } catch (\Throwable $e) {
                 Log::warning("NotifyUpwellLowFuel: cyno board timer for structure {$row->structure_id} not updated: " . $e->getMessage());
+            }
+
+            if ($previousStatus === $status) {
+                continue;
             }
 
             if (empty($bindings)) {
@@ -378,6 +393,8 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
             Log::info("NotifyUpwellLowFuel: dispatched cyno_reagent {$status} for structure {$row->structure_id} ({$reagentName}={$qty})");
         }
+
+        $this->closeUnseenReagentRows($seenReferences);
 
         return $sent;
     }
@@ -458,9 +475,21 @@ class NotifyUpwellLowFuel implements ShouldQueue
         return $payload;
     }
 
-    private function upsertCynoBoardTimer($row, string $reagentName, int $reagentTypeId, int $qty, string $status, bool $isJammer, array $meta = []): void
+    /**
+     * Keep the reagent's board row in step, and report the status it held
+     * before this run. The row is the alert latch: the caller alerts when the
+     * status changes, not on every poll while it stays low.
+     *
+     * @return string|null The previous status, or null if the reagent was
+     *                     not already low.
+     */
+    private function upsertCynoBoardTimer($row, string $reagentName, int $reagentTypeId, int $qty, string $status, bool $isJammer, array $meta = []): ?string
     {
-        $reagentKey = $isJammer ? 'strontium' : 'liquid_ozone';
+        $sourceReference = $this->cynoReagentReference($row->structure_id, $isJammer);
+
+        $existing = Timer::where('source_reference', $sourceReference)
+            ->whereNull('dismissed_at')
+            ->first();
 
         // Display metadata is preloaded in the caller (processCynoReagents)
         // and passed via $meta. Helpers no longer hit the DB per row.
@@ -471,10 +500,10 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         Timer::upsertAuto([
             'source'                 => 'auto_fuel',
-            'event_type'             => $status === 'critical' ? 'fuel_critical' : 'fuel_warning',
+            'event_type'             => 'reagents_low',
             'severity'               => $status,
             'structure_id'           => $row->structure_id,
-            'structure_name'         => ($structureName ?? 'Unknown') . " — {$reagentName}",
+            'structure_name'         => ($structureName ?? 'Unknown') . " ({$reagentName})",
             'structure_type'         => $structureType,
             'structure_type_id'      => $row->type_id,
             'system_id'              => $row->system_id,
@@ -482,13 +511,40 @@ class NotifyUpwellLowFuel implements ShouldQueue
             'system_security'        => $sys->security ?? null,
             'corporation_id'         => $row->corporation_id,
             'owner_corporation_name' => $ownerName,
-            // No deterministic eve_time for cyno reagents (consumption is event-driven, not steady).
-            // Use now() so the row sorts to "current" on the board; admin reads quantity from notes.
-            'eve_time'               => Carbon::now(),
+            // Reagents are used per cyno cycle, not burned on a clock, so
+            // there is no deadline to show. The row records when the reagent
+            // was first seen low and counts up until it is refilled.
+            'eve_time'               => $existing?->eve_time ?? Carbon::now(),
             'notes'                  => "{$reagentName}: " . number_format($qty) . " units (status: {$status})",
-            'source_reference'       => "cyno_reagent:{$row->structure_id}:{$reagentKey}",
+            'source_reference'       => $sourceReference,
             'dismissed_at'           => null,
         ]);
+
+        return $existing?->severity;
+    }
+
+    private function cynoReagentReference(int $structureId, bool $isJammer): string
+    {
+        return "cyno_reagent:{$structureId}:" . ($isJammer ? 'strontium' : 'liquid_ozone');
+    }
+
+    /**
+     * Close the reagent rows for cyno modules this pass did not see online:
+     * the module was offlined or removed, or the structure is gone. A
+     * low-reagent row never ages off the board, so nothing else would.
+     *
+     * @param array<int, string> $seenReferences
+     */
+    private function closeUnseenReagentRows(array $seenReferences): void
+    {
+        Timer::where('event_type', 'reagents_low')
+            ->whereNull('dismissed_at')
+            ->get()
+            ->reject(fn (Timer $timer) => in_array($timer->source_reference, $seenReferences, true))
+            ->each(function (Timer $timer) {
+                $timer->dismissed_at = Carbon::now();
+                $timer->save();
+            });
     }
 
     /**
@@ -946,10 +1002,40 @@ class NotifyUpwellLowFuel implements ShouldQueue
             // (board, EventBus subscribers, embeds) needs to see that.
             $data['days_remaining'] = round($actualDays, 2);
             $data['hours_remaining'] = round($actualDays * 24, 2);
-            $data['fuel_expires'] = Carbon::now()->addHours((int) round($actualDays * 24));
+
+            // Count from when these quantities were first seen, not from now.
+            // They only change when SeAT refreshes the corp's assets, so
+            // between refreshes the expiry holds still instead of creeping
+            // later by one poll each run and rewriting the board row.
+            $readAt = $this->metenoxReadingTime((int) $structure->structure_id, (int) $fuelBlocks, (int) $magmaticGas);
+            $data['fuel_expires'] = $readAt->copy()->addHours((int) round($actualDays * 24));
         }
 
         return $data;
+    }
+
+    /**
+     * When this Metenox's current fuel and gas quantities were first seen.
+     * A changed quantity means SeAT has refreshed the assets, and the clock
+     * restarts from this poll.
+     */
+    private function metenoxReadingTime(int $structureId, int $fuelBlocks, int $magmaticGas): Carbon
+    {
+        $key = "structure-manager:metenox-reading:{$structureId}";
+        $seen = Cache::get($key);
+
+        if (is_array($seen)
+            && ($seen['fuel'] ?? null) === $fuelBlocks
+            && ($seen['gas'] ?? null) === $magmaticGas
+            && !empty($seen['at'])
+        ) {
+            return Carbon::parse($seen['at']);
+        }
+
+        $now = Carbon::now();
+        Cache::put($key, ['fuel' => $fuelBlocks, 'gas' => $magmaticGas, 'at' => $now->toIso8601String()], $now->copy()->addDays(2));
+
+        return $now;
     }
 
     /**
