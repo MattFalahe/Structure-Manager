@@ -48,6 +48,7 @@ class NotificationCategory extends Model
         'events.structure_lifecycle' => 'Never pings: lifecycle alerts are informational',
         // NotifyUpwellLowFuel::buildDiscordPayload
         'upwell.fuel'                => 'Pings on critical and final alerts only',
+        'upwell.magmatic_gas'        => 'Pings on critical and final alerts only',
         // NotifyUpwellLowFuel::injectCynoReagentMention
         'upwell.cyno_reagents'       => 'Pings on critical alerts only',
         // NotifyPosLowFuel::sendDiscordNotification
@@ -55,6 +56,16 @@ class NotificationCategory extends Model
         'pos.strontium'              => 'Pings on critical and final alerts only',
         // NotifyPosLowFuel::STATE_ALERTS
         'pos.lifecycle'              => 'Pings only when a tower is reinforced',
+    ];
+
+    /**
+     * Categories that hand their alerts to another one when nothing live is
+     * bound to them. Mirrors NotifyUpwellLowFuel::bindingsForFuelAlert(): a
+     * gas-limited Metenox goes to Magmatic Gas when that is bound, and to
+     * Fuel otherwise.
+     */
+    private const FALLS_BACK_TO = [
+        'upwell.magmatic_gas' => 'upwell.fuel',
     ];
 
     /**
@@ -113,5 +124,14 @@ class NotificationCategory extends Model
     public function getMentionRuleAttribute(): ?string
     {
         return self::MENTION_RULES[$this->full_key] ?? null;
+    }
+
+    /**
+     * The category this one's alerts go to while nothing live is bound to
+     * it, or null when unbound means they go nowhere.
+     */
+    public function getFallsBackToAttribute(): ?string
+    {
+        return self::FALLS_BACK_TO[$this->full_key] ?? null;
     }
 }

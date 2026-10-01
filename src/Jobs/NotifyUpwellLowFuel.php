@@ -114,12 +114,39 @@ class NotifyUpwellLowFuel implements ShouldQueue
     {
         Log::info('NotifyUpwellLowFuel: Job started');
 
-        // Early bail-out if the upwell.fuel category itself is disabled.
-        if (!WebhookDispatcher::isCategoryEnabled('upwell', 'fuel')) {
-            Log::debug('NotifyUpwellLowFuel: upwell.fuel category disabled; skipping.');
-            return;
+        $notificationsSent = 0;
+
+        // The fuel pass serves upwell.fuel and upwell.magmatic_gas, so it runs
+        // when either is on. The cyno pass has its own category and runs
+        // regardless; it used to be skipped whenever fuel was switched off.
+        if (WebhookDispatcher::isCategoryEnabled('upwell', 'fuel')
+            || WebhookDispatcher::isCategoryEnabled('upwell', 'magmatic_gas')
+        ) {
+            $notificationsSent += $this->processFuelPass();
+        } else {
+            Log::debug('NotifyUpwellLowFuel: upwell.fuel and upwell.magmatic_gas are both disabled; skipping the fuel pass.');
         }
 
+        // Cyno reagent pass — runs alongside the fuel pass but keyed off the
+        // upwell.cyno_reagents category, not upwell.fuel. Iterates only structures
+        // that have a Standup Cyno Generator or Cyno Jammer service module.
+        try {
+            $cynoSent = $this->processCynoReagents();
+            $notificationsSent += $cynoSent;
+        } catch (\Throwable $e) {
+            Log::error('NotifyUpwellLowFuel: cyno reagent pass failed: ' . $e->getMessage());
+        }
+
+        Log::info("NotifyUpwellLowFuel: Job completed, sent {$notificationsSent} notification(s)");
+    }
+
+    /**
+     * Fuel pass over every fueled Upwell structure.
+     *
+     * @return int Notifications sent
+     */
+    private function processFuelPass(): int
+    {
         // Load configurable thresholds (independent from POS settings)
         // Thresholds locked in code via FuelThresholds — see helper docblock.
         $criticalDays = FuelThresholds::UPWELL_FUEL_CRITICAL_DAYS;
@@ -146,12 +173,11 @@ class NotifyUpwellLowFuel implements ShouldQueue
         $byCorp = $structures->groupBy('corporation_id');
 
         foreach ($byCorp as $corpId => $corpStructures) {
-            // Resolve bindings once per corp. upwell.fuel covers standard structures;
-            // upwell.magmatic_gas could also match for Metenox — but for v1 we fan out
-            // all upwell fuel alerts (including Metenox dual-fuel) through upwell.fuel
-            // to keep behavior identical to pre-refactor. Metenox admins can bind the
-            // same webhook to upwell.magmatic_gas as a duplicate channel if desired.
-            $bindings = WebhookDispatcher::resolveBindings('upwell', 'fuel', (int) $corpId);
+            // Resolve bindings once per corp. A Metenox whose gas runs out
+            // first is a Magmatic Gas alert and every other alert is Fuel;
+            // processStructure() picks once it knows the limiting resource.
+            $fuelBindings = WebhookDispatcher::resolveBindings('upwell', 'fuel', (int) $corpId);
+            $gasBindings  = WebhookDispatcher::resolveBindings('upwell', 'magmatic_gas', (int) $corpId);
 
             foreach ($corpStructures as $structure) {
                 // Test-structure routing: if the structure is in the safe test
@@ -160,16 +186,18 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 // Without this, the diagnostic page's "Run Upwell notification check"
                 // button cannot exercise SM's enriched dual-fuel embed against test
                 // Metenoxes (test corps don't have webhook bindings configured).
-                $structureBindings = $this->resolveBindingsForStructure($structure, $bindings);
+                $structureFuelBindings = $this->resolveBindingsForStructure($structure, $fuelBindings);
+                $structureGasBindings  = $this->resolveBindingsForStructure($structure, $gasBindings);
 
-                if (empty($structureBindings)) {
+                if (empty($structureFuelBindings) && empty($structureGasBindings)) {
                     continue;
                 }
 
                 try {
                     $sent = $this->processStructure(
                         $structure,
-                        $structureBindings,
+                        $structureFuelBindings,
+                        $structureGasBindings,
                         $criticalDays,
                         $warningDays,
                         $criticalInterval
@@ -181,17 +209,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
             }
         }
 
-        // Cyno reagent pass — runs alongside the fuel pass but keyed off the
-        // upwell.cyno_reagents category, not upwell.fuel. Iterates only structures
-        // that have a Standup Cyno Generator or Cyno Jammer service module.
-        try {
-            $cynoSent = $this->processCynoReagents();
-            $notificationsSent += $cynoSent;
-        } catch (\Throwable $e) {
-            Log::error('NotifyUpwellLowFuel: cyno reagent pass failed: ' . $e->getMessage());
-        }
-
-        Log::info("NotifyUpwellLowFuel: Job completed, sent {$notificationsSent} notification(s)");
+        return $notificationsSent;
     }
 
     /**
@@ -603,7 +621,27 @@ class NotifyUpwellLowFuel implements ShouldQueue
         ]];
     }
 
-    private function processStructure($structure, array $bindings, $criticalDays, $warningDays, $criticalInterval): int
+    /**
+     * A Metenox whose gas will run out first is a Magmatic Gas alert, and goes
+     * to that category when anything is bound to it. Otherwise it goes to
+     * Fuel like every other structure, which is where every Metenox alert
+     * went before the gas category was wired up, so an install that never
+     * bound it sees no change. NotificationCategory::FALLS_BACK_TO describes
+     * this for the Routing Map.
+     *
+     * @return array{0:string,1:array} The category key the alert goes out
+     *                                  under, and its bindings
+     */
+    private function bindingsForFuelAlert(array $fuelData, array $fuelBindings, array $gasBindings): array
+    {
+        if (($fuelData['limiting_factor'] ?? null) === 'magmatic_gas' && !empty($gasBindings)) {
+            return ['upwell.magmatic_gas', $gasBindings];
+        }
+
+        return ['upwell.fuel', $fuelBindings];
+    }
+
+    private function processStructure($structure, array $fuelBindings, array $gasBindings, $criticalDays, $warningDays, $criticalInterval): int
     {
         // Enrich with fuel data
         $fuelData = $this->getStructureFuelData($structure);
@@ -611,6 +649,8 @@ class NotifyUpwellLowFuel implements ShouldQueue
         if ($fuelData === null) {
             return 0;
         }
+
+        [$categoryKey, $bindings] = $this->bindingsForFuelAlert($fuelData, $fuelBindings, $gasBindings);
 
         // Get or create notification tracking row
         $status = StructureNotificationStatus::getOrCreate(
@@ -668,6 +708,13 @@ class NotifyUpwellLowFuel implements ShouldQueue
             Log::warning("NotifyUpwellLowFuel: board timer for structure {$structure->structure_id} not updated: " . $e->getMessage());
         }
 
+        // Nowhere to send this one: only the other category is bound. Leave
+        // the latch alone, or this status would count as alerted and hold
+        // back the alert when the other resource becomes the limiting one.
+        if (empty($bindings)) {
+            return 0;
+        }
+
         // Check if notification should fire
         if (!$this->shouldSendNotification($status, $currentStatus, $fuelData, $criticalInterval)) {
             return 0;
@@ -688,7 +735,8 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 $binding['webhook_url'],
                 $currentStatus,
                 $isFinalAlert,
-                $binding['role_mention'] ?? ''
+                $binding['role_mention'] ?? '',
+                $categoryKey
             );
             $sent++;
         }
@@ -1191,7 +1239,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
     /**
      * Build and send a Discord/Slack webhook notification.
      */
-    private function sendNotification($structure, array $fuelData, string $webhookUrl, string $currentStatus, bool $isFinalAlert, string $roleMention = ''): void
+    private function sendNotification($structure, array $fuelData, string $webhookUrl, string $currentStatus, bool $isFinalAlert, string $roleMention = '', string $categoryKey = 'upwell.fuel'): void
     {
         // SECURITY: revalidate URL before every POST
         if (!WebhookConfiguration::isValidWebhookUrl($webhookUrl)) {
@@ -1221,7 +1269,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
         \StructureManager\Services\WebhookDeliveryService::sendByUrl(
             $webhookUrl,
             $payload,
-            'upwell.fuel',
+            $categoryKey,
             "{$alertType} fuel alert — {$structureLabel}"
         );
     }

@@ -18,9 +18,24 @@ use StructureManager\Models\WebhookConfiguration;
  *
  * This is the single place every dispatch job goes through. If you change
  * how role mentions are picked, change it here.
+ *
+ * An empty tier means "not set" and falls through to the next one, so a
+ * binding cannot use emptiness to stop a webhook's legacy role pinging.
+ * NO_MENTION can: it wins its tier like any role and mentions no one.
  */
 class WebhookDispatcher
 {
+    /**
+     * Stored as a binding's or a category's role mention to mean "do not
+     * ping here", stopping the fallback to the tiers below it.
+     */
+    public const NO_MENTION = 'none';
+
+    public static function isNoMention(?string $value): bool
+    {
+        return $value !== null && strtolower(trim($value)) === self::NO_MENTION;
+    }
+
     /**
      * Resolve active webhook bindings for a notification.
      *
@@ -80,6 +95,10 @@ class WebhookDispatcher
                 ?: ($category->role_mention
                     ?: ($row->webhook_legacy_role ?: null));
 
+            if (self::isNoMention($mention)) {
+                $mention = null;
+            }
+
             $bindings[] = [
                 'webhook_id'   => (int) $row->webhook_id,
                 'webhook_url'  => $row->webhook_url,
@@ -114,7 +133,7 @@ class WebhookDispatcher
     {
         $allowedMentions = ['parse' => [], 'users' => [], 'roles' => []];
 
-        if ($raw === null || trim($raw) === '') {
+        if ($raw === null || trim($raw) === '' || self::isNoMention($raw)) {
             return ['', $allowedMentions];
         }
 

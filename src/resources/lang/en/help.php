@@ -197,6 +197,7 @@ return [
     'recent_changes_list' => '<p><strong>2.0.5</strong> (in preparation)</p>
     <ul>
         <li><strong>New structures are followed until they come online.</strong> The Structure Board shows each stage of a deployment as it happens: the first vulnerable window, the anchoring timer, the wait for the Quantum Core, and onlining. The wait counts up and stays on the board until the core is in. A new <code>events.quantum_core</code> category alerts when the wait begins, naming the core the structure needs, and reminds every 30 minutes while it lasts. It is not bound to a webhook, so bind it in the Notifications panel to receive these. The interval is under Settings, Structure Events.</li>
+        <li><strong>A binding can now say "no ping".</strong> Set its role to <code>none</code> with the <i class="fas fa-bell-slash"></i> button, and it mentions no one even when the category or the webhook has a role. A blank binding still falls back to them. <strong>Magmatic Gas works</strong> as well: a Metenox whose gas runs out first alerts there once it is bound, and under Fuel until then, as before.</li>
         <li><strong>Roles on Sovereignty and Services Offline now ping.</strong> A role set on either was silently ignored before. If one reaches them, including a webhook\'s legacy role, expect a ping for every sov event, entosis captures included. The Routing Map shows the role each binding resolves to, and now also says when each category actually pings. Cyno reagent alerts go out when the status changes instead of every ten minutes.</li>
         <li><strong>Anchoring and full power alerts read correctly.</strong> Anchoring Started showed "0m remaining" whatever the real time left, and called the deployment phase "Anchoring Completes". It now shows the time left and labels it Deployment Ends. The first full power after a deployment reads Went into High Power instead of High Power Restored, and elapsed timers on the board now fade as they were meant to.</li>
     </ul>
@@ -488,6 +489,7 @@ return [
         <li><strong>L3 (Webhook legacy role):</strong> the <code>role_mention</code> column on the webhook itself, carried over from the original release for backward compatibility</li>
         <li>No mention if all three tiers are empty</li>
     </ol>
+    <p>Leaving a tier blank passes the decision down to the next one, so a blank binding still pings the webhook\'s legacy role. To stop that, set the binding or the category to <code>none</code> with the <i class="fas fa-bell-slash"></i> button beside the field. <code>none</code> wins its tier like a role does and mentions no one.</p>
     <p>The <strong>Routing Map</strong> tab in Settings shows the resolved tier (L1 / L2 / L3) for every category-to-webhook binding at a glance. Role-mention inputs also translate raw Discord role IDs into readable role names when a Discord role source is installed.</p>',
     'v31_role_picker_title' => 'Discord Role Picker',
     'v31_role_picker_desc' => 'When one or more Discord role sources are detected on your SeAT install, the Notifications page shows a role picker button next to every role-mention input. Clicking it opens a searchable dropdown populated from every installed source, deduplicated by Discord role ID and tagged with a source badge.',
@@ -510,7 +512,7 @@ return [
         <thead><tr><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Namespace</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">Category</th><th style="text-align:left; padding:6px; border-bottom:1px solid #454d55;">What triggers it</th></tr></thead>
         <tbody>
             <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>fuel</code></td><td style="padding:6px;">Upwell fuel bay below warning/critical/1h thresholds</td></tr>
-            <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>magmatic_gas</code></td><td style="padding:6px;">Metenox gas supply below thresholds</td></tr>
+            <tr><td style="padding:6px;">upwell</td><td style="padding:6px;"><code>magmatic_gas</code></td><td style="padding:6px;">Metenox fuel alerts where the gas runs out before the fuel blocks. While nothing is bound here they go to <code>upwell.fuel</code></td></tr>
             <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_attack</code></td><td style="padding:6px;">UnderAttack, LostShields, LostArmor, Destroyed, Skyhook variants</td></tr>
             <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_lifecycle</code></td><td style="padding:6px;">Anchoring, unanchoring, ownership transferred, skyhook deployed</td></tr>
             <tr><td style="padding:6px;">events</td><td style="padding:6px;"><code>structure_fuel_events</code></td><td style="padding:6px;">Low power, high power restored, services offline, CCP fuel alerts</td></tr>
@@ -1574,7 +1576,7 @@ Webhook #3:
         <ol>
             <li>Add your webhook URL(s) in <code>Settings &gt; POS Notifications &gt; Webhook Configuration</code></li>
             <li>Go to <code>Structure Manager &gt; Notifications</code></li>
-            <li>Enable the <code>upwell.fuel</code> category (and <code>upwell.magmatic_gas</code> for Metenox gas alerts)</li>
+            <li>Enable the <code>upwell.fuel</code> category. Metenox alerts where the gas runs out first go to <code>upwell.magmatic_gas</code> if you bind it, and to <code>upwell.fuel</code> if you do not</li>
             <li>Bind the webhook(s) you want to receive Upwell alerts</li>
             <li>Set a default role mention on the category, or per-binding for fine control</li>
         </ol>',

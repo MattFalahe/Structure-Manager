@@ -15,6 +15,13 @@
 @php($rp_hasProvider = $roleProviderAvailable ?? false)
 @if(empty($desc))
     <span class="sm-role-none">No mention</span>
+@elseif(($desc['kind'] ?? '') === 'none')
+    {{-- Set to "none" on purpose: mentions no one and stops the fallback to
+         the category default and the webhook's own role. --}}
+    <span class="sm-role-pill is-silenced" title="Set to none: no role is mentioned here, whatever the category or webhook has">
+        <i class="fas fa-bell-slash"></i>
+        <span>No ping</span>
+    </span>
 @elseif(!empty($desc['known']))
     {{-- Resolved against an installed role source — show the name + color. --}}
     <span class="sm-role-pill" title="Discord role ID {{ $desc['id'] }}">

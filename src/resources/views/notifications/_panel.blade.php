@@ -291,6 +291,12 @@
         color: #9ec5e8;
     }
     .sm-role-none { color: #666c76; font-style: italic; }
+    /* Deliberately silenced: neutral rather than the amber of a broken value. */
+    .sm-role-pill.is-silenced {
+        background: #262a33;
+        border-color: #4b5361;
+        color: #aeb6c2;
+    }
 </style>
 
 <div class="notif-wrapper">
@@ -469,12 +475,15 @@
                                             <i class="fas fa-hashtag"></i>
                                         </button>
                                     @endif
+                                    <button type="button" class="btn btn-sm btn-secondary js-no-ping" title="No ping: bindings without a role of their own stay silent, even if the webhook has a role">
+                                        <i class="fas fa-bell-slash"></i>
+                                    </button>
                                 </div>
                                 {{-- Resolved role name — filled by JS from the role-lookup data island --}}
                                 <div class="role-name-display"></div>
                             </div>
                             <small style="color:#666c76; font-size:0.75rem;">
-                                Applied when a binding doesn't override. Leave blank = no mention.
+                                Applied when a binding has no role of its own. Left blank, the webhook's own role is used if it has one; <i class="fas fa-bell-slash"></i> pings no one.
                             </small>
                         </div>
                         <div>
@@ -537,6 +546,9 @@
                                                             <i class="fas fa-hashtag"></i>
                                                         </button>
                                                     @endif
+                                                    <button type="button" class="btn btn-xs btn-secondary js-no-ping" title="No ping: this binding stays silent, even if the category or webhook has a role. Save to apply.">
+                                                        <i class="fas fa-bell-slash"></i>
+                                                    </button>
                                                 </div>
                                                 {{-- Resolved role name — filled by JS --}}
                                                 <div class="role-name-display"></div>
@@ -554,6 +566,10 @@
                                 @endforeach
                             </tbody>
                         </table>
+                    @elseif($cat->falls_back_to)
+                        <div class="no-binding" style="padding:0.5rem 0; font-size:0.82rem;">
+                            No webhooks bound, so these alerts go to <code>{{ $cat->falls_back_to }}</code> instead. Bind one above to give them their own channel.
+                        </div>
                     @else
                         <div class="no-binding" style="padding:0.5rem 0; font-size:0.82rem;">
                             No webhooks bound — this category fires nowhere. Add a binding above.

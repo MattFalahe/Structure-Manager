@@ -278,6 +278,18 @@ class DiscordRoleResolver
             return null;
         }
 
+        if (WebhookDispatcher::isNoMention($raw)) {
+            return [
+                'id'     => null,
+                'raw'    => $raw,
+                'kind'   => 'none',
+                'name'   => null,
+                'color'  => null,
+                'source' => null,
+                'known'  => false,
+            ];
+        }
+
         $kind = 'unknown';
         if (preg_match('/^<@&\d+>$/', $raw) || preg_match('/^\d+$/', $raw)) {
             $kind = 'role';

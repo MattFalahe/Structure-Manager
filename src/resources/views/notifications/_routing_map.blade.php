@@ -170,6 +170,8 @@
                     'webhook' => $rwh,
                     'binding' => $rb,
                     'via'     => $rvia,
+                    // "none" wins its tier like a role does and mentions no one.
+                    'silenced' => \StructureManager\Services\WebhookDispatcher::isNoMention($reff),
                     'role'    => \StructureManager\Services\DiscordRoleResolver::describeRoleMention($reff, $smRoleLookup ?? []),
                     // Live = the alert actually reaches this channel: the
                     // category, the binding and the webhook must all be on,
@@ -178,14 +180,17 @@
                 ];
             }
             $rliveDests = collect($rdests)->where('live', true)->count();
+            // A category with a fallback hands its alerts on while nothing
+            // live is bound to it, so it is not firing nowhere.
+            $rfallback = $rliveDests === 0 ? $rcat->falls_back_to : null;
             if ($rcat->enabled) {
                 if ($rliveDests > 0) {
                     $routeStatRouted++;
-                } else {
+                } elseif ($rfallback === null) {
                     $routeStatSilent++;
                 }
             }
-            $rnsRows[] = ['cat' => $rcat, 'dests' => $rdests, 'mcBlocked' => $catMcBlocked];
+            $rnsRows[] = ['cat' => $rcat, 'dests' => $rdests, 'mcBlocked' => $catMcBlocked, 'fallback' => $rfallback];
         }
         if (!empty($rnsRows)) {
             $routingData[$rns] = $rnsRows;
@@ -241,7 +246,9 @@
                                     <div class="routing-cat-key">{{ $rcat->namespace }}.{{ $rcat->category_key }}</div>
                                 </td>
                                 <td colspan="3">
-                                    @if(!$rcat->enabled)
+                                    @if($rrow['fallback'])
+                                        <span class="routing-none">{{ $rcat->enabled ? 'Not bound' : 'Category disabled' }}, so these alerts go to <code>{{ $rrow['fallback'] }}</code> instead.</span>
+                                    @elseif(!$rcat->enabled)
                                         <span class="routing-none">Category disabled (no delivery).</span>
                                     @elseif($rcatMcBlocked)
                                         <span class="routing-unrouted">
@@ -272,6 +279,9 @@
                                             @elseif($rcatMcBlocked)
                                                 <div class="routing-status"><span class="off">Dormant: needs Manager Core (not installed)</span></div>
                                             @endif
+                                            @if($rrow['fallback'])
+                                                <div class="routing-status">Nothing live here, so alerts go to <code>{{ $rrow['fallback'] }}</code></div>
+                                            @endif
                                         </td>
                                     @endif
                                     <td class="routing-dest">
@@ -295,7 +305,7 @@
                                         {{-- A resolved role is only half the answer: some
                                              categories ping it on critical alerts only, and
                                              lifecycle never does. --}}
-                                        @if($rd['via'] !== 'none' && $rcat->mention_rule)
+                                        @if($rd['via'] !== 'none' && !$rd['silenced'] && $rcat->mention_rule)
                                             <div class="routing-status">{{ $rcat->mention_rule }}</div>
                                         @endif
                                     </td>

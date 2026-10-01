@@ -1893,6 +1893,20 @@ function testWebhook(id) {
         const raw = ($input.val() || '').trim();
         if (raw === '') { $display.empty(); return; }
 
+        // "none" mentions no one and stops the fallback to the category
+        // default and the webhook's own role (WebhookDispatcher::NO_MENTION).
+        if (raw.toLowerCase() === 'none') {
+            const scope = $input.hasClass('js-binding-role')
+                ? 'No ping, even if the category or webhook has a role'
+                : 'No ping for bindings without a role of their own';
+            $display.empty().append(
+                $('<span class="sm-role-pill is-silenced"></span>')
+                    .append($('<i class="fas fa-bell-slash"></i>'))
+                    .append($('<span></span>').text(scope))
+            );
+            return;
+        }
+
         const isRole = /^<@&\d+>$/.test(raw) || /^\d+$/.test(raw);
         const isUser = /^<@!?\d+>$/.test(raw);
         const id = smExtractSnowflake(raw);
@@ -2065,6 +2079,15 @@ function testWebhook(id) {
         const $tr = $(this).closest('tr');
         activeRoleTarget = $tr.find('.js-binding-role');
         openRolePicker();
+    });
+
+    // "No ping" fills in none. Blur is what saves a category role and what
+    // repaints the pill; a binding still needs its Save button, as a picked
+    // role does.
+    $(document).on('click', '.js-no-ping', function () {
+        $(this).closest('.role-field').find('.js-category-role, .js-binding-role').first()
+            .val('none')
+            .trigger('blur');
     });
 
     // INLINE picker — supports multiple instances on the same page via
