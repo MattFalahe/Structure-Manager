@@ -27,6 +27,12 @@ Follows a **newly deployed Upwell structure all the way to online** on the Struc
 - While the structure waits, a **reminder** goes out every 30 minutes. The interval is under Settings, Structure Events, from 5 to 240 minutes.
 - EVE sends nothing when a core is installed. The first sign is the structure reaching full power, once onlining has finished and a service is online, or SeAT showing it onlining. When I tested it, a core installed straight away took 23 minutes to be confirmed that way, which is why the default is 30. A shorter interval can send one reminder after the core is already in, and the reminder says so.
 
+### ⛽ Fuel costs for other plugins (`structure-manager:fuel.estimate`)
+
+- With Manager Core installed, another plugin can ask what a structure it is only planning would burn: a structure type, the service modules it would run and a number of hours. The answer is the fuel blocks and Magmatic Gas, and their cost at the Fuel Economics page's own prices, fuel blocks at the cheapest of the four.
+- Mining Manager's Extraction Simulator uses it to set a refinery's Moon Drill and a Metenox's fuel against what each would earn.
+- When a price is missing, or the Economics integration is set to Disabled, the amounts still come back but no ISK total does, so a cost is never quietly left out.
+
 ### 🐛 Fixes
 
 - **Anchoring Started always read "0m remaining".** The time left was worked out backwards, so anything still in the future came out negative and was clamped to zero. Unanchoring Started had the same fault.

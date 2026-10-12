@@ -269,6 +269,28 @@ class FuelCalculator
     }
     
     /**
+     * Fuel blocks per hour for these service modules on a structure type,
+     * with that structure's bonuses. For a structure that is only being
+     * planned, so there are no online services to read. Slugs not in
+     * SERVICE_FUEL_RATES are left out rather than guessed at.
+     *
+     * @param string[] $modules module slugs, e.g. ['moon_drill']
+     */
+    public static function hourlyBlocksForModules(int $structureTypeId, array $modules): float
+    {
+        $structureInfo = self::getStructureInfo($structureTypeId);
+
+        $hourly = 0.0;
+        foreach (array_unique($modules) as $module) {
+            if (isset(self::SERVICE_FUEL_RATES[$module])) {
+                $hourly += (float) self::getModuleConsumption($module, $structureInfo);
+            }
+        }
+
+        return $hourly;
+    }
+
+    /**
      * Get typical configuration estimate (FALLBACK when no service data)
      * This is for logistics planning only
      */

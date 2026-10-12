@@ -667,6 +667,36 @@ class ManagerCoreIntegration
     }
 
     /**
+     * Expose fuel costing for a planned structure, so another plugin prices
+     * fuel at the same rates and prices as the Economics page instead of
+     * keeping its own copy of either:
+     *
+     *   structure-manager:fuel.estimate(int $structureTypeId, array $modules, int $hours): array
+     *
+     * See FuelEconomicsService::estimate() for the payload. No-op when MC is
+     * absent.
+     */
+    public static function registerFuelCapability(): void
+    {
+        if (!class_exists('\ManagerCore\Services\PluginBridge')) {
+            return;
+        }
+
+        try {
+            $bridge = app(\ManagerCore\Services\PluginBridge::class);
+            $bridge->registerCapability(
+                'structure-manager',
+                'fuel.estimate',
+                fn ($structureTypeId, $modules = [], $hours = 0) => app(\StructureManager\Services\FuelEconomicsService::class)
+                    ->estimate((int) $structureTypeId, (array) $modules, (int) $hours)
+            );
+            Log::debug('[Structure Manager] Registered fuel.estimate capability with Manager Core');
+        } catch (\Throwable $e) {
+            Log::warning('[Structure Manager] Could not register fuel capability with Manager Core: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Publish a `structure.doctrine.changed` EventBus event when a doctrine (or
      * a compliance setting) changes, so consumers can invalidate any cached
      * compliance view. No-op when MC's EventBus is absent. The topic must be

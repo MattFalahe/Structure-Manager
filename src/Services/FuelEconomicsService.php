@@ -359,6 +359,83 @@ class FuelEconomicsService
     }
 
     /**
+     * Fuel and its cost for a structure that is only being planned: a type,
+     * the service modules it would run, and how many hours. Same rates and
+     * prices as the projection above, fuel blocks at the cheapest of the four
+     * and Magmatic Gas at its own price.
+     *
+     * Exposed to other plugins as structure-manager:fuel.estimate. Mining
+     * Manager's Extraction Simulator sets a refinery's fuel and a Metenox's
+     * against what each would earn.
+     *
+     * Nothing is priced while the Economics integration is disabled, since
+     * these types are then never subscribed and MC has no current price for
+     * them. 'isk' is null whenever a price it needs is missing, never a
+     * total that quietly leaves part of the fuel out.
+     *
+     * @param string[] $modules module slugs from TypeIdRegistry::SERVICE_FUEL_RATES
+     */
+    public function estimate(int $structureTypeId, array $modules, int $hours): array
+    {
+        $hours   = max(0, $hours);
+        $modules = array_values(array_unique(array_filter(
+            array_map('strval', $modules),
+            fn ($module) => TypeIdRegistry::fuelRatesForModule($module) !== null
+        )));
+
+        $blocksPerHour = FuelCalculator::hourlyBlocksForModules($structureTypeId, $modules);
+        $gasPerHour = 0;
+        foreach ($modules as $module) {
+            $gasPerHour += (int) (TypeIdRegistry::SERVICE_FUEL_RATES[$module]['magmatic_gas'] ?? 0);
+        }
+
+        $blocks = (int) round($blocksPerHour * $hours);
+        $gas    = $gasPerHour * $hours;
+
+        $enabled = ManagerCoreIntegration::isEconomicsEnabled();
+        $prices  = $enabled
+            ? ManagerCoreIntegration::pricesForTypes(array_merge(
+                array_keys(TypeIdRegistry::FUEL_BLOCK_NAMES),
+                [TypeIdRegistry::MAGMATIC_GAS]
+            ))
+            : [];
+
+        $cheapest = $this->pickCheapestFuelBlock($prices);
+        $gasPrice = isset($prices[TypeIdRegistry::MAGMATIC_GAS])
+            ? (float) $prices[TypeIdRegistry::MAGMATIC_GAS]
+            : null;
+
+        $missing = [];
+        if ($blocks > 0 && $cheapest === null) {
+            $missing[] = 'fuel_blocks';
+        }
+        if ($gas > 0 && $gasPrice === null) {
+            $missing[] = 'magmatic_gas';
+        }
+
+        return [
+            'structure_type_id'     => $structureTypeId,
+            'modules'               => $modules,
+            'hours'                 => $hours,
+            'blocks_per_hour'       => $blocksPerHour,
+            'magmatic_gas_per_hour' => $gasPerHour,
+            'blocks'                => $blocks,
+            'magmatic_gas'          => $gas,
+            'fuel_block'            => $cheapest === null ? null : [
+                'type_id' => $cheapest['type_id'],
+                'name'    => $cheapest['type_name'],
+                'price'   => $cheapest['price'],
+            ],
+            'magmatic_gas_price'    => $gasPrice,
+            'isk'                   => empty($missing)
+                ? $blocks * ($cheapest['price'] ?? 0.0) + $gas * ($gasPrice ?? 0.0)
+                : null,
+            'missing_prices'        => $missing,
+            'pricing'               => ['enabled' => $enabled] + $this->resolvePricingMeta(),
+        ];
+    }
+
+    /**
      * Per-kind structure summary for the breakdown banner.
      *
      *   upwell_count       : Upwell structures (excluding Metenox)

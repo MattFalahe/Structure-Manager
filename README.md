@@ -107,7 +107,7 @@ Structure Manager v2 is built to work with [Manager Core](https://github.com/Mat
 **With Manager Core installed:**
 - ⚡ **~2-minute ESI detection** via the shared director key pool (vs SeAT's native 15-20 min cadence)
 - 💰 **Fuel Economics page** — projected ISK costs over weekly / monthly / quarterly / yearly windows using MC's pricing service
-- 📡 **Cross-plugin events** — Structure Manager publishes `structure.alert.*`, `structure_manager.timer.*`, and `structure.doctrine.changed` events on MC's EventBus, and exposes the `structure-manager:compliance.getForCorporation` capability over the PluginBridge (HR Manager consumes it to show structure compliance inside Corp Health)
+- 📡 **Cross-plugin events** — Structure Manager publishes `structure.alert.*`, `structure_manager.timer.*`, and `structure.doctrine.changed` events on MC's EventBus, and exposes the `structure-manager:compliance.getForCorporation` capability over the PluginBridge (HR Manager consumes it to show structure compliance inside Corp Health), plus `structure-manager:fuel.estimate`, which prices the fuel for a planned structure at the Fuel Economics page's prices (Mining Manager's Extraction Simulator uses it to compare a refinery with a Metenox)
 - 🤝 **Ecosystem benefits** — Mining Manager flags moon extractions as at-risk when their parent structure enters reinforce; SeAT Broadcast (`seat-discord-pings`) will (when its calendar build lands) consume the tactical-planning events for fleet calendaring
 
 **Without Manager Core:**

@@ -174,6 +174,16 @@ class StructureManagerServiceProvider extends AbstractSeatPlugin
                     '[Structure Manager] Compliance capability registration failed: ' . $e->getMessage()
                 );
             }
+
+            // Fuel costing for a planned structure (Mining Manager's Extraction
+            // Simulator). No-op when MC is absent.
+            try {
+                ManagerCoreIntegration::registerFuelCapability();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    '[Structure Manager] Fuel capability registration failed: ' . $e->getMessage()
+                );
+            }
         }
 
         // Family B (cross-plugin timer.* events): observer fires
