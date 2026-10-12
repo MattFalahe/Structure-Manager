@@ -1173,6 +1173,13 @@ class DiagnosticController extends Controller
             'Stuck final-alert latches'   => $stuckLatches,
         ];
 
+        // Structures other plugins were told are critical and have not yet
+        // heard fuel_recovered. One that was unanchored or destroyed while
+        // low stays counted, since it never comes back to say so.
+        if (Schema::hasColumn('structure_notification_status', 'fuel_event_status')) {
+            $details['Fuel events awaiting recovery'] = StructureNotificationStatus::whereNotNull('fuel_event_status')->count();
+        }
+
         $status = 'ok';
         if ($critical > 0) {
             $status = 'warn';
@@ -1227,7 +1234,7 @@ class DiagnosticController extends Controller
             'message' => 'ESI detection is set to OFF. Shield/armor/hull/destroyed events will NOT fire. Fuel alerts (poll-based) still work.',
             'details' => [
                 'Detection mode' => 'off (manually disabled)',
-                'Effect'         => 'No CCP notifications processed; no structure.alert.* events published',
+                'Effect'         => 'No CCP notifications processed, so none of the structure.alert.* events that come from them. Events from polling still publish: fuel, hull reinforced, and destroyed after a structure goes missing.',
                 'How to fix'     => 'Settings > Structure Events > Detection Mode → switch to Auto or SeAT native',
             ],
         ];
@@ -3647,7 +3654,7 @@ class DiagnosticController extends Controller
             // structure_notification_status real columns:
             // last_fuel_notification_at, last_fuel_notification_status,
             // fuel_final_alert_sent, last_gas_notification_at,
-            // last_gas_notification_status (Metenox).
+            // last_gas_notification_status (Metenox), fuel_event_status.
             $fuelEventsEnabled = (bool) StructureManagerSettings::get('notify_structure_fuel_events', 1);
             $cadenceHours = (int) StructureManagerSettings::get('upwell_fuel_notification_interval', 0);
             $lastFire = null;
@@ -3662,13 +3669,19 @@ class DiagnosticController extends Controller
             $gateMessage = $fuelEventsEnabled
                 ? 'Fuel-event category is enabled. Cadence: ' . ($cadenceHours === 0 ? 'status-change-only.' : "{$cadenceHours}h between repeats.")
                 : 'Fuel-event category DISABLED in settings. No alerts will fire even if fuel goes critical.';
-            if ($lastFire) {
-                $gateMessage .= ' Last fuel-fire: ' . ($lastFire->last_fuel_notification_at ?? '?')
+            // A row can exist without any alert: one is also kept for a
+            // structure whose fuel events went out with nothing bound for it.
+            if ($lastFire && !empty($lastFire->last_fuel_notification_at)) {
+                $gateMessage .= ' Last fuel-fire: ' . $lastFire->last_fuel_notification_at
                     . ' (level: ' . ($lastFire->last_fuel_notification_status ?? '?') . ').';
-                if (!empty($lastFire->last_gas_notification_at)) {
-                    $gateMessage .= ' Last gas-fire: ' . $lastFire->last_gas_notification_at
-                        . ' (level: ' . ($lastFire->last_gas_notification_status ?? '?') . ').';
-                }
+            }
+            if ($lastFire && !empty($lastFire->last_gas_notification_at)) {
+                $gateMessage .= ' Last gas-fire: ' . $lastFire->last_gas_notification_at
+                    . ' (level: ' . ($lastFire->last_gas_notification_status ?? '?') . ').';
+            }
+            if ($lastFire && !empty($lastFire->fuel_event_status)) {
+                $gateMessage .= ' Other plugins were told it went critical and hear fuel_recovered when it is back to good'
+                    . ' (fuel_event_status: ' . $lastFire->fuel_event_status . ').';
             }
             $steps[] = [
                 'title'   => '6. Notification gate',

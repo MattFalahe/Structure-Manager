@@ -200,6 +200,7 @@ return [
         <li><strong>A binding can now say "no ping".</strong> Set its role to <code>none</code> with the <i class="fas fa-bell-slash"></i> button, and it mentions no one even when the category or the webhook has a role. A blank binding still falls back to them. <strong>Magmatic Gas works</strong> as well: a Metenox whose gas runs out first alerts there once it is bound, and under Fuel until then, as before.</li>
         <li><strong>Roles on Sovereignty and Services Offline now ping.</strong> A role set on either was silently ignored before. If one reaches them, including a webhook\'s legacy role, expect a ping for every sov event, entosis captures included. The Routing Map shows the role each binding resolves to, and now also says when each category actually pings. Cyno reagent alerts go out when the status changes instead of every ten minutes.</li>
         <li><strong>Anchoring and full power alerts read correctly.</strong> Anchoring Started showed "0m remaining" whatever the real time left, and called the deployment phase "Anchoring Completes". It now shows the time left and labels it Deployment Ends. The first full power after a deployment reads Went into High Power instead of High Power Restored, and elapsed timers on the board now fade as they were meant to.</li>
+        <li><strong>Mining Manager hears about low fuel on every refinery.</strong> Other plugins were only told a structure was low on fuel when Structure Manager sent its own fuel alert, so a refinery with no fuel webhook bound never raised Mining Manager\'s Extraction at Risk. They are now told each time a structure drops below 7 days of fuel, whatever is bound here. A refinery that is already low with an extraction running can raise one straight after you upgrade.</li>
     </ul>
     <p><strong>2.0.4</strong></p>
     <ul>
@@ -576,7 +577,7 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
     'mc_ecosystem_desc' => 'Manager Core is designed to serve multiple plugins, not just Structure Manager. Each plugin that integrates contributes different capabilities to the shared bus:',
     'mc_ecosystem_list' => '<ul>
         <li><strong>Structure Manager</strong> &mdash; publishes the <code>structure.alert.*</code> event family (shield_reinforced, armor_reinforced, hull_reinforced, destroyed, destroyed_confirmed, fuel_critical, fuel_recovered, anchoring_started, sov_reinforced, entosis_in_progress) and the <code>structure_manager.timer.*</code> family (created, updated, dismissed, elapsed, upcoming_24h, upcoming_1h, recovered). Registers an ESI notification handler on Manager Core\'s shared fast-poll. Consumes MC pricing for the Fuel Economics page.</li>
-        <li><strong>Mining Manager</strong> &mdash; already integrated. Subscribes to <code>structure.alert.*</code> for extraction-at-risk alerts when a moon-mining refinery enters reinforce. Publishes its own <code>mining.*</code> event family (taxes, theft, jackpots, sessions, events). Uses MC\'s pricing service and the shared director key holder pool.</li>
+        <li><strong>Mining Manager</strong> &mdash; already integrated. Subscribes to <code>structure.alert.*</code> for extraction-at-risk alerts when a moon-mining refinery runs low on fuel or enters reinforce. Publishes its own <code>mining.*</code> event family (taxes, theft, jackpots, sessions, events). Uses MC\'s pricing service and the shared director key holder pool.</li>
         <li><strong>SeAT Broadcast [<code>seat-discord-pings</code>]</strong> &mdash; already integrated with Manager Core\'s EventBus. A planned calendar build will consume SM\'s tactical-planning events to render a fleet-coverage calendar with configurable pre-timer reminder pings (24h / 2h / 30min before reinforce / anchoring timers).</li>
         <li><strong>Corp Wallet Manager</strong> &mdash; integrated with Manager Core. Publishes <code>wallet.*</code> events for cross-plugin reactions (Mining Manager uses these for invoice payment matching).</li>
         <li><strong>HR Manager</strong> &mdash; integrated with Manager Core for cross-plugin member-lifecycle events. Used with Corp Wallet Manager for onboarding and accounting workflows.</li>
@@ -1151,14 +1152,14 @@ docker compose -f docker-compose.yml -f docker-compose.mariadb.yml -f docker-com
                 </tr>
                 <tr>
                     <td style="padding:6px 10px;"><code>structure.alert.fuel_critical</code></td>
-                    <td style="padding:6px 10px;">(SM fuel poll detecting low fuel)</td>
+                    <td style="padding:6px 10px;">SM\'s fuel poll, once each time a structure drops below 7 days of fuel, whether or not a fuel webhook is bound</td>
                     <td style="padding:6px 10px;">Fuel exhaustion time</td>
                     <td style="padding:6px 10px;"><span class="badge badge-danger">critical</span></td>
                     <td style="padding:6px 10px;">Schedule refuel run</td>
                 </tr>
                 <tr>
                     <td style="padding:6px 10px;"><code>structure.alert.fuel_recovered</code></td>
-                    <td style="padding:6px 10px;">(SM fuel poll detecting refill)</td>
+                    <td style="padding:6px 10px;">SM\'s fuel poll, once a structure that sent <code>fuel_critical</code> is refuelled to 14 days or more</td>
                     <td style="padding:6px 10px;">null</td>
                     <td style="padding:6px 10px;"><span class="badge badge-success">info</span></td>
                     <td style="padding:6px 10px;">Clear calendar; cancel reminders</td>

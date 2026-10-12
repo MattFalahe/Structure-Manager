@@ -5,7 +5,8 @@ namespace StructureManager\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Tracks notification state for Upwell structure fuel alerts.
+ * Tracks notification state for Upwell structure fuel alerts, and the fuel
+ * event other plugins were last told about (fuel_event_status).
  *
  * One row per fueled structure. Survives history table cleanup/pruning.
  */
@@ -21,6 +22,7 @@ class StructureNotificationStatus extends Model
         'fuel_final_alert_sent',
         'last_gas_notification_status',
         'last_gas_notification_at',
+        'fuel_event_status',
     ];
 
     protected $casts = [

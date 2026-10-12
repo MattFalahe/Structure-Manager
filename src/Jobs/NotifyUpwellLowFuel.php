@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use StructureManager\Models\StructureNotificationStatus;
 use StructureManager\Models\StructureManagerSettings;
 use StructureManager\Models\Timer;
@@ -116,15 +117,20 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
         $notificationsSent = 0;
 
-        // The fuel pass serves upwell.fuel and upwell.magmatic_gas, so it runs
-        // when either is on. The cyno pass has its own category and runs
-        // regardless; it used to be skipped whenever fuel was switched off.
-        if (WebhookDispatcher::isCategoryEnabled('upwell', 'fuel')
+        // The fuel pass serves upwell.fuel and upwell.magmatic_gas, and the
+        // fuel events other plugins act on, so it runs when either category
+        // is on or there are events to publish. The cyno pass has its own
+        // category and runs regardless; it used to be skipped whenever fuel
+        // was switched off.
+        $publishEvents = $this->canPublishFuelEvents();
+
+        if ($publishEvents
+            || WebhookDispatcher::isCategoryEnabled('upwell', 'fuel')
             || WebhookDispatcher::isCategoryEnabled('upwell', 'magmatic_gas')
         ) {
-            $notificationsSent += $this->processFuelPass();
+            $notificationsSent += $this->processFuelPass($publishEvents);
         } else {
-            Log::debug('NotifyUpwellLowFuel: upwell.fuel and upwell.magmatic_gas are both disabled; skipping the fuel pass.');
+            Log::debug('NotifyUpwellLowFuel: upwell.fuel and upwell.magmatic_gas are both disabled and there are no fuel events to publish; skipping the fuel pass.');
         }
 
         // Cyno reagent pass — runs alongside the fuel pass but keyed off the
@@ -143,9 +149,11 @@ class NotifyUpwellLowFuel implements ShouldQueue
     /**
      * Fuel pass over every fueled Upwell structure.
      *
+     * @param bool $publishEvents Every structure gets its fuel events checked,
+     *                            whether or not anything is bound for it
      * @return int Notifications sent
      */
-    private function processFuelPass(): int
+    private function processFuelPass(bool $publishEvents): int
     {
         // Load configurable thresholds (independent from POS settings)
         // Thresholds locked in code via FuelThresholds — see helper docblock.
@@ -189,7 +197,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 $structureFuelBindings = $this->resolveBindingsForStructure($structure, $fuelBindings);
                 $structureGasBindings  = $this->resolveBindingsForStructure($structure, $gasBindings);
 
-                if (empty($structureFuelBindings) && empty($structureGasBindings)) {
+                if (empty($structureFuelBindings) && empty($structureGasBindings) && !$publishEvents) {
                     continue;
                 }
 
@@ -200,7 +208,8 @@ class NotifyUpwellLowFuel implements ShouldQueue
                         $structureGasBindings,
                         $criticalDays,
                         $warningDays,
-                        $criticalInterval
+                        $criticalInterval,
+                        $publishEvents
                     );
                     $notificationsSent += $sent;
                 } catch (\Throwable $e) {
@@ -566,17 +575,6 @@ class NotifyUpwellLowFuel implements ShouldQueue
     }
 
     /**
-     * Process a single Upwell structure for fuel-status alerts. Decides
-     * whether to fire warning / critical / final-alert webhook(s), updates
-     * the local notification-status latch, upserts a Structure Board timer
-     * row, and (when MC is installed) publishes cross-plugin events on
-     * recovery / critical transitions.
-     *
-     * @param array<int, array{webhook_id:int, webhook_url:string, role_mention:?string}> $bindings
-     * @return int Number of notifications sent (0 or count of bindings)
-     */
-
-    /**
      * Pick the correct webhook bindings for a given structure.
      *
      * Test-structure routing: if the structure_id is in TestDataGenerator's
@@ -641,12 +639,41 @@ class NotifyUpwellLowFuel implements ShouldQueue
         return ['upwell.fuel', $fuelBindings];
     }
 
-    private function processStructure($structure, array $fuelBindings, array $gasBindings, $criticalDays, $warningDays, $criticalInterval): int
+    /**
+     * Process a single Upwell structure. Publishes its fuel events for other
+     * plugins, then, when anything is bound for it, decides whether to fire
+     * warning / critical / final-alert webhook(s), updates the local
+     * notification-status latch and upserts a Structure Board timer row.
+     *
+     * @param array<int, array{webhook_id:int, webhook_url:string, role_mention:?string}> $fuelBindings
+     * @param array<int, array{webhook_id:int, webhook_url:string, role_mention:?string}> $gasBindings
+     * @return int Number of notifications sent (0 or count of bindings)
+     */
+    private function processStructure($structure, array $fuelBindings, array $gasBindings, $criticalDays, $warningDays, $criticalInterval, bool $publishEvents = false): int
     {
         // Enrich with fuel data
         $fuelData = $this->getStructureFuelData($structure);
 
         if ($fuelData === null) {
+            return 0;
+        }
+
+        // Determine current fuel status
+        $currentStatus = $this->determineFuelStatus($fuelData, $criticalDays, $warningDays);
+
+        // Other plugins hear about the fuel whatever SM sends to Discord, so
+        // this runs before anything below can return. Like the board write,
+        // a failure here must not stop the fuel alert.
+        if ($publishEvents) {
+            try {
+                $this->publishFuelEvents($structure, $fuelData, $currentStatus);
+            } catch (\Throwable $e) {
+                Log::warning("NotifyUpwellLowFuel: fuel events for structure {$structure->structure_id} not published: " . $e->getMessage());
+            }
+        }
+
+        // Nothing is bound for this structure, so the events were all it needed.
+        if (empty($fuelBindings) && empty($gasBindings)) {
             return 0;
         }
 
@@ -658,24 +685,18 @@ class NotifyUpwellLowFuel implements ShouldQueue
             $structure->corporation_id
         );
 
-        // Determine current fuel status
-        $currentStatus = $this->determineFuelStatus($fuelData, $criticalDays, $warningDays);
-
         // Reset latches on recovery (above critical threshold)
         $this->resetLatchesOnRecovery($status, $currentStatus);
 
-        // Detect a recovery transition: structure was previously alerting at
-        // warning/critical and is now back to good. Publish a recovery event
-        // so cross-plugin subscribers can clear their dedup latches without
-        // waiting for the next critical fire. Snapshot+commit pattern: read
-        // the previous status BEFORE updating, write 'good' back if we fired,
-        // so we don't double-publish on the next 10-min poll.
+        // Detect a recovery transition: SM last alerted at warning/critical
+        // and the structure is now back to good. Snapshot+commit pattern:
+        // read the previous status BEFORE updating, write 'good' back once
+        // handled, so this runs once and not on every 10-min poll.
+        // structure.alert.fuel_recovered is publishFuelEvents()'s job.
         $previousStatus = $status->last_fuel_notification_status ?? null;
         $wasAlerting = in_array($previousStatus, ['warning', 'critical'], true);
         if ($wasAlerting && $currentStatus === 'good') {
-            $this->publishFuelRecoveredEvent($structure, $fuelData);
-
-            // Family B: also publish structure_manager.timer.recovered for
+            // Family B: publish structure_manager.timer.recovered for
             // the active fuel timer (if one exists). The timer is about to
             // be auto-soft-dismissed by upsertBoardTimer below — firing
             // recovered BEFORE that dismiss gives subscribers two distinct
@@ -749,57 +770,104 @@ class NotifyUpwellLowFuel implements ShouldQueue
         }
         $status->save();
 
-        // Cross-plugin: publish a `structure.alert.fuel_critical` event through
-        // Manager Core's EventBus for ALL critical-fuel structures. Subscribers
-        // filter to the structures they care about (MM filters to refineries
-        // with active moon extractions; future subscribers can use their own
-        // criteria). No-op if MC is missing.
-        $this->publishFuelCriticalEvent($structure, $fuelData, $currentStatus);
-
         return $sent;
     }
 
     /**
-     * Publish a `structure.alert.fuel_critical` event on Manager Core's
-     * EventBus when:
-     *   - current fuel status is 'critical'
-     *   - Manager Core is installed (EventBus class exists)
-     *
-     * Fires for ALL critical-fuel Upwell structures uniformly with the other 4
-     * `structure.alert.*` flavors (shield_reinforced, armor_reinforced,
-     * hull_reinforced, destroyed). Subscribers are responsible for filtering
-     * to the structures they care about — Mining Manager filters to refineries
-     * with active moon extractions inside its own StructureAlertHandler;
-     * future subscribers (Pings, etc.) can route by their own criteria.
-     *
-     * This was previously gated behind a refinery+active-extraction filter to
-     * limit MM's notification volume, but that left non-MM subscribers unable
-     * to receive fuel-critical events for citadels and engineering complexes.
-     * The contract pattern is "publish broadly, subscribe narrowly" — push the
-     * filtering to where it belongs (subscribers).
-     *
-     * @param object $structure
-     * @param array  $fuelData
-     * @param string $currentStatus
-     * @return void
+     * The fuel events need Manager Core to carry them and fuel_event_status
+     * to latch them. Without the column every poll would publish again, so a
+     * part-migrated install publishes none until its migrations have run.
      */
-    private function publishFuelCriticalEvent($structure, array $fuelData, string $currentStatus): void
+    private function canPublishFuelEvents(): bool
     {
-        // Only fire on the critical transition — warning is intentionally not
-        // an event flavor (matches contract: only critical + recovered fire)
-        if ($currentStatus !== 'critical') {
+        if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
+            return false;
+        }
+
+        if (!Schema::hasColumn('structure_notification_status', 'fuel_event_status')) {
+            Log::warning('NotifyUpwellLowFuel: structure_notification_status.fuel_event_status is missing; no fuel events are published until migrations have run.');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Publish this structure's fuel events for other plugins, whatever SM
+     * itself sends to Discord. Mining Manager warns about an extraction at
+     * risk from them, so they cannot wait on a fuel webhook being bound here.
+     *
+     * fuel_event_status remembers what subscribers were last told, so each
+     * drop into critical is published once rather than on every poll:
+     *   critical  fuel_critical went out and the structure is still critical
+     *   warning   back above critical but not yet good, fuel_recovered still owed
+     *   null      nothing owed
+     * Warning keeps the debt because subscribers clear their own latches on
+     * fuel_recovered alone, and a later drop back into critical is a fresh
+     * fuel_critical. A row is only created once there is something to remember.
+     */
+    private function publishFuelEvents($structure, array $fuelData, string $currentStatus): void
+    {
+        $status = StructureNotificationStatus::where('structure_id', $structure->structure_id)->first();
+        $told = $status?->fuel_event_status;
+
+        if ($currentStatus === 'critical') {
+            if ($told === 'critical' || !$this->publishFuelCriticalEvent($structure, $fuelData)) {
+                return;
+            }
+
+            $status ??= StructureNotificationStatus::getOrCreate(
+                $structure->structure_id,
+                $structure->corporation_id
+            );
+            $status->fuel_event_status = 'critical';
+            $status->save();
             return;
         }
 
+        if ($told === null) {
+            return;
+        }
+
+        if ($currentStatus === 'good') {
+            if ($this->publishFuelRecoveredEvent($structure, $fuelData)) {
+                $status->fuel_event_status = null;
+                $status->save();
+            }
+        } elseif ($told === 'critical') {
+            $status->fuel_event_status = 'warning';
+            $status->save();
+        }
+    }
+
+    /**
+     * Publish a `structure.alert.fuel_critical` event on Manager Core's
+     * EventBus. publishFuelEvents() calls it once each time a structure
+     * drops into critical.
+     *
+     * Fires for every Upwell structure, not only refineries. Subscribers
+     * filter to the structures they care about: Mining Manager keeps
+     * refineries with an active moon extraction, inside its own
+     * StructureAlertHandler. The contract is "publish broadly, subscribe
+     * narrowly", so citadels and engineering complexes reach other
+     * subscribers too.
+     *
+     * @param object $structure
+     * @param array  $fuelData
+     * @return bool Whether the event went out. A failed publish is tried
+     *              again on the next poll.
+     */
+    private function publishFuelCriticalEvent($structure, array $fuelData): bool
+    {
         // MC not installed — nothing to publish to
         if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
-            return;
+            return false;
         }
 
         // Route through AlertEventEnvelope so the contract base fields
         // (source_plugin / schema_version / event_id / category_group /
         // eve_time / seconds_until / is_elapsed / url) are uniform with the
-        // other 4 structure.alert.* flavors.
+        // other structure.alert.* flavors.
         $payload = AlertEventEnvelope::build('fuel_critical', [
             'structure_id'      => (int) $structure->structure_id,
             'corporation_id'    => (int) $structure->corporation_id,
@@ -809,7 +877,7 @@ class NotifyUpwellLowFuel implements ShouldQueue
             'structure_name'    => $fuelData['structure_name'] ?? null,
             'system_name'       => $fuelData['system_name'] ?? null,
             'system_security'   => $fuelData['system_security'] ?? null,
-            'severity'          => $currentStatus,
+            'severity'          => 'critical',
             'source_reference'  => 'fuel:' . $structure->structure_id,
 
             // eve_time = when the structure runs out of fuel
@@ -830,30 +898,33 @@ class NotifyUpwellLowFuel implements ShouldQueue
             );
 
             Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_critical for structure {$structure->structure_id} (event_id={$payload['event_id']})");
+            return true;
         } catch (\Throwable $e) {
             Log::warning("NotifyUpwellLowFuel: fuel_critical event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
+            return false;
         }
     }
 
     /**
-     * Publish a `structure.alert.fuel_recovered` event when an Upwell structure's
-     * fuel status transitions from warning/critical back to good (i.e. the
-     * structure has been refueled). Closes the alert ladder so subscribers can
-     * auto-clear their dedup latches without waiting for the next critical fire.
+     * Publish a `structure.alert.fuel_recovered` event when a structure that
+     * was published as critical is back to good (i.e. it has been refueled).
+     * Closes the alert ladder so subscribers can auto-clear their dedup
+     * latches without waiting for the next critical fire.
      *
-     * Subscribers (Mining Manager, Pings, etc.) can use this to:
-     *   - Reset per-structure alert-sent flags
+     * Subscribers can use this to:
+     *   - Reset per-structure alert-sent flags (Mining Manager does)
      *   - Send a "structure refueled" follow-up message
      *   - Update calendar / board entries to dismissed state
      *
      * @param object $structure
      * @param array  $fuelData
-     * @return void
+     * @return bool Whether the event went out. A failed publish is tried
+     *              again on the next poll.
      */
-    private function publishFuelRecoveredEvent($structure, array $fuelData): void
+    private function publishFuelRecoveredEvent($structure, array $fuelData): bool
     {
         if (!class_exists('\\ManagerCore\\Services\\EventBus')) {
-            return;
+            return false;
         }
 
         $payload = AlertEventEnvelope::build('fuel_recovered', [
@@ -885,8 +956,10 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 $payload
             );
             Log::info("NotifyUpwellLowFuel: published structure.alert.fuel_recovered for structure {$structure->structure_id} (event_id={$payload['event_id']})");
+            return true;
         } catch (\Throwable $e) {
             Log::warning("NotifyUpwellLowFuel: fuel_recovered event publish failed for structure {$structure->structure_id}: " . $e->getMessage());
+            return false;
         }
     }
 
