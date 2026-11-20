@@ -1,0 +1,28 @@
+{
+    "plugin": "structure-manager",
+    "manager_core": { "relation": "optional", "minimum": "1.1.0" },
+    "migration_identifier": "structure_manager",
+    "publishes": [
+        "structure.alert.shield_reinforced", "structure.alert.armor_reinforced", "structure.alert.hull_reinforced",
+        "structure.alert.destroyed", "structure.alert.destroyed_confirmed", "structure.alert.anchoring_started",
+        "structure.alert.sov_reinforced", "structure.alert.entosis_in_progress",
+        "structure.alert.fuel_critical", "structure.alert.fuel_recovered",
+        "structure.doctrine.changed",
+        "structure_manager.timer.created", "structure_manager.timer.updated", "structure_manager.timer.dismissed",
+        "structure_manager.timer.upcoming_24h", "structure_manager.timer.upcoming_6h", "structure_manager.timer.upcoming_1h",
+        "structure_manager.timer.elapsed", "structure_manager.timer.recovered"
+    ],
+    "subscribes": [
+        { "topic": "structure_manager.timer.upcoming_24h", "handler": "StructureManager\\Handlers\\PreTimerReminderHandler@handle" },
+        { "topic": "structure_manager.timer.upcoming_6h", "handler": "StructureManager\\Handlers\\PreTimerReminderHandler@handle" },
+        { "topic": "structure_manager.timer.upcoming_1h", "handler": "StructureManager\\Handlers\\PreTimerReminderHandler@handle" }
+    ],
+    "capabilities": {
+        "provides": ["compliance.getForCorporation", "fuel.estimate"],
+        "calls": []
+    },
+    "routes": {
+        "serves": ["structure-manager.doctrines.index"],
+        "uses": ["manager-core.esi-key-pool.index"]
+    }
+}
