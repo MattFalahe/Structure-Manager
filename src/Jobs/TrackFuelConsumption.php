@@ -57,6 +57,16 @@ class TrackFuelConsumption implements ShouldQueue
     const METENOX_TYPE_ID = TypeIdRegistry::METENOX;
 
     /**
+     * Minutes since a structure's last snapshot before the next one is taken.
+     * The job runs hourly, but it can reach a structure a second earlier than
+     * it did the hour before. Asking for a full hour then skipped that hour,
+     * and the next snapshot landed two hours after the last. Every rate worked
+     * out from snapshots uses the real minutes between them, so taking one a
+     * few minutes short of the hour changes no figure.
+     */
+    private const SNAPSHOT_GAP_MINUTES = 55;
+
+    /**
      * The schedule row's allow_overlap=false only guards the console command,
      * which dispatches this job and returns immediately. Without this
      * middleware a slow run just accumulates concurrent jobs on the same
@@ -222,17 +232,35 @@ class TrackFuelConsumption implements ShouldQueue
             ->where('type_id', self::MAGMATIC_GAS_TYPE_ID)
             ->sum('quantity');
 
-        // Race guard: SeAT's corporation_assets refresh is non-atomic
-        // (DELETE-then-INSERT, per-corp). An hourly snapshot landing inside
-        // that window can read 0 for one fuel type while the other reads
-        // correctly. A real depletion burns fuel + gas proportionally, so
-        // an asymmetric 0 is almost certainly the race rather than the
-        // bay being out. Skip this snapshot — the next hour's poll will
-        // catch the assets table whole. Without this guard, the race
-        // writes a bogus row that breaks the structure detail page's
-        // consumption chart and flips the limiting_factor display.
-        // Same heuristic as the notification path (see
-        // NotifyUpwellLowFuel::getStructureFuelData).
+        // SeAT refreshes a corporation's assets by restamping every row it
+        // receives and then deleting the rows it did not restamp. It runs that
+        // refresh once for every Director token it holds, and the runs can
+        // overlap: the later one then deletes rows the earlier one has just
+        // written again, and they stay missing until a later refresh puts them
+        // back. A fuel bay missing from the table reads as an empty one.
+        //
+        // fuel_expires comes from SeAT's structures job, in a table that
+        // refresh never touches. Fuel blocks at 0 while it is still more than
+        // 12 hours out means the rows are missing, not burned, and that holds
+        // when gas reads 0 as well, a case the check below lets through. A bay
+        // that really empties takes fuel_expires down with it on SeAT's next
+        // structure refresh, so the reading is only held back until then.
+        $hoursToExpiry = $this->hoursUntil($structure->fuel_expires);
+        if ($fuelBlocks == 0 && $hoursToExpiry > 12) {
+            Log::warning(sprintf(
+                'TrackFuelConsumption: suspected corp-assets refresh race on Metenox %d '
+                . '(fuel bay reads 0 but cs.fuel_expires says %.1fh remaining), skipping snapshot',
+                $structure->structure_id,
+                $hoursToExpiry
+            ));
+            return ['tracked' => false, 'method' => null];
+        }
+
+        // Gas has no second source to check against. Fuel and gas burn
+        // together, so one of them at 0 while the other still has more than
+        // a week left is a missing reading too, not a depletion. A bogus row
+        // breaks the consumption chart on the structure page and flips the
+        // limiting factor. Same check as NotifyUpwellLowFuel::getStructureFuelData.
         $fuelDaysCheck = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;
         $gasDaysCheck  = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
         if (
@@ -263,7 +291,7 @@ class TrackFuelConsumption implements ShouldQueue
         if (!$lastRecord) {
             $shouldCreateRecord = true;
             Log::info("Metenox {$structure->structure_id}: First snapshot");
-        } elseif ($lastRecord->created_at->diffInHours(now(), true) >= 1) {
+        } elseif ($lastRecord->created_at->diffInMinutes(now(), true) >= self::SNAPSHOT_GAP_MINUTES) {
             $shouldCreateRecord = true;
         }
         
@@ -344,16 +372,14 @@ class TrackFuelConsumption implements ShouldQueue
         $currentDaysRemaining = Carbon::parse($structure->fuel_expires)->diffInDays(now(), true);
 
         // Race guard: if the bay reads 0 but cs.fuel_expires says the
-        // structure still has fuel for many hours, SeAT's corporation_assets
-        // refresh is mid-DELETE-INSERT for this corp. Skip the snapshot —
-        // taking it would poison the consumption chart (false "consumption
-        // anomaly" or "unexplained_delta" via the v2.0.0 event classifier)
-        // and downstream queries that join against the snapshot. The next
-        // hourly poll catches the table whole. cs.fuel_expires lags real
-        // depletion by at most the ESI structure-info refresh cadence
-        // (15-20 min), so a >12h threshold is conservative against false
-        // skips of genuine depletions (where cs.fuel_expires would be
-        // near 0 anyway).
+        // structure still has fuel for many hours, the bay's rows are missing
+        // from corporation_assets after overlapping SeAT asset refreshes (see
+        // trackMetenoxFuel). Skip the snapshot. Taking it would poison the
+        // consumption chart (false "consumption anomaly" or
+        // "unexplained_delta" via the v2.0.0 event classifier) and downstream
+        // queries that join against the snapshot. cs.fuel_expires catches up
+        // with a real depletion on SeAT's next structure refresh, so a >12h
+        // threshold is conservative against skipping a genuine one.
         if (
             $fuelBayData['available'] === false
             && $currentDaysRemaining > 0.5
@@ -382,7 +408,7 @@ class TrackFuelConsumption implements ShouldQueue
             $shouldCreateRecord = true;
             $trackingMethod = $fuelBayData['available'] ? 'fuel_bay' : 'days_remaining';
             Log::info("Structure {$structure->structure_id}: First snapshot (method: {$trackingMethod})");
-        } elseif ($lastRecord->created_at->diffInHours(now(), true) >= 1) {
+        } elseif ($lastRecord->created_at->diffInMinutes(now(), true) >= self::SNAPSHOT_GAP_MINUTES) {
             $shouldCreateRecord = true;
         }
 
@@ -1029,10 +1055,10 @@ class TrackFuelConsumption implements ShouldQueue
      */
     /**
      * Number of consecutive polls a tuple must be ABSENT before we
-     * record a depletion-reconciliation row. SeAT's hourly corporation-
-     * assets update job is non-atomic (DELETE-then-INSERT pattern, no
-     * transaction), so a single poll that observes "fuel missing" can
-     * be a race with that refresh rather than a real move. Requiring
+     * record a depletion-reconciliation row. Overlapping SeAT asset
+     * refreshes can leave rows missing from corporation_assets until a
+     * later refresh restores them (see trackMetenoxFuel), so a single poll
+     * that observes "fuel missing" is not proof of a real move. Requiring
      * two consecutive observations of absence collapses the false-
      * positive rate from "every hour" to "essentially never".
      */
@@ -1204,5 +1230,20 @@ class TrackFuelConsumption implements ShouldQueue
         }
         
         return $result;
+    }
+
+    /**
+     * Hours from now until a corporation_structures.fuel_expires value, or 0
+     * when it is missing or already past.
+     */
+    private function hoursUntil($fuelExpires): float
+    {
+        if (empty($fuelExpires)) {
+            return 0.0;
+        }
+
+        $expires = Carbon::parse($fuelExpires);
+
+        return $expires->isFuture() ? now()->diffInMinutes($expires, true) / 60.0 : 0.0;
     }
 }

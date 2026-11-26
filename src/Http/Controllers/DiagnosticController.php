@@ -2809,16 +2809,17 @@ class DiagnosticController extends Controller
         //   - the top N worst offenders so a sustained issue on a specific
         //     structure stands out without flooding the page on large installs
         //
-        // Why this matters: the v2.0.2 race guards intentionally SKIP writing
-        // a snapshot when SeAT's corporation_assets table is mid-refresh,
-        // rather than write a wrong value. The trade-off is gaps in the
-        // history rather than poisoned rows — which is preferable for every
+        // Why this matters: the race guards intentionally SKIP writing a
+        // snapshot when a fuel bay is missing from corporation_assets after
+        // overlapping SeAT asset refreshes, rather than write it as empty.
+        // The trade-off is gaps in the history rather than poisoned rows — which is preferable for every
         // downstream consumer (consumption chart, event classifier, refuel
         // detection all normalise by hours_elapsed) but worth surfacing here
         // so operators can spot if the underlying SeAT problem is rare
         // (1-3 misses/24h = noise) or sustained (12+/24h = SeAT-side
-        // investigation needed). Excessive misses also predict that real
-        // critical notifications will be 10 min delayed at most.
+        // investigation needed). A real empty bay on a Metenox is held back
+        // the same way, until SeAT's next structure refresh moves
+        // fuel_expires.
         //
         // Cap the per-structure list at 10 rows so a misconfigured install
         // doesn't render a 200-row group; the summary still reports the
@@ -2880,7 +2881,7 @@ class DiagnosticController extends Controller
                 $summaryMessage = $totalMissed === 0
                     ? sprintf('%d Upwell structure(s) all have full 24/24 coverage in the past 24h.', $totalStructures)
                     : sprintf(
-                        '%d of %d structures missed at least one snapshot in the last 24h (%d total misses). Expected: 24 per structure (hourly track-fuel cron). Frequent misses can indicate SeAT corp-assets refresh races (see NotifyUpwellLowFuel and TrackFuelConsumption race-guard warnings in laravel.log), cron queue lag, or sustained ESI scope issues.',
+                        '%d of %d structures missed at least one snapshot in the last 24h (%d total misses). Expected: 24 per structure (hourly track-fuel cron). Frequent misses can mean SeAT refreshes the corporation from several Director tokens and the refreshes overlap, leaving fuel bays missing from corporation_assets for a while (TrackFuelConsumption logs each skipped reading as a warning, so it only reaches laravel.log when LOG_LEVEL is warning or lower). Cron queue lag and sustained ESI scope issues cause misses too.',
                         $totalFlagged,
                         $totalStructures,
                         $totalMissed
@@ -3044,7 +3045,7 @@ class DiagnosticController extends Controller
         if (!empty($coverageChecks)) {
             $groups[] = [
                 'title' => 'Tracking coverage (last 24h)',
-                'description' => 'Upwell structures are counted against an hourly snapshot, which is written whether or not anything changed, so 24 a day is the target. POS towers are measured differently: readings are written on change plus a daily heartbeat, so the row count follows how often the fuel moved and the useful question is how stale the newest row is. Gaps on either side come from worker queue lag, sustained ESI scope problems, or the guards that deliberately skip a reading rather than record a value taken while SeAT was mid-refresh of corporation_assets. Occasional gaps are the tolerance working; sustained or clustered ones are worth chasing upstream.',
+                'description' => 'Upwell structures are counted against an hourly snapshot, which is written whether or not anything changed, so 24 a day is the target. POS towers are measured differently: readings are written on change plus a daily heartbeat, so the row count follows how often the fuel moved and the useful question is how stale the newest row is. Gaps on either side come from worker queue lag, sustained ESI scope problems, or the guards that deliberately skip a reading when a fuel bay is missing from corporation_assets, which happens when SeAT refreshes a corporation from several Director tokens and the refreshes overlap. Occasional gaps are the tolerance working; sustained or clustered ones are worth chasing upstream.',
                 'items' => $coverageChecks,
             ];
         }

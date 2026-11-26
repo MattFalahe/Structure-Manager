@@ -334,9 +334,10 @@ class NotifyUpwellLowFuel implements ShouldQueue
 
             // Race guard: cyno reagents live in the same StructureFuel bay
             // as fuel blocks. If the reagent reads 0 but cs.fuel_expires
-            // shows the structure still has many hours of fuel, the assets
-            // table is mid-DELETE-INSERT for this corp and the reagent
-            // rows are temporarily missing. Cross-check against
+            // shows the structure still has many hours of fuel, the reagent
+            // rows are probably missing from corporation_assets after
+            // overlapping SeAT asset refreshes (see getStructureFuelData).
+            // Cross-check against
             // cs.fuel_expires (same bay, same race) before alerting.
             if ($qty == 0) {
                 $fuelExpires = DB::table('corporation_structures')
@@ -989,22 +990,23 @@ class NotifyUpwellLowFuel implements ShouldQueue
             ->whereIn('type_id', self::FUEL_BLOCK_TYPES)
             ->sum('quantity');
 
-        // Race guard: SeAT's corporation_assets refresh is non-atomic
-        // (DELETE-then-INSERT, per-corp). A poll landing inside that window
-        // can read 0 for the bay's fuel rows even when the structure has
-        // plenty of fuel left. For non-Metenox Upwell, the status decision
-        // itself comes from $hoursRemaining (cs.fuel_expires based) and is
-        // therefore safe, but the embed would render "0 blocks remaining"
-        // inside the same race window, which looks like the structure is
-        // about to go offline when it isn't. Skip the poll; the next 10-min
-        // run picks up the assets table whole. Metenox has its own guard
-        // further down (after the gas read) because the asymmetric 0 case
-        // is the one that actually drives a false CRITICAL there.
-        if (
-            $structure->type_id != self::METENOX_TYPE_ID
-            && $fuelBlocks == 0
-            && $hoursRemaining > 12
-        ) {
+        // Race guard: SeAT refreshes a corporation's assets by restamping
+        // every row it receives and then deleting the rows it did not
+        // restamp, once for every Director token it holds. When two of those
+        // refreshes overlap, the later one deletes rows the earlier one has
+        // just written again, and they stay missing until a later refresh
+        // puts them back. A fuel bay missing from the table reads as 0.
+        //
+        // $hoursRemaining comes from cs.fuel_expires, which another SeAT job
+        // writes, so 0 blocks while it says more than 12 hours is a missing
+        // bay. Skip the poll. On an ordinary Upwell structure the status
+        // already comes from fuel_expires, but the embed would still say
+        // "0 blocks remaining". On a Metenox the status comes from the bay
+        // itself, and this is the only check that catches fuel and gas both
+        // reading 0. A bay that really empties takes fuel_expires down with
+        // it on SeAT's next structure refresh, so the alert is held back
+        // until then, never dropped.
+        if ($fuelBlocks == 0 && $hoursRemaining > 12) {
             Log::warning(sprintf(
                 'NotifyUpwellLowFuel: suspected corp-assets refresh race on Upwell %d '
                 . '(live fuel=0 but cs.fuel_expires says %.1fh remaining), skipping this poll',
@@ -1068,17 +1070,14 @@ class NotifyUpwellLowFuel implements ShouldQueue
             $gasDays = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
             $actualDays = min($fuelDays, $gasDays);
 
-            // Race guard: SeAT's corporation_assets refresh is non-atomic
-            // (DELETE-then-INSERT, per-corp). A poll inside the window can
-            // read 0 for one fuel type while the other reads correctly.
-            // A real depletion burns fuel + gas proportionally, so an
-            // asymmetric 0 (one resource 0 while the other has many days
-            // left) is almost certainly the race rather than the structure
-            // being out. This is the case that drove false CRITICAL embeds
-            // because the Metenox path below overrides days_remaining from
-            // $actualDays = min(fuel, gas) — a race-induced 0 makes
-            // actualDays = 0 which then triggers critical. Bail; the next
-            // 10-minute poll picks the assets table back up whole.
+            // Gas has no second source to check against. A real depletion
+            // burns fuel and gas together, so one of them at 0 while the
+            // other still has more than a week left is a missing reading,
+            // not the structure being out (fuel blocks at 0 with fuel_expires
+            // still far off never reach here, see above). It matters because
+            // days_remaining below is overridden from min(fuel, gas), so a
+            // missing gas row makes it 0 and raises a false CRITICAL. Bail;
+            // a later poll reads the bay again.
             $raceSuspicionDays = 7;
             if (
                 ($fuelBlocks == 0 && $gasDays > $raceSuspicionDays)

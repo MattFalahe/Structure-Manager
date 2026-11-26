@@ -201,22 +201,24 @@ class FuelAlertController extends Controller
                         $fuelDaysRemaining = $fuelBlocks > 0 ? $fuelBlocks / (5 * 24) : 0;
                         $gasDaysRemaining = $magmaticGas > 0 ? $magmaticGas / (200 * 24) : 0;
 
-                        // Race guard: SeAT's corporation_assets refresh is
-                        // non-atomic (DELETE-then-INSERT, per-corp). A page
-                        // render landing inside that window can read 0 for
-                        // one fuel type while the other reads correctly. A
-                        // real depletion burns both proportionally; an
-                        // asymmetric 0 (one resource 0 while the other has
-                        // many days left) is almost certainly the race.
-                        // Mirrors NotifyUpwellLowFuel's notification-side
-                        // guard. When triggered, surface metenox_data with
+                        // Overlapping SeAT asset refreshes can leave a fuel
+                        // bay's rows missing from corporation_assets for a
+                        // while, and a missing bay reads as an empty one (see
+                        // TrackFuelConsumption::trackMetenoxFuel). Fuel blocks
+                        // at 0 while cs.fuel_expires is more than 12 hours out
+                        // is that, with gas at 0 or not. Gas has no second
+                        // source, so gas at 0 while the blocks have more than
+                        // a week is treated the same way, since both burn
+                        // together. Mirrors NotifyUpwellLowFuel. When
+                        // triggered, surface metenox_data with
                         // limiting_factor='unknown' so the view renders
                         // "AWAITING FUEL DATA" instead of misleading 0s,
                         // and skip the days/hours/status override so the
                         // page falls back to cs.fuel_expires display.
                         $raceSuspicionDays = 7;
                         $raceSuspected = (
-                            ($fuelBlocks == 0 && $gasDaysRemaining > $raceSuspicionDays)
+                            ($fuelBlocks == 0 && $structure->hours_remaining > 12)
+                            || ($fuelBlocks == 0 && $gasDaysRemaining > $raceSuspicionDays)
                             || ($magmaticGas == 0 && $fuelDaysRemaining > $raceSuspicionDays)
                         );
 
