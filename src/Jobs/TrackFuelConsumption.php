@@ -416,8 +416,7 @@ class TrackFuelConsumption implements ShouldQueue
         if ($lastRecord && $shouldCreateRecord) {
             // v2.0.2 — minute-precision elapsed time. diffInHours floors
             // to whole hours, which mis-attributes ~2-hour cron gaps as
-            // 1 hour and inflates the implied burn rate. See the Tier 1.5
-            // forensics memory section for the production audit that
+            // 1 hour and inflates the implied burn rate. A production audit
             // confirmed this as the dominant false-positive cause.
             $realHoursPassed = $lastRecord->created_at->diffInMinutes(now(), true) / 60.0;
 
@@ -542,7 +541,6 @@ class TrackFuelConsumption implements ShouldQueue
                 // no fuel actually left the structure. Switching to
                 // diffInMinutes / 60.0 gives minute-granular floats with no
                 // other behaviour change. The production audit on 2026-05-30
-                // (Tier 1.5 in project_structure_manager_fuel_forensics.md)
                 // confirmed this as the dominant cause of the false
                 // theft-detection rows.
                 $hoursElapsed = $lastRecord
