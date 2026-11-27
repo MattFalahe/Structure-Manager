@@ -1728,7 +1728,7 @@ function showAddWebhookModal() {
     $('#webhook_description').val('');
     $('#webhook_role_mention').val('');
     $('#webhook_enabled').prop('checked', true);
-    $('#webhookModal').modal('show');
+    $('#webhookModal').appendTo('body').modal('show');
 }
 
 function editWebhook(id) {
@@ -1742,7 +1742,7 @@ function editWebhook(id) {
         $('#webhook_description').val(webhook.description || '');
         $('#webhook_role_mention').val(webhook.role_mention || '');
         $('#webhook_enabled').prop('checked', webhook.enabled);
-        $('#webhookModal').modal('show');
+        $('#webhookModal').appendTo('body').modal('show');
     });
 }
 
@@ -2263,6 +2263,10 @@ function testWebhook(id) {
         if (!$modal.length) {
             // Fallback if connector isn't detected
             return;
+        }
+        // Its own wrapper on <body>, so the picker keeps this page's styling.
+        if (!$modal.parent().hasClass('sm-modal-host')) {
+            $('<div class="structure-manager-wrapper sm-modal-host"></div>').appendTo('body').append($modal);
         }
         const $body = $('#rolePickerBody');
         $body.html('<div class="text-center" style="padding:1rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>');

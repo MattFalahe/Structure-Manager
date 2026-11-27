@@ -407,7 +407,7 @@ $(document).ready(function() {
 
     function loadFuelHistory(structureId) {
         $.get('{{ url('structure-manager/fuel-history') }}/' + structureId, function(data) {
-            $('#fuelModal').modal('show');
+            $('#fuelModal').appendTo('body').modal('show');
 
             var labels = data.map(function(d) { return moment(d.created_at).format('MM-DD'); });
             var fuelData = data.map(function(d) { return d.days_remaining; });

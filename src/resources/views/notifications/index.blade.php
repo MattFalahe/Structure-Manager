@@ -623,7 +623,7 @@
         }
         const $body = $('#rolePickerBody');
         $body.html('<div class="text-center" style="padding:1rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>');
-        $modal.modal('show');
+        $modal.appendTo('body').modal('show');
 
         $.getJSON(ROUTES.listRoles, function (res) {
             if (!res.roles || res.roles.length === 0) {

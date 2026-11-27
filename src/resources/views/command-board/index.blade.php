@@ -837,6 +837,13 @@
 (function($) {
     'use strict';
 
+    // Opened by data-toggle, so it moves to <body> as it shows.
+    $(document).on('show.bs.modal', '#cbManualOpModal', function () {
+        if (!$(this).parent().is('body')) {
+            $(this).appendTo('body');
+        }
+    });
+
     // ============================================================
     // Legend panel toggle — collapsible "what does this badge mean"
     // reference. Default closed; state persists per-browser so an
