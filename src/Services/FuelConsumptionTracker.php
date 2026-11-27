@@ -56,8 +56,7 @@ class FuelConsumptionTracker
             // returns INT (floor), so a 1h 59m 42s gap returns 1 hour even
             // though the structure burned ~2 hours of fuel. That mismatch
             // was the dominant cause of false `withdrawal_bay` rows in the
-            // 2026-05-30 production audit — see the Tier 1.5 section in
-            // project_structure_manager_fuel_forensics.md. Using
+            // 2026-05-30 production audit. Using
             // diffInMinutes / 60.0 gives us minute-granular floats that the
             // classifier already expects, without changing thresholds.
             $realHoursPassed = $previous->created_at->diffInMinutes($current->created_at, true) / 60.0;

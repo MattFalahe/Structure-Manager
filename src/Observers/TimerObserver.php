@@ -28,7 +28,6 @@ use StructureManager\Services\TimerEventPublisher;
  *     observer fires .dismissed on the auto-soft-dismiss instead)
  *
  * @see TimerEventPublisher
- * @see project_plugin_integration_contracts.md (memory) for Family B contract
  */
 class TimerObserver
 {

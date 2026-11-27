@@ -9,8 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  * the disappearance-classifier can fire (or correctly NOT fire) the
  * structure.alert.destroyed event when a row vanishes.
  *
- * See migration `2025_10_01_000024_*` and the design memo
- * `project_structure_manager_destruction_detection.md`.
+ * See migration `2025_10_01_000024_*`.
  *
  * Status state machine:
  *   watching

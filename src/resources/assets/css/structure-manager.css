@@ -2572,11 +2572,7 @@ div.structure-manager-wrapper div.tab-pane {
    Bootstrap's `.text-muted` is `color: #6c757d !important` and ties on
    specificity with the bare-element overrides — the chained-class
    selector below (.success-box .text-muted) beats it on specificity
-   so muted-but-still-readable copy stays legible inside boxes too.
-
-   See `feedback_help_docs_visual_design.md` in project memory for the
-   recurring pattern + the MM equivalent at index.blade.php inline
-   styles. */
+   so muted-but-still-readable copy stays legible inside boxes too. */
 .info-box h3, .info-box h4, .info-box h5,
 .warning-box h3, .warning-box h4, .warning-box h5,
 .success-box h3, .success-box h4, .success-box h5,

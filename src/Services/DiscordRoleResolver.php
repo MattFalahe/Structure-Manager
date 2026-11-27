@@ -182,8 +182,7 @@ class DiscordRoleResolver
     /**
      * Short human label for a single provider (used in source badges).
      *
-     * Display names follow the project's canonical naming convention from
-     * feedback_plugin_naming_conventions: the seat-discord-pings package is
+     * Display names are the plugins' own: the seat-discord-pings package is
      * displayed as "SeAT Broadcast" in user-facing UI. The internal table
      * identifier (PROVIDER_DISCORD_ROLES_TABLE) and underlying table name
      * (discord_roles) stay as-is so we don't churn through unrelated layers.

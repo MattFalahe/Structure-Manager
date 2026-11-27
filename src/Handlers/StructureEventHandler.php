@@ -707,15 +707,17 @@ class StructureEventHandler
      * subscribers (Mining Manager fires extraction_at_risk; future plugins
      * can subscribe similarly) react to these.
      *
-     * Mapping (matches the contract in
-     * project_structure_manager_destruction_detection.md and the existing
-     * NotifyUpwellLowFuel::publishFuelCriticalEvent for fuel_critical):
+     * Mapping (same envelope as NotifyUpwellLowFuel::publishFuelCriticalEvent
+     * uses for fuel_critical):
      *
      *   StructureLostShields / SkyhookLostShields → structure.alert.shield_reinforced
      *   StructureLostArmor                        → structure.alert.armor_reinforced
+     *   StructureDestroyed / SkyhookDestroyed     → structure.alert.destroyed
      *
-     * Other reinforce flavors (hull_reinforced, destroyed) ship in later SM
-     * work — see project_structure_manager_destruction_detection.md.
+     * hull_reinforced comes from TrackStructurePresence, which reads the state
+     * column, because CCP's notifications don't mark the start of hull
+     * reliably. A structure that vanishes without a StructureDestroyed is
+     * caught there too.
      *
      * No-op if Manager Core is not installed (class_exists guard). No filter
      * by structure type — SM publishes broadly so future subscribers can use
@@ -941,9 +943,9 @@ class StructureEventHandler
             ),
         ];
 
-        // For 'destroyed' alerts, add the destruction-specific fields the
-        // contract requires (see project_structure_manager_destruction_detection.md
-        // payload contract). HIGH-confidence detection from a CCP notification
+        // For 'destroyed' alerts, add the destruction-specific fields
+        // subscribers read. TrackStructurePresence sets the same four on its
+        // grace-period path. HIGH-confidence detection from a CCP notification
         // is the gold standard — destroyed_at is the notification timestamp.
         if ($alertFlavor === 'destroyed') {
             $destroyedAtIso = isset($notification->timestamp)

@@ -49,8 +49,6 @@ use Illuminate\Support\Str;
  * fuel_expires, hourly_rate, destroyed_at, detection_source, killmail_url,
  * final_timer_result, notification_id, etc) are passed through verbatim so
  * existing subscribers (Mining Manager) keep reading what they already read.
- *
- * @see project_plugin_integration_contracts.md (memory) for the full contract
  */
 final class AlertEventEnvelope
 {

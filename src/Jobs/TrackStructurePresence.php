@@ -27,8 +27,6 @@ use StructureManager\Models\StructureDisappearanceTracking;
  * republishing).
  *
  * Standalone — does NOT depend on Manager Core. SM owns this entirely.
- *
- * See `project_structure_manager_destruction_detection.md` for the full design.
  */
 class TrackStructurePresence implements ShouldQueue
 {
@@ -296,8 +294,9 @@ class TrackStructurePresence implements ShouldQueue
 
     /**
      * Publish structure.alert.destroyed for a structure classified as destroyed
-     * via the grace-period path. Payload matches the contract documented in
-     * project_structure_manager_destruction_detection.md (lines 148-167).
+     * via the grace-period path. Same destroyed fields as the CCP notification
+     * path in StructureEventHandler, so subscribers read one shape whichever
+     * path caught it.
      *
      * No-op when Manager Core is not installed.
      */

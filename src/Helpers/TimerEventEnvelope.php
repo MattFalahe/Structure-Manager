@@ -62,8 +62,6 @@ use StructureManager\Models\Timer;
  *
  * Additional flavor-specific fields can be passed via $extras and survive
  * verbatim alongside the contract scaffold.
- *
- * @see project_plugin_integration_contracts.md (memory) for full Family B contract
  */
 final class TimerEventEnvelope
 {
