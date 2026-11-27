@@ -69,6 +69,9 @@ class PruneStructureBoardTimers implements ShouldQueue
 
     public $tries = 1;
 
+    /** Unused while $tries is 1; there so raising it never retries straight away. */
+    public $backoff = [60];
+
     /** Default for command_board_autodismiss_elapsed_hours when unset. */
     private const DEFAULT_AUTODISMISS_HOURS = 4;
 

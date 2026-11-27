@@ -45,6 +45,9 @@ class PublishTimerScheduleEvents implements ShouldQueue
 
     public $tries = 1;
 
+    /** Unused while $tries is 1; there so raising it never retries straight away. */
+    public $backoff = [60];
+
     /**
      * The 24-hour upcoming window — fire when eve_time is within this many
      * seconds of now AND not yet emitted. We use 24h exactly (not 25h or

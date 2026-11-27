@@ -77,6 +77,9 @@ class DispatchAttackerThreatIntel implements ShouldQueue
      */
     public $tries = 1;
 
+    /** Unused while $tries is 1; there so raising it never retries zKB straight away. */
+    public $backoff = [60];
+
     public int $attackerCharacterId;
     public ?int $corporationId;
     public ?string $structureName;
