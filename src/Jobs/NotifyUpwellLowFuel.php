@@ -98,6 +98,15 @@ class NotifyUpwellLowFuel implements ShouldQueue
     const STRONTIUM_CLATHRATE_TYPE_ID = 16275;
 
     /**
+     * How long a cyno reagent may read 0, while the structure still has fuel,
+     * before the 0 is believed. Rows lost to overlapping asset refreshes come
+     * back on the corporation's next refresh, and SeAT refreshes every
+     * Director's token hourly, so a 0 that outlasts this is a bay that is
+     * really empty.
+     */
+    private const REAGENT_ZERO_HOLD_MINUTES = 90;
+
+    /**
      * Default thresholds for cyno reagent quantity alerts. Quantity-based
      * (not time-based) because cyno modules consume on demand per cycle —
      * "1 hour remaining" makes no sense for an idle cyno gen, but "you have
@@ -332,29 +341,38 @@ class NotifyUpwellLowFuel implements ShouldQueue
                 ->where('type_id', $reagentTypeId)
                 ->sum('quantity');
 
-            // Race guard: cyno reagents live in the same StructureFuel bay
-            // as fuel blocks. If the reagent reads 0 but cs.fuel_expires
-            // shows the structure still has many hours of fuel, the reagent
-            // rows are probably missing from corporation_assets after
-            // overlapping SeAT asset refreshes (see getStructureFuelData).
-            // Cross-check against
-            // cs.fuel_expires (same bay, same race) before alerting.
-            if ($qty == 0) {
+            // Race guard: a reagent reading 0 while the structure still has
+            // many hours of fuel may be rows missing from corporation_assets
+            // after overlapping SeAT asset refreshes (see
+            // getStructureFuelData), not an empty bay. Unlike fuel blocks,
+            // nothing else SeAT stores ever shows the reagent running out,
+            // so the only test is time: hold the alert until the 0 has
+            // lasted REAGENT_ZERO_HOLD_MINUTES, then send it.
+            $zeroSinceKey = 'sm:reagent_zero_since:' . $this->cynoReagentReference($row->structure_id, $isJammer);
+            if ($qty > 0) {
+                Cache::forget($zeroSinceKey);
+            } else {
                 $fuelExpires = DB::table('corporation_structures')
                     ->where('structure_id', $row->structure_id)
                     ->value('fuel_expires');
                 if ($fuelExpires !== null) {
                     $hoursOfFuelLeft = Carbon::now()->diffInHours(Carbon::parse($fuelExpires), false);
                     if ($hoursOfFuelLeft > 12) {
-                        Log::warning(sprintf(
-                            'NotifyUpwellLowFuel: suspected corp-assets refresh race on cyno reagent '
-                            . 'at structure %d (%s reads 0 but cs.fuel_expires shows %.1fh of fuel), '
-                            . 'skipping this row',
-                            $row->structure_id,
-                            $reagentName,
-                            $hoursOfFuelLeft
-                        ));
-                        continue;
+                        $zeroSince = (int) Cache::get($zeroSinceKey, 0) ?: Carbon::now()->getTimestamp();
+                        Cache::put($zeroSinceKey, $zeroSince, Carbon::now()->addHours(6));
+                        $minutesAtZero = (Carbon::now()->getTimestamp() - $zeroSince) / 60;
+                        if ($minutesAtZero < self::REAGENT_ZERO_HOLD_MINUTES) {
+                            Log::warning(sprintf(
+                                'NotifyUpwellLowFuel: %s reads 0 at structure %d but cs.fuel_expires shows '
+                                . '%.1fh of fuel; holding the alert (0 for %d of %d minutes)',
+                                $reagentName,
+                                $row->structure_id,
+                                $hoursOfFuelLeft,
+                                (int) $minutesAtZero,
+                                self::REAGENT_ZERO_HOLD_MINUTES
+                            ));
+                            continue;
+                        }
                     }
                 }
             }

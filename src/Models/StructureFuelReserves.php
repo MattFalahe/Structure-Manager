@@ -71,10 +71,13 @@ class StructureFuelReserves extends Model
         return self::where('structure_id', $structureId)
             ->selectRaw('fuel_type_id, location_flag, reserve_quantity')
             ->whereIn('id', function($query) use ($structureId) {
+                // Per corporation as well: a tenant's office fuel and the
+                // owner's hangars share a structure, a fuel type and a
+                // division, and each keeps its own latest reading.
                 $query->selectRaw('MAX(id)')
                     ->from('structure_fuel_reserves')
                     ->where('structure_id', $structureId)
-                    ->groupBy('fuel_type_id', 'location_flag');
+                    ->groupBy('corporation_id', 'fuel_type_id', 'location_flag');
             })
             ->get();
     }

@@ -627,9 +627,16 @@ class TrackFuelConsumption implements ShouldQueue
         // Gas reserves are stored in regular structures (Astrahus, Fortizar, etc.)
         // because Metenox structures don't have corp hangars!
         $fuelTypes[] = self::MAGMATIC_GAS_TYPE_ID;
-        
+
+        // Only the owner's own hangars. Another corporation renting an office
+        // here is tracked as that corporation's external reserve, and the
+        // depletion pass checks each corporation's rows against its own
+        // assets, so counting a tenant's fuel here wrote it in and took it
+        // out again on alternate hours.
+
         // METHOD 1: Direct - Fuel in structure's CorpSAG
         $directReserves = DB::table('corporation_assets')
+            ->where('corporation_id', $corporationId)
             ->where('location_id', $structureId)
             ->where('location_flag', 'LIKE', 'CorpSAG%')
             ->whereIn('type_id', $fuelTypes)  
@@ -639,6 +646,7 @@ class TrackFuelConsumption implements ShouldQueue
         $nestedReserves = DB::table('corporation_assets as fuel')
             ->join('corporation_assets as office', 'fuel.location_id', '=', 'office.item_id')
             ->join('invTypes as office_type', 'office.type_id', '=', 'office_type.typeID')
+            ->where('fuel.corporation_id', $corporationId)
             ->where('office.location_id', $structureId)
             ->where('office_type.typeName', 'Office')
             ->where('fuel.location_flag', 'LIKE', 'CorpSAG%')
@@ -707,6 +715,7 @@ class TrackFuelConsumption implements ShouldQueue
         foreach ($reserves as $reserve) {
             // Get last reserve record
             $lastReserve = StructureFuelReserves::where('structure_id', $structureId)
+                ->where('corporation_id', $corporationId)
                 ->where('fuel_type_id', $reserve->type_id)
                 ->where('location_flag', $reserve->location_flag)
                 ->orderBy('created_at', 'desc')
@@ -913,8 +922,12 @@ class TrackFuelConsumption implements ShouldQueue
         foreach ($allRows as $row) {
             $actualLocationId = (int) $row->actual_location_id;
 
-            // Dedup by (structure_id=actual_location_id, fuel_type, location_flag)
+            // Dedup by (structure_id=actual_location_id, fuel_type,
+            // location_flag) for this corporation. The owner of the structure
+            // has rows for the same tuple, and comparing against those hid
+            // this corporation's fuel behind the owner's reading.
             $lastReserve = StructureFuelReserves::where('structure_id', $actualLocationId)
+                ->where('corporation_id', $corporationId)
                 ->where('fuel_type_id', $row->type_id)
                 ->where('location_flag', $row->location_flag)
                 ->orderBy('created_at', 'desc')
